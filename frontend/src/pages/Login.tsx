@@ -78,8 +78,8 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
               <label className="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-2">
                 Work Email Address
               </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#94A3B8]">
+              <div className="relative flex items-center">
+                <div className="absolute left-3.5 flex items-center pointer-events-none text-[#94A3B8]">
                   <Mail className="w-4 h-4" />
                 </div>
                 <input
@@ -88,7 +88,8 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@company.com"
-                  className="cockpit-input pl-10"
+                  className="cockpit-input has-icon"
+                  style={{ paddingLeft: '2.75rem' }}
                 />
               </div>
             </div>
@@ -97,8 +98,8 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
               <label className="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-2">
                 Password
               </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#94A3B8]">
+              <div className="relative flex items-center">
+                <div className="absolute left-3.5 flex items-center pointer-events-none text-[#94A3B8]">
                   <Lock className="w-4 h-4" />
                 </div>
                 <input
@@ -107,7 +108,8 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
-                  className="cockpit-input pl-10"
+                  className="cockpit-input has-icon"
+                  style={{ paddingLeft: '2.75rem' }}
                 />
               </div>
             </div>

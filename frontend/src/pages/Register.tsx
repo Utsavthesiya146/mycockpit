@@ -71,8 +71,8 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
               <label className="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1.5">
                 Full Name
               </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#94A3B8]">
+              <div className="relative flex items-center">
+                <div className="absolute left-3.5 flex items-center pointer-events-none text-[#94A3B8]">
                   <User className="w-4 h-4" />
                 </div>
                 <input
@@ -81,7 +81,8 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Vikram Malhotra"
-                  className="cockpit-input pl-10"
+                  className="cockpit-input has-icon"
+                  style={{ paddingLeft: '2.75rem' }}
                 />
               </div>
             </div>
@@ -90,8 +91,8 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
               <label className="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1.5">
                 Company / Business Name
               </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#94A3B8]">
+              <div className="relative flex items-center">
+                <div className="absolute left-3.5 flex items-center pointer-events-none text-[#94A3B8]">
                   <Building className="w-4 h-4" />
                 </div>
                 <input
@@ -100,7 +101,8 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
                   value={companyName}
                   onChange={(e) => handleCompanyChange(e.target.value)}
                   placeholder="e.g. Acme Innovations"
-                  className="cockpit-input pl-10"
+                  className="cockpit-input has-icon"
+                  style={{ paddingLeft: '2.75rem' }}
                 />
               </div>
             </div>
@@ -109,8 +111,8 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
               <label className="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1.5">
                 Personal Client URL Slug
               </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#94A3B8]">
+              <div className="relative flex items-center">
+                <div className="absolute left-3.5 flex items-center pointer-events-none text-[#94A3B8]">
                   <LinkIcon className="w-4 h-4" />
                 </div>
                 <input
@@ -119,11 +121,12 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
                   value={slug}
                   onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
                   placeholder="acme"
-                  className="cockpit-input pl-10 font-mono"
+                  className="cockpit-input has-icon font-mono"
+                  style={{ paddingLeft: '2.75rem' }}
                 />
               </div>
               <p className="mt-1 text-[11px] text-[#64748B] font-mono">
-                Your vanity URL: <span className="text-[#4667E8] font-bold">akiradigital.com/{slug || 'yourname'}</span>
+                Your vanity URL: <span className="text-[#4667E8] font-bold">mycockpit.ai/{slug || 'yourname'}</span>
               </p>
             </div>
 
@@ -131,8 +134,8 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
               <label className="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1.5">
                 Work Email Address
               </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#94A3B8]">
+              <div className="relative flex items-center">
+                <div className="absolute left-3.5 flex items-center pointer-events-none text-[#94A3B8]">
                   <Mail className="w-4 h-4" />
                 </div>
                 <input
@@ -141,7 +144,8 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="owner@company.com"
-                  className="cockpit-input pl-10"
+                  className="cockpit-input has-icon"
+                  style={{ paddingLeft: '2.75rem' }}
                 />
               </div>
             </div>
@@ -150,8 +154,8 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
               <label className="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1.5">
                 Password
               </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#94A3B8]">
+              <div className="relative flex items-center">
+                <div className="absolute left-3.5 flex items-center pointer-events-none text-[#94A3B8]">
                   <Lock className="w-4 h-4" />
                 </div>
                 <input
@@ -161,7 +165,8 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Min. 8 characters"
-                  className="cockpit-input pl-10"
+                  className="cockpit-input has-icon"
+                  style={{ paddingLeft: '2.75rem' }}
                 />
               </div>
             </div>

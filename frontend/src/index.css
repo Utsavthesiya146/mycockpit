@@ -149,11 +149,23 @@
   background-color: #FFFFFF;
   border: 1px solid #E5EAF1;
   border-radius: 0.75rem;
-  padding: 0.625rem 0.875rem;
+  padding-top: 0.625rem;
+  padding-bottom: 0.625rem;
+  padding-left: 0.875rem;
+  padding-right: 0.875rem;
   font-size: 0.875rem;
   color: #172033;
   box-shadow: 0 1px 2px 0 rgba(23, 32, 51, 0.02);
   transition: all 0.18s ease;
+}
+
+.cockpit-input.pl-9 {
+  padding-left: 2.25rem !important;
+}
+
+.cockpit-input.pl-10,
+.cockpit-input.has-icon {
+  padding-left: 2.75rem !important;
 }
 
 .cockpit-input::placeholder {
