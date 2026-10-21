@@ -6,38 +6,27 @@ declare(strict_types=1);
 // ===================================================
 
 error_reporting(E_ALL);
-ini_set('display_errors', '0');
+ini_set('display_errors', '1');
 
-// Autoload Cockpit classes (supports both case-sensitive Linux & Windows)
-spl_autoload_register(function ($class) {
-    $prefix = 'Cockpit\\';
-    $baseDir = __DIR__ . '/../';
-
-    $len = strlen($prefix);
-    if (strncmp($prefix, $class, $len) !== 0) {
-        return;
-    }
-
-    $relativeClass = substr($class, $len);
-    $parts = explode('\\', $relativeClass);
-
-    // 1. Try lowercase directory name (e.g. Utils -> utils, Controllers -> controllers)
-    if (count($parts) > 1) {
-        $linuxParts = $parts;
-        $linuxParts[0] = strtolower($linuxParts[0]);
-        $linuxFile = $baseDir . implode('/', $linuxParts) . '.php';
-        if (file_exists($linuxFile)) {
-            require_once $linuxFile;
-            return;
-        }
-    }
-
-    // 2. Fallback to exact case
-    $file = $baseDir . implode('/', $parts) . '.php';
-    if (file_exists($file)) {
-        require_once $file;
-    }
-});
+// Explicitly require core backend files (bulletproof on all Linux distributions)
+require_once __DIR__ . '/../config/Database.php';
+require_once __DIR__ . '/../config/Config.php';
+require_once __DIR__ . '/../utils/Response.php';
+require_once __DIR__ . '/../utils/JWT.php';
+require_once __DIR__ . '/../middleware/AuthMiddleware.php';
+require_once __DIR__ . '/../middleware/TenantMiddleware.php';
+require_once __DIR__ . '/../controllers/AuthController.php';
+require_once __DIR__ . '/../controllers/TenantController.php';
+require_once __DIR__ . '/../controllers/DashboardController.php';
+require_once __DIR__ . '/../controllers/FinancialController.php';
+require_once __DIR__ . '/../controllers/CrmController.php';
+require_once __DIR__ . '/../controllers/HrmController.php';
+require_once __DIR__ . '/../controllers/CalendarController.php';
+require_once __DIR__ . '/../controllers/TaskController.php';
+require_once __DIR__ . '/../controllers/FollowupController.php';
+require_once __DIR__ . '/../controllers/InvoiceController.php';
+require_once __DIR__ . '/../controllers/AppHubController.php';
+require_once __DIR__ . '/../controllers/AIController.php';
 
 use Cockpit\Utils\Response;
 use Cockpit\Middleware\AuthMiddleware;
