@@ -8,7 +8,12 @@ RUN npm run build
 
 # Stage 2: Production Apache + PHP 8.2 Runtime
 FROM php:8.2-apache
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 RUN docker-php-ext-install pdo pdo_mysql && a2enmod rewrite
+
+# CRITICAL: Enable AllowOverride All so Apache reads .htaccess for /api routing and SPA
+RUN sed -i 's/AllowOverride None/AllowOverride All/g' /etc/apache2/apache2.conf && \
+    echo "ServerName localhost" >> /etc/apache2/apache2.conf
 
 WORKDIR /var/www/html
 
@@ -23,6 +28,7 @@ RUN echo "<IfModule mod_rewrite.c>" > /var/www/html/.htaccess && \
     echo "    RewriteEngine On" >> /var/www/html/.htaccess && \
     echo "    RewriteBase /" >> /var/www/html/.htaccess && \
     echo "    RewriteRule ^api/(.*)$ backend/api/index.php/\$1 [QSA,L]" >> /var/www/html/.htaccess && \
+    echo "    RewriteRule ^api$ backend/api/index.php/ [QSA,L]" >> /var/www/html/.htaccess && \
     echo "    RewriteCond %{REQUEST_FILENAME} -f [OR]" >> /var/www/html/.htaccess && \
     echo "    RewriteCond %{REQUEST_FILENAME} -d" >> /var/www/html/.htaccess && \
     echo "    RewriteRule ^ - [L]" >> /var/www/html/.htaccess && \

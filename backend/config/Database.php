@@ -13,7 +13,7 @@ class Database {
         if (self::$connection === null) {
             $host = getenv('DB_HOST') ?: (getenv('MYSQLHOST') ?: '127.0.0.1');
             $port = getenv('DB_PORT') ?: (getenv('MYSQLPORT') ?: '3306');
-            $dbName = getenv('DB_NAME') ?: (getenv('MYSQLDATABASE') ?: 'mycockpit_dev');
+            $dbName = getenv('DB_NAME') ?: (getenv('MYSQLDATABASE') ?: (str_contains($host, 'tidbcloud') ? 'test' : 'mycockpit_dev'));
             $user = getenv('DB_USER') ?: (getenv('MYSQLUSER') ?: 'root');
             $password = getenv('DB_PASS') !== false ? getenv('DB_PASS') : (getenv('MYSQLPASSWORD') !== false ? getenv('MYSQLPASSWORD') : '');
 
@@ -35,6 +35,9 @@ class Database {
                 self::$connection = new PDO($dsn, $user, $password, $options);
             } catch (PDOException $e) {
                 http_response_code(500);
+                $origin = $_SERVER['HTTP_ORIGIN'] ?? '*';
+                header("Access-Control-Allow-Origin: {$origin}");
+                header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
                 header('Content-Type: application/json');
                 echo json_encode([
                     'status' => 'error',

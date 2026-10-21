@@ -21,8 +21,12 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, setIsSi
   const [copied, setCopied] = useState(false);
   const [switching, setSwitching] = useState(false);
 
-  // Development mode check: demo switcher only active in local dev
-  const isDevMode = import.meta.env.DEV || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  // Development mode check: demo switcher active in local dev and cloud preview domains
+  const isDevMode = import.meta.env.DEV || 
+    window.location.hostname === 'localhost' || 
+    window.location.hostname === '127.0.0.1' || 
+    window.location.hostname.includes('onrender.com') || 
+    window.location.hostname.includes('railway.app');
 
   const getTabTitle = (tab: NavTab) => {
     switch (tab) {
