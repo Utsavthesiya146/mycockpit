@@ -28,6 +28,23 @@ class Database {
 
             // If connecting to cloud TLS providers (like TiDB Cloud on port 4000), enable SSL
             if ($port === '4000' || str_contains($host, 'tidbcloud') || getenv('DB_SSL') === 'true') {
+                $possibleCaPaths = [
+                    '/etc/ssl/certs/ca-certificates.crt',
+                    '/etc/pki/tls/certs/ca-bundle.crt',
+                    '/etc/ssl/ca-bundle.pem',
+                    '/etc/ssl/cert.pem'
+                ];
+                $caFound = false;
+                foreach ($possibleCaPaths as $caPath) {
+                    if (file_exists($caPath)) {
+                        $options[PDO::MYSQL_ATTR_SSL_CA] = $caPath;
+                        $caFound = true;
+                        break;
+                    }
+                }
+                if (!$caFound) {
+                    $options[PDO::MYSQL_ATTR_SSL_CA] = '/etc/ssl/certs/ca-certificates.crt';
+                }
                 $options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
             }
 
