@@ -26,6 +26,11 @@ class Database {
                 PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
             ];
 
+            // If connecting to cloud TLS providers (like TiDB Cloud on port 4000), enable SSL
+            if ($port === '4000' || str_contains($host, 'tidbcloud') || getenv('DB_SSL') === 'true') {
+                $options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
+            }
+
             try {
                 self::$connection = new PDO($dsn, $user, $password, $options);
             } catch (PDOException $e) {
