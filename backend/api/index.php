@@ -8,7 +8,7 @@ declare(strict_types=1);
 error_reporting(E_ALL);
 ini_set('display_errors', '0');
 
-// Autoload Cockpit classes
+// Autoload Cockpit classes (supports both case-sensitive Linux & Windows)
 spl_autoload_register(function ($class) {
     $prefix = 'Cockpit\\';
     $baseDir = __DIR__ . '/../';
@@ -19,8 +19,21 @@ spl_autoload_register(function ($class) {
     }
 
     $relativeClass = substr($class, $len);
-    $file = $baseDir . str_replace('\\', '/', $relativeClass) . '.php';
+    $parts = explode('\\', $relativeClass);
 
+    // 1. Try lowercase directory name (e.g. Utils -> utils, Controllers -> controllers)
+    if (count($parts) > 1) {
+        $linuxParts = $parts;
+        $linuxParts[0] = strtolower($linuxParts[0]);
+        $linuxFile = $baseDir . implode('/', $linuxParts) . '.php';
+        if (file_exists($linuxFile)) {
+            require_once $linuxFile;
+            return;
+        }
+    }
+
+    // 2. Fallback to exact case
+    $file = $baseDir . implode('/', $parts) . '.php';
     if (file_exists($file)) {
         require_once $file;
     }
