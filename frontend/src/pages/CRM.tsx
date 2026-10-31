@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, Building2, Mail, Phone, MapPin, Hash } from 'lucide-react';
 import { api } from '../services/api';
 import { Badge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
@@ -37,8 +37,8 @@ export const CRM: React.FC = () => {
         api.get('/crm/customers'),
         api.get('/crm/leads')
       ]);
-      setCustomers(cData);
-      setLeads(lData);
+      setCustomers(cData || []);
+      setLeads(lData || []);
     } catch (err) {
       console.error('Failed to load CRM data', err);
     } finally {
@@ -64,6 +64,10 @@ export const CRM: React.FC = () => {
       setIsCustomerModalOpen(false);
       setCustName('');
       setCustCompany('');
+      setCustEmail('');
+      setCustPhone('');
+      setCustCity('');
+      setCustTaxId('');
       fetchData();
     } catch (err: any) {
       alert(err.message || 'Error creating customer');
@@ -107,22 +111,22 @@ export const CRM: React.FC = () => {
   };
 
   const pipelineStages: { id: Lead['status']; label: string; headerColor: string }[] = [
-    { id: 'new', label: 'New Inquiries', headerColor: 'text-[#0284C7]' },
-    { id: 'contacted', label: 'Contacted', headerColor: 'text-[#4667E8]' },
-    { id: 'qualified', label: 'Qualified', headerColor: 'text-[#8B5CF6]' },
-    { id: 'proposal', label: 'Proposal Sent', headerColor: 'text-[#D97706]' },
-    { id: 'won', label: 'Won / Closed', headerColor: 'text-[#0F9D92]' },
+    { id: 'new', label: 'New Inquiries', headerColor: 'text-[#D62839]' },
+    { id: 'contacted', label: 'Contacted', headerColor: 'text-[#D97706]' },
+    { id: 'qualified', label: 'Qualified', headerColor: 'text-[#B91C2C]' },
+    { id: 'proposal', label: 'Proposal Sent', headerColor: 'text-[#D62839]' },
+    { id: 'won', label: 'Won / Closed', headerColor: 'text-[#059669]' },
   ];
 
   return (
     <div className="space-y-6">
       {/* Subnav & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-1.5 p-1 bg-white border border-[#E5EAF1] rounded-xl text-xs font-semibold shadow-2xs">
+        <div className="flex items-center gap-1.5 p-1 bg-white border border-[#E9EAEE] rounded-xl text-xs font-semibold shadow-2xs">
           <button
             onClick={() => setActiveTab('leads')}
             className={`px-4 py-2 rounded-lg transition-all duration-180 cursor-pointer ${
-              activeTab === 'leads' ? 'bg-[#4667E8] text-white shadow-xs font-bold' : 'text-[#64748B] hover:text-[#172033]'
+              activeTab === 'leads' ? 'bg-[#D62839] text-white shadow-xs font-bold' : 'text-[#667085] hover:text-[#20242C] hover:bg-[#FFF1F2]'
             }`}
           >
             Sales Pipeline ({leads.length})
@@ -130,7 +134,7 @@ export const CRM: React.FC = () => {
           <button
             onClick={() => setActiveTab('customers')}
             className={`px-4 py-2 rounded-lg transition-all duration-180 cursor-pointer ${
-              activeTab === 'customers' ? 'bg-[#4667E8] text-white shadow-xs font-bold' : 'text-[#64748B] hover:text-[#172033]'
+              activeTab === 'customers' ? 'bg-[#D62839] text-white shadow-xs font-bold' : 'text-[#667085] hover:text-[#20242C] hover:bg-[#FFF1F2]'
             }`}
           >
             Customers Directory ({customers.length})
@@ -179,28 +183,28 @@ export const CRM: React.FC = () => {
             const stageTotal = stageLeads.reduce((sum, l) => sum + Number(l.value), 0);
 
             return (
-              <div key={stage.id} className="min-w-[260px] bg-white rounded-2xl border border-[#E5EAF1] p-3.5 flex flex-col shadow-xs">
-                <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#E5EAF1]">
+              <div key={stage.id} className="min-w-[260px] bg-white rounded-2xl border border-[#E9EAEE] p-4 flex flex-col shadow-xs">
+                <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#E9EAEE]">
                   <div>
                     <h3 className={`text-xs font-bold uppercase tracking-wider ${stage.headerColor}`}>{stage.label}</h3>
-                    <p className="text-[11px] font-mono text-[#172033] font-bold mt-0.5">{formatCurrency(stageTotal)}</p>
+                    <p className="text-[11px] font-mono text-[#20242C] font-bold mt-0.5">{formatCurrency(stageTotal)}</p>
                   </div>
-                  <span className="w-5 h-5 rounded-full bg-[#F1F5F9] text-[11px] font-bold text-[#64748B] flex items-center justify-center">
+                  <span className="w-5 h-5 rounded-full bg-[#FFF1F2] text-[11px] font-bold text-[#D62839] border border-[#FECDD3] flex items-center justify-center">
                     {stageLeads.length}
                   </span>
                 </div>
 
                 <div className="space-y-2.5 flex-1 overflow-y-auto max-h-[65vh]">
                   {stageLeads.map((lead) => (
-                    <div key={lead.id} className="p-3.5 rounded-xl bg-[#F8FAFC] border border-[#E5EAF1] hover:border-[#CBD5E1] hover:shadow-xs transition-all duration-180">
-                      <h4 className="text-sm font-bold text-[#172033] tracking-tight">{lead.name}</h4>
-                      {lead.company && <p className="text-xs text-[#64748B] mt-0.5">{lead.company}</p>}
-                      <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-[#E5EAF1] text-xs">
-                        <span className="font-mono font-bold text-[#0F9D92]">{formatCurrency(Number(lead.value))}</span>
+                    <div key={lead.id} className="p-3.5 rounded-xl bg-[#F8F9FB] border border-[#E9EAEE] hover:border-[#FECDD3] hover:shadow-xs transition-all duration-180">
+                      <h4 className="text-sm font-bold text-[#20242C] tracking-tight">{lead.name}</h4>
+                      {lead.company && <p className="text-xs text-[#667085] mt-0.5">{lead.company}</p>}
+                      <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-[#E9EAEE] text-xs">
+                        <span className="font-mono font-bold text-[#059669]">{formatCurrency(Number(lead.value))}</span>
                         <select
                           value={lead.status}
                           onChange={(e) => handleLeadStatusChange(lead.id, e.target.value)}
-                          className="bg-white text-[11px] text-[#475569] border border-[#E5EAF1] rounded-lg px-2 py-0.5 focus:outline-none focus:border-[#4667E8]"
+                          className="bg-white text-[11px] text-[#20242C] border border-[#E9EAEE] rounded-lg px-2 py-1 focus:outline-none focus:border-[#D62839] cursor-pointer"
                         >
                           <option value="new">New</option>
                           <option value="contacted">Contacted</option>
@@ -213,8 +217,8 @@ export const CRM: React.FC = () => {
                     </div>
                   ))}
                   {stageLeads.length === 0 && (
-                    <div className="text-center py-8 text-[11px] text-[#94A3B8] border border-dashed border-[#E5EAF1] rounded-xl bg-[#F8FAFC]/50">
-                      Empty stage
+                    <div className="text-center py-8 text-[11px] text-[#94A3B8] border border-dashed border-[#E9EAEE] rounded-xl bg-[#FAFAFA]">
+                      No opportunities in this stage
                     </div>
                   )}
                 </div>
@@ -224,12 +228,45 @@ export const CRM: React.FC = () => {
         </div>
       )}
 
-      {/* CUSTOMERS DIRECTORY TABLE */}
+      {/* CUSTOMERS DIRECTORY */}
       {activeTab === 'customers' && (
-        <div className="rounded-2xl bg-white border border-[#E5EAF1] overflow-hidden shadow-xs">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-[#172033]">
-              <thead className="bg-[#F8FAFC] text-xs uppercase font-bold text-[#64748B] border-b border-[#E5EAF1]">
+        <div className="rounded-2xl bg-white border border-[#E9EAEE] overflow-hidden shadow-xs">
+          {/* Mobile Card List View for Phones */}
+          <div className="sm:hidden divide-y divide-[#E9EAEE]">
+            {customers.map((c) => (
+              <div key={c.id} className="p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-[#20242C]">{c.name}</h4>
+                  <Badge status={c.status} />
+                </div>
+                {c.company && (
+                  <p className="text-xs text-[#667085] flex items-center gap-1.5">
+                    <Building2 className="w-3.5 h-3.5 text-[#D62839]" />
+                    <span>{c.company}</span>
+                  </p>
+                )}
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#667085] pt-1">
+                  {c.email && (
+                    <span className="flex items-center gap-1 font-mono">
+                      <Mail className="w-3 h-3 text-[#94A3B8]" />
+                      {c.email}
+                    </span>
+                  )}
+                  {c.phone && (
+                    <span className="flex items-center gap-1 font-mono">
+                      <Phone className="w-3 h-3 text-[#94A3B8]" />
+                      {c.phone}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop Table View */}
+          <div className="hidden sm:block overflow-x-auto">
+            <table className="w-full text-left text-sm text-[#20242C]">
+              <thead className="bg-[#F8F9FB] text-xs uppercase font-bold text-[#667085] border-b border-[#E9EAEE]">
                 <tr>
                   <th className="px-6 py-4">Client Contact</th>
                   <th className="px-6 py-4">Company Organization</th>
@@ -239,23 +276,23 @@ export const CRM: React.FC = () => {
                   <th className="px-6 py-4 text-center">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#E5EAF1]">
+              <tbody className="divide-y divide-[#E9EAEE]">
                 {customers.map((c) => (
-                  <tr key={c.id} className="hover:bg-[#F8FAFC] transition-colors">
-                    <td className="px-6 py-4 font-bold text-[#172033]">
+                  <tr key={c.id} className="hover:bg-[#FFF1F2]/30 transition-colors">
+                    <td className="px-6 py-4 font-bold text-[#20242C]">
                       {c.name}
                     </td>
-                    <td className="px-6 py-4 text-[#475569] font-medium">
+                    <td className="px-6 py-4 text-[#667085] font-medium">
                       {c.company || '—'}
                     </td>
                     <td className="px-6 py-4 text-xs font-mono">
-                      <p className="text-[#172033] font-medium">{c.email || 'No email'}</p>
-                      <p className="text-[#64748B]">{c.phone || 'No phone'}</p>
+                      <p className="text-[#20242C] font-medium">{c.email || 'No email'}</p>
+                      <p className="text-[#667085]">{c.phone || 'No phone'}</p>
                     </td>
-                    <td className="px-6 py-4 text-xs text-[#64748B]">
+                    <td className="px-6 py-4 text-xs text-[#667085]">
                       {c.city || 'India'}
                     </td>
-                    <td className="px-6 py-4 text-xs font-mono text-[#64748B]">
+                    <td className="px-6 py-4 text-xs font-mono text-[#667085]">
                       {c.tax_id || '—'}
                     </td>
                     <td className="px-6 py-4 text-center">
@@ -284,7 +321,7 @@ export const CRM: React.FC = () => {
       >
         <form onSubmit={handleCreateCustomer} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1.5">
+            <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
               Contact Full Name
             </label>
             <input
@@ -297,7 +334,7 @@ export const CRM: React.FC = () => {
             />
           </div>
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1.5">
+            <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
               Company Name
             </label>
             <input
@@ -308,9 +345,9 @@ export const CRM: React.FC = () => {
               className="cockpit-input"
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1.5">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
                 Email
               </label>
               <input
@@ -322,7 +359,7 @@ export const CRM: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1.5">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
                 Phone
               </label>
               <input
@@ -334,9 +371,9 @@ export const CRM: React.FC = () => {
               />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1.5">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
                 City / Region
               </label>
               <input
@@ -348,7 +385,7 @@ export const CRM: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1.5">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
                 GST / Tax ID
               </label>
               <input
@@ -361,7 +398,7 @@ export const CRM: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-[#E5EAF1]">
+          <div className="flex justify-end gap-3 pt-4 border-t border-[#E9EAEE]">
             <button
               type="button"
               onClick={() => setIsCustomerModalOpen(false)}
@@ -387,7 +424,7 @@ export const CRM: React.FC = () => {
       >
         <form onSubmit={handleCreateLead} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1.5">
+            <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
               Opportunity Title
             </label>
             <input
@@ -400,7 +437,7 @@ export const CRM: React.FC = () => {
             />
           </div>
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1.5">
+            <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
               Company
             </label>
             <input
@@ -411,9 +448,9 @@ export const CRM: React.FC = () => {
               className="cockpit-input"
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1.5">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
                 Deal Value (₹)
               </label>
               <input
@@ -426,7 +463,7 @@ export const CRM: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1.5">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
                 Initial Stage
               </label>
               <select
@@ -443,7 +480,7 @@ export const CRM: React.FC = () => {
             </div>
           </div>
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1.5">
+            <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
               Lead Source
             </label>
             <input
@@ -455,7 +492,7 @@ export const CRM: React.FC = () => {
             />
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-[#E5EAF1]">
+          <div className="flex justify-end gap-3 pt-4 border-t border-[#E9EAEE]">
             <button
               type="button"
               onClick={() => setIsLeadModalOpen(false)}

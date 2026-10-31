@@ -25,7 +25,7 @@ export const SettingsPage: React.FC = () => {
   const fetchTeam = async () => {
     try {
       const data: any = await api.get('/tenants/team');
-      setTeamMembers(data);
+      setTeamMembers(data || []);
     } catch (err) {
       console.error('Failed to load team members', err);
     }
@@ -73,71 +73,71 @@ export const SettingsPage: React.FC = () => {
   return (
     <div className="space-y-6 max-w-4xl">
       {/* Workspace Profile Card */}
-      <div className="p-6 rounded-2xl bg-white border border-[#E5EAF1] shadow-sm">
-        <h3 className="text-base font-bold text-[#172033] tracking-tight mb-4 flex items-center gap-2">
-          <SettingsIcon className="w-4 h-4 text-[#4667E8]" />
-          <span>Tenant Organization Profile</span>
+      <div className="p-6 rounded-2xl bg-white border border-[#E9EAEE] shadow-xs">
+        <h3 className="text-base font-bold text-[#20242C] tracking-tight mb-4 flex items-center gap-2">
+          <SettingsIcon className="w-4 h-4 text-[#D62839]" />
+          <span>Organization & Personal Workspace Profile</span>
         </h3>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
           <div>
-            <span className="text-xs font-semibold text-[#64748B] uppercase tracking-wider block mb-1">Company / Workspace Name</span>
-            <p className="font-bold text-[#172033] text-base">{tenant?.name || 'My Cockpit Organization'}</p>
+            <span className="text-xs font-semibold text-[#667085] uppercase tracking-wider block mb-1">Company / Organization Name</span>
+            <p className="font-bold text-[#20242C] text-base">{tenant?.name || 'My Cockpit Organization'}</p>
           </div>
           <div>
-            <span className="text-xs font-semibold text-[#64748B] uppercase tracking-wider block mb-1">Subscription Tier</span>
-            <span className="px-2.5 py-1 rounded-full text-xs font-semibold uppercase bg-[#EEF2FF] text-[#4667E8] border border-[#EEF2FF]">
+            <span className="text-xs font-semibold text-[#667085] uppercase tracking-wider block mb-1">Subscription Tier</span>
+            <span className="px-2.5 py-1 rounded-full text-xs font-semibold uppercase bg-[#FFF1F2] text-[#D62839] border border-[#FECDD3]">
               {tenant?.plan || 'Enterprise'} Tier
             </span>
           </div>
-          <div className="sm:col-span-2 pt-4 border-t border-[#E5EAF1]">
-            <span className="text-xs font-semibold text-[#64748B] uppercase tracking-wider block mb-1.5">Personal Client Vanity URL</span>
-            <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-[#F8FAFC] border border-[#E5EAF1] font-mono text-xs text-[#4667E8]">
+          <div className="sm:col-span-2 pt-4 border-t border-[#E9EAEE]">
+            <span className="text-xs font-semibold text-[#667085] uppercase tracking-wider block mb-1.5">Personal Client Vanity URL</span>
+            <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-[#F8FAFC] border border-[#E9EAEE] font-mono text-xs text-[#D62839]">
               <div className="flex items-center gap-2 truncate">
-                <LinkIcon className="w-4 h-4 text-[#4667E8] shrink-0" />
+                <LinkIcon className="w-4 h-4 text-[#D62839] shrink-0" />
                 <span className="font-semibold truncate">{personalUrl}</span>
               </div>
               <button
                 onClick={handleCopyUrl}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-[#E5EAF1] text-[#64748B] hover:text-[#172033] font-sans text-xs transition-colors shrink-0 shadow-sm"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-[#E9EAEE] text-[#667085] hover:text-[#D62839] hover:bg-[#FFF1F2] font-sans text-xs transition-colors shrink-0 shadow-2xs cursor-pointer"
               >
-                {copiedUrl ? <Check className="w-3.5 h-3.5 text-[#0F9D92]" /> : <Copy className="w-3.5 h-3.5" />}
+                {copiedUrl ? <Check className="w-3.5 h-3.5 text-[#059669]" /> : <Copy className="w-3.5 h-3.5" />}
                 <span>{copiedUrl ? 'Copied' : 'Copy'}</span>
               </button>
             </div>
-            <p className="text-xs text-[#64748B] mt-1.5">
-              Production Hostinger alias: <span className="text-[#172033] font-mono font-medium">mycockpit.ai/{user?.tenant_slug || 'client'}</span>
+            <p className="text-xs text-[#667085] mt-1.5">
+              Production alias: <span className="text-[#20242C] font-mono font-medium">akiradigital.com/{user?.tenant_slug || 'client'}</span>
             </p>
           </div>
         </div>
       </div>
 
       {/* Team & RBAC Management */}
-      <div className="p-6 rounded-2xl bg-white border border-[#E5EAF1] shadow-sm">
-        <div className="flex items-center justify-between mb-4">
+      <div className="p-6 rounded-2xl bg-white border border-[#E9EAEE] shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
-            <h3 className="text-base font-bold text-[#172033] tracking-tight flex items-center gap-2">
-              <Users className="w-4 h-4 text-[#4667E8]" />
+            <h3 className="text-base font-bold text-[#20242C] tracking-tight flex items-center gap-2">
+              <Users className="w-4 h-4 text-[#D62839]" />
               <span>Role-Based Access Control (RBAC)</span>
             </h3>
-            <p className="text-xs text-[#64748B] mt-0.5">Manage teammates authorized to access this tenant workspace</p>
+            <p className="text-xs text-[#667085] mt-0.5">Manage team members authorized to access this workspace</p>
           </div>
 
           <button
             onClick={() => setIsAddUserOpen(true)}
-            className="cockpit-btn-primary flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#4667E8] text-white text-xs font-semibold shadow-sm hover:bg-[#3b5bd6] transition-all"
+            className="cockpit-btn-primary"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Invite Member</span>
           </button>
         </div>
 
-        <div className="divide-y divide-[#E5EAF1]">
+        <div className="divide-y divide-[#E9EAEE]">
           {teamMembers.map((m) => (
             <div key={m.id} className="py-3.5 flex items-center justify-between text-sm">
               <div>
-                <p className="font-semibold text-[#172033]">{m.name}</p>
-                <p className="text-xs text-[#64748B]">{m.email}</p>
+                <p className="font-semibold text-[#20242C]">{m.name}</p>
+                <p className="text-xs text-[#667085]">{m.email}</p>
               </div>
               <div className="flex items-center gap-2">
                 <Badge status={m.role} />
@@ -146,30 +146,30 @@ export const SettingsPage: React.FC = () => {
             </div>
           ))}
           {teamMembers.length === 0 && (
-            <p className="py-6 text-center text-xs text-[#64748B]">No additional team members added.</p>
+            <p className="py-6 text-center text-xs text-[#667085]">No additional team members added.</p>
           )}
         </div>
       </div>
 
       {/* AI Engine Configuration */}
-      <div className="p-6 rounded-2xl bg-white border border-[#E5EAF1] shadow-sm">
-        <h3 className="text-base font-bold text-[#172033] tracking-tight mb-1 flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-[#4667E8]" />
+      <div className="p-6 rounded-2xl bg-white border border-[#E9EAEE] shadow-xs">
+        <h3 className="text-base font-bold text-[#20242C] tracking-tight mb-1 flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-[#D62839]" />
           <span>Personal AI Engine Settings</span>
         </h3>
-        <p className="text-xs text-[#64748B] mb-4">
+        <p className="text-xs text-[#667085] mb-4">
           Connect an external generative AI provider (Google Gemini or OpenAI) or use the autonomous local MySQL business reasoning engine.
         </p>
 
         <form onSubmit={handleSaveAiConfig} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-[#64748B] mb-1.5">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-[#667085] mb-1.5">
               AI Reasoning Provider
             </label>
             <select
               value={aiProvider}
               onChange={(e) => setAiProvider(e.target.value)}
-              className="w-full sm:w-80 px-3.5 py-2.5 bg-[#F8FAFC] border border-[#E5EAF1] rounded-xl text-sm text-[#172033] focus:outline-none focus:border-[#4667E8] focus:bg-white transition-all"
+              className="cockpit-input sm:w-80"
             >
               <option value="gemini">Google Gemini 2.0 / 1.5 Pro</option>
               <option value="openai">OpenAI GPT-4o Architecture</option>
@@ -178,7 +178,7 @@ export const SettingsPage: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-[#64748B] mb-1.5">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-[#667085] mb-1.5">
               API Secret Key (Optional for External Generative Models)
             </label>
             <input
@@ -186,22 +186,22 @@ export const SettingsPage: React.FC = () => {
               value={geminiKey}
               onChange={(e) => setGeminiKey(e.target.value)}
               placeholder="AIzaSy..."
-              className="w-full px-3.5 py-2.5 bg-[#F8FAFC] border border-[#E5EAF1] rounded-xl text-sm font-mono text-[#172033] placeholder-[#94A3B8] focus:outline-none focus:border-[#4667E8] focus:bg-white transition-all"
+              className="cockpit-input font-mono"
             />
-            <p className="text-xs text-[#64748B] mt-1.5">
-              Credentials are never exposed in browser network inspection; proxy requests route securely via backend PHP controllers.
+            <p className="text-xs text-[#667085] mt-1.5">
+              Credentials are never exposed in client network inspection; proxy requests route securely via backend PHP controllers.
             </p>
           </div>
 
           <div className="flex items-center gap-3 pt-2">
             <button
               type="submit"
-              className="cockpit-btn-primary px-4 py-2.5 rounded-xl bg-[#4667E8] text-white text-xs font-semibold shadow-sm hover:bg-[#3b5bd6] transition-all"
+              className="cockpit-btn-primary"
             >
               Save AI Settings
             </button>
             {savedAi && (
-              <span className="text-xs text-[#0F9D92] flex items-center gap-1.5 font-semibold">
+              <span className="text-xs text-[#059669] flex items-center gap-1.5 font-semibold">
                 <Check className="w-4 h-4" />
                 <span>Configuration Saved</span>
               </span>
@@ -218,7 +218,7 @@ export const SettingsPage: React.FC = () => {
       >
         <form onSubmit={handleAddUser} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-[#64748B] mb-1.5">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-[#667085] mb-1.5">
               Member Full Name
             </label>
             <input
@@ -227,11 +227,11 @@ export const SettingsPage: React.FC = () => {
               value={userName}
               onChange={(e) => setUserName(e.target.value)}
               placeholder="e.g. Pooja Patel"
-              className="w-full px-3.5 py-2.5 bg-[#F8FAFC] border border-[#E5EAF1] rounded-xl text-sm text-[#172033] focus:outline-none focus:border-[#4667E8] focus:bg-white transition-all"
+              className="cockpit-input"
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-[#64748B] mb-1.5">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-[#667085] mb-1.5">
               Work Email
             </label>
             <input
@@ -240,17 +240,17 @@ export const SettingsPage: React.FC = () => {
               value={userEmail}
               onChange={(e) => setUserEmail(e.target.value)}
               placeholder="pooja@company.com"
-              className="w-full px-3.5 py-2.5 bg-[#F8FAFC] border border-[#E5EAF1] rounded-xl text-sm text-[#172033] focus:outline-none focus:border-[#4667E8] focus:bg-white transition-all"
+              className="cockpit-input"
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-[#64748B] mb-1.5">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-[#667085] mb-1.5">
               Tenant Role Permission
             </label>
             <select
               value={userRole}
               onChange={(e) => setUserRole(e.target.value as any)}
-              className="w-full px-3.5 py-2.5 bg-[#F8FAFC] border border-[#E5EAF1] rounded-xl text-sm text-[#172033] focus:outline-none focus:border-[#4667E8] focus:bg-white transition-all"
+              className="cockpit-input"
             >
               <option value="tenant_admin">Tenant Admin (Full Management)</option>
               <option value="employee">Employee (Operational Access)</option>
@@ -258,7 +258,7 @@ export const SettingsPage: React.FC = () => {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-[#64748B] mb-1.5">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-[#667085] mb-1.5">
               Initial Password
             </label>
             <input
@@ -266,21 +266,21 @@ export const SettingsPage: React.FC = () => {
               required
               value={userPassword}
               onChange={(e) => setUserPassword(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-[#F8FAFC] border border-[#E5EAF1] rounded-xl text-sm text-[#172033] focus:outline-none focus:border-[#4667E8] focus:bg-white transition-all"
+              className="cockpit-input font-mono"
             />
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-[#E5EAF1]">
+          <div className="flex justify-end gap-3 pt-4 border-t border-[#E9EAEE]">
             <button
               type="button"
               onClick={() => setIsAddUserOpen(false)}
-              className="px-4 py-2 rounded-xl text-[#64748B] hover:text-[#172033] text-sm font-semibold transition-colors"
+              className="cockpit-btn-secondary"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="cockpit-btn-primary px-5 py-2 rounded-xl bg-[#4667E8] text-white text-sm font-semibold shadow-sm hover:bg-[#3b5bd6] transition-all"
+              className="cockpit-btn-primary"
             >
               Save Team Member
             </button>

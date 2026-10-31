@@ -9,8 +9,6 @@ import {
   Sparkles, 
   Plus,
   RefreshCw,
-  Building,
-  CheckCircle2,
   ArrowRight
 } from 'lucide-react';
 import { api } from '../services/api';
@@ -62,8 +60,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-3 border-[#EEF2FF] border-t-[#4667E8] rounded-full animate-spin" />
-          <p className="text-xs font-semibold text-[#64748B]">Synthesizing live business telemetry...</p>
+          <div className="w-10 h-10 border-3 border-[#FFF1F2] border-t-[#D62839] rounded-full animate-spin" />
+          <p className="text-xs font-semibold text-[#667085]">Synthesizing live business telemetry...</p>
         </div>
       </div>
     );
@@ -77,16 +75,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
   return (
     <div className="space-y-6">
       {/* Welcome & Context Banner */}
-      <div className="p-6 rounded-2xl bg-white border border-[#E5EAF1] shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="p-6 rounded-2xl bg-white border border-[#E9EAEE] shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-1.5">
-          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-[#E8F8F5] border border-[#B2EBE4] text-[#0F9D92] text-xs font-semibold">
-            <span className="w-2 h-2 rounded-full bg-[#0F9D92] animate-pulse" />
-            <span>Active Node: {tenant?.name || 'My Organization'}</span>
+          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-[#FFF1F2] border border-[#FECDD3] text-[#D62839] text-xs font-semibold">
+            <span className="w-2 h-2 rounded-full bg-[#D62839] animate-pulse" />
+            <span>Active Organization: {tenant?.name || 'My Organization'}</span>
           </div>
-          <h2 className="text-2xl font-extrabold text-[#172033] tracking-tight">
+          <h2 className="text-2xl font-extrabold text-[#20242C] tracking-tight">
             Welcome back, {user?.name}
           </h2>
-          <p className="text-sm text-[#64748B] max-w-xl">
+          <p className="text-sm text-[#667085] max-w-xl">
             Here is your live operations briefing, financial collections progress, and upcoming action items.
           </p>
         </div>
@@ -95,7 +93,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
           <button
             onClick={handleRefresh}
             disabled={refreshing}
-            className="p-2.5 rounded-xl bg-white hover:bg-[#F8FAFC] text-[#64748B] hover:text-[#172033] border border-[#E5EAF1] transition-all duration-180 shadow-2xs cursor-pointer"
+            className="p-2.5 rounded-xl bg-white hover:bg-[#FFF1F2] text-[#667085] hover:text-[#D62839] border border-[#E9EAEE] hover:border-[#FECDD3] transition-all duration-180 shadow-2xs cursor-pointer"
             title="Refresh Live Data"
           >
             <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
@@ -110,14 +108,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
         </div>
       </div>
 
-      {/* Financial KPI Metrics Cards (Accurate MySQL Totals) */}
+      {/* Financial KPI Metrics Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           title="Total Receivable"
           value={formatCurrency(fin.total_receivable)}
           subtitle="Gross invoices billed"
           icon={CreditCard}
-          colorScheme="indigo"
+          colorScheme="red"
           trend={`${data?.crm?.customer_count || 0} Accounts`}
           trendUp={true}
         />
@@ -144,7 +142,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
           value={formatCurrency(fin.overdue_amount)}
           subtitle="Past contractual due date"
           icon={AlertTriangle}
-          colorScheme="rose"
+          colorScheme="red"
           trend={fin.overdue_amount > 0 ? "Requires Follow-up" : "Zero Overdue"}
           trendUp={fin.overdue_amount === 0}
         />
@@ -155,20 +153,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
         {/* Left Column: Schedule & Priorities */}
         <div className="lg:col-span-2 space-y-6">
           {/* Today's Meetings Widget */}
-          <div className="p-6 rounded-2xl bg-white border border-[#E5EAF1] shadow-xs">
+          <div className="p-6 rounded-2xl bg-white border border-[#E9EAEE] shadow-xs">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-[#EEF2FF] text-[#4667E8] border border-[#E0E7FF]">
+                <div className="p-2 rounded-xl bg-[#FFF1F2] text-[#D62839] border border-[#FECDD3]">
                   <Calendar className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-[#172033] tracking-tight">Today's Schedule</h3>
-                  <p className="text-xs text-[#64748B]">Client meetings and conference appointments</p>
+                  <h3 className="text-base font-bold text-[#20242C] tracking-tight">Today's Schedule</h3>
+                  <p className="text-xs text-[#667085]">Client meetings and conference appointments</p>
                 </div>
               </div>
               <button 
                 onClick={() => setActiveTab('calendar')}
-                className="text-xs text-[#4667E8] hover:text-[#3855D4] font-semibold flex items-center gap-1 cursor-pointer"
+                className="text-xs text-[#D62839] hover:text-[#B91C2C] font-semibold flex items-center gap-1 cursor-pointer"
               >
                 <span>Full Calendar</span>
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -178,10 +176,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
             {data?.today_meetings?.length > 0 ? (
               <div className="space-y-2.5">
                 {data.today_meetings.map((m: any) => (
-                  <div key={m.id} className="p-3.5 rounded-xl bg-[#F8FAFC] border border-[#E5EAF1] flex items-center justify-between">
+                  <div key={m.id} className="p-3.5 rounded-xl bg-[#F8F9FB] border border-[#E9EAEE] flex items-center justify-between">
                     <div>
-                      <h4 className="text-sm font-bold text-[#172033]">{m.title}</h4>
-                      <p className="text-xs text-[#64748B] mt-0.5">
+                      <h4 className="text-sm font-bold text-[#20242C]">{m.title}</h4>
+                      <p className="text-xs text-[#667085] mt-0.5">
                         {new Date(m.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} — {m.location_or_url || 'Office Meeting Room'}
                       </p>
                     </div>
@@ -197,20 +195,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
           </div>
 
           {/* Priority Action Tasks Widget */}
-          <div className="p-6 rounded-2xl bg-white border border-[#E5EAF1] shadow-xs">
+          <div className="p-6 rounded-2xl bg-white border border-[#E9EAEE] shadow-xs">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-[#EEF2FF] text-[#4667E8] border border-[#E0E7FF]">
+                <div className="p-2 rounded-xl bg-[#FFF1F2] text-[#D62839] border border-[#FECDD3]">
                   <CheckSquare className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-[#172033] tracking-tight">Priority Action Items</h3>
-                  <p className="text-xs text-[#64748B]">Immediate deliverables and milestones</p>
+                  <h3 className="text-base font-bold text-[#20242C] tracking-tight">Priority Action Items</h3>
+                  <p className="text-xs text-[#667085]">Immediate deliverables and milestones</p>
                 </div>
               </div>
               <button 
                 onClick={() => setActiveTab('tasks')}
-                className="text-xs text-[#4667E8] hover:text-[#3855D4] font-semibold flex items-center gap-1 cursor-pointer"
+                className="text-xs text-[#D62839] hover:text-[#B91C2C] font-semibold flex items-center gap-1 cursor-pointer"
               >
                 <span>All Tasks</span>
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -220,10 +218,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
             {data?.priority_tasks?.length > 0 ? (
               <div className="space-y-2.5">
                 {data.priority_tasks.map((t: any) => (
-                  <div key={t.id} className="p-3.5 rounded-xl bg-[#F8FAFC] border border-[#E5EAF1] flex items-center justify-between">
+                  <div key={t.id} className="p-3.5 rounded-xl bg-[#F8F9FB] border border-[#E9EAEE] flex items-center justify-between">
                     <div>
-                      <h4 className="text-sm font-bold text-[#172033]">{t.title}</h4>
-                      <p className="text-xs text-[#64748B] mt-0.5">Due date: {t.due_date || 'Ongoing'}</p>
+                      <h4 className="text-sm font-bold text-[#20242C]">{t.title}</h4>
+                      <p className="text-xs text-[#667085] mt-0.5">Due date: {t.due_date || 'Ongoing'}</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge status={t.priority} />
@@ -243,22 +241,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
         {/* Right Column: AI Assistant Card & Pending Follow-ups */}
         <div className="space-y-6">
           {/* AI Copilot Card */}
-          <div className="p-6 rounded-2xl bg-gradient-to-br from-[#EEF2FF] via-white to-white border border-[#C7D2FE] shadow-xs relative overflow-hidden">
+          <div className="p-6 rounded-2xl bg-gradient-to-br from-[#FFF1F2] via-white to-white border border-[#FECDD3] shadow-xs relative overflow-hidden">
             <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-9 h-9 rounded-xl bg-[#4667E8] flex items-center justify-center text-white shadow-xs">
+              <div className="w-9 h-9 rounded-xl bg-[#D62839] flex items-center justify-center text-white shadow-xs">
                 <Sparkles className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-[#172033]">Personal AI Copilot</h3>
-                <p className="text-[11px] text-[#64748B]">Instant database intelligence</p>
+                <h3 className="text-sm font-bold text-[#20242C]">Personal AI Copilot</h3>
+                <p className="text-[11px] text-[#667085]">Instant database intelligence</p>
               </div>
             </div>
-            <p className="text-xs text-[#475569] leading-relaxed mb-4">
+            <p className="text-xs text-[#667085] leading-relaxed mb-4">
               "What is my pending payment amount?" or "Which customers need follow-up?"
             </p>
             <button
               onClick={() => setActiveTab('ai')}
-              className="w-full py-2.5 rounded-xl bg-[#4667E8] hover:bg-[#3855D4] text-white text-xs font-semibold shadow-xs flex items-center justify-center gap-2 transition-all duration-180 cursor-pointer"
+              className="w-full py-2.5 rounded-xl bg-[#D62839] hover:bg-[#B91C2C] text-white text-xs font-semibold shadow-xs flex items-center justify-center gap-2 transition-all duration-180 cursor-pointer"
             >
               <span>Launch AI Conversation</span>
               <Sparkles className="w-3.5 h-3.5" />
@@ -266,12 +264,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
           </div>
 
           {/* Pending Follow-ups Widget */}
-          <div className="p-6 rounded-2xl bg-white border border-[#E5EAF1] shadow-xs">
+          <div className="p-6 rounded-2xl bg-white border border-[#E9EAEE] shadow-xs">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-bold text-[#172033] tracking-tight">Pending Follow-ups</h3>
+              <h3 className="text-base font-bold text-[#20242C] tracking-tight">Pending Follow-ups</h3>
               <button 
                 onClick={() => setActiveTab('followups')}
-                className="text-xs text-[#4667E8] hover:text-[#3855D4] font-semibold cursor-pointer"
+                className="text-xs text-[#D62839] hover:text-[#B91C2C] font-semibold cursor-pointer"
               >
                 View All →
               </button>
@@ -280,10 +278,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
             {data?.pending_followups?.length > 0 ? (
               <div className="space-y-3">
                 {data.pending_followups.map((f: any) => (
-                  <div key={f.id} className="p-3 rounded-xl bg-[#F8FAFC] border border-[#E5EAF1]">
-                    <p className="text-xs font-bold text-[#172033]">{f.title}</p>
-                    <p className="text-[11px] text-[#64748B] mt-0.5">
-                      Client: <span className="text-[#4667E8] font-semibold">{f.customer_name || 'General Lead'}</span>
+                  <div key={f.id} className="p-3 rounded-xl bg-[#F8F9FB] border border-[#E9EAEE]">
+                    <p className="text-xs font-bold text-[#20242C]">{f.title}</p>
+                    <p className="text-[11px] text-[#667085] mt-0.5">
+                      Client: <span className="text-[#D62839] font-semibold">{f.customer_name || 'General Lead'}</span>
                     </p>
                   </div>
                 ))}

@@ -15,13 +15,13 @@ export const Badge: React.FC<BadgeProps> = ({ status }) => {
       case 'active':
       case 'won':
       case 'connected':
-        return 'bg-[#E8F8F5] text-[#0F9D92] border-[#B2EBE4]';
+        return 'bg-[#ECFDF5] text-[#059669] border-[#A7F3D0]';
       
       case 'partially paid':
       case 'in progress':
       case 'qualified':
       case 'proposal':
-        return 'bg-[#EEF2FF] text-[#4667E8] border-[#C7D2FE]';
+        return 'bg-[#FFF1F2] text-[#D62839] border-[#FECDD3] font-bold';
 
       case 'pending':
       case 'sent':
@@ -29,7 +29,7 @@ export const Badge: React.FC<BadgeProps> = ({ status }) => {
       case 'new':
       case 'contacted':
       case 'launcher only':
-        return 'bg-[#F0F9FF] text-[#0284C7] border-[#BAE6FD]';
+        return 'bg-[#FFF8F1] text-[#D97706] border-[#FDE68A]';
 
       case 'overdue':
       case 'urgent':
@@ -37,7 +37,7 @@ export const Badge: React.FC<BadgeProps> = ({ status }) => {
       case 'cancelled':
       case 'suspended':
       case 'terminated':
-        return 'bg-[#FFF1ED] text-[#E11D48] border-[#FECDD3]';
+        return 'bg-[#FEF2F2] text-[#DC2626] border-[#FECDD3] font-bold';
 
       case 'high':
       case 'config required':
@@ -50,7 +50,7 @@ export const Badge: React.FC<BadgeProps> = ({ status }) => {
       case 'unsupported':
       case 'inactive':
       default:
-        return 'bg-[#F1F5F9] text-[#64748B] border-[#E2E8F0]';
+        return 'bg-[#F8F9FB] text-[#667085] border-[#E9EAEE]';
     }
   };
 

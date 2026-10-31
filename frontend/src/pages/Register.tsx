@@ -44,23 +44,27 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex flex-col justify-center items-center px-4 sm:px-6 lg:px-8 py-12 relative overflow-hidden">
+    <div className="min-h-screen bg-[#FAFAFA] flex flex-col justify-center items-center px-4 sm:px-6 lg:px-8 py-12 relative overflow-hidden">
+      {/* Warm ambient accents */}
+      <div className="absolute top-1/4 -left-32 w-96 h-96 bg-[#FFF1F2] rounded-full blur-3xl pointer-events-none opacity-80" />
+      <div className="absolute bottom-1/4 -right-32 w-96 h-96 bg-[#FFF1F2] rounded-full blur-3xl pointer-events-none opacity-60" />
+
       <div className="w-full max-w-md space-y-6 z-10">
         <div className="text-center">
-          <div className="inline-flex w-14 h-14 rounded-2xl bg-[#4667E8] items-center justify-center shadow-lg shadow-[#4667E8]/25 mb-4">
-            <Layers className="w-7 h-7 text-white" />
+          <div className="inline-flex w-14 h-14 rounded-2xl bg-[#D62839] items-center justify-center shadow-lg shadow-[#D62839]/25 mb-4 text-white">
+            <Layers className="w-7 h-7" />
           </div>
-          <h1 className="text-3xl font-extrabold text-[#172033] tracking-tight">
+          <h1 className="text-3xl font-extrabold text-[#20242C] tracking-tight">
             Register Organization
           </h1>
-          <p className="mt-2 text-sm text-[#64748B] font-medium">
+          <p className="mt-2 text-sm text-[#667085] font-medium">
             Launch your multi-tenant cockpit with personal AI
           </p>
         </div>
 
-        <div className="bg-white border border-[#E5EAF1] rounded-3xl p-8 shadow-xl shadow-slate-200/50">
+        <div className="bg-white border border-[#E9EAEE] rounded-3xl p-6 sm:p-8 shadow-xl shadow-slate-200/40">
           {error && (
-            <div className="mb-6 p-4 rounded-xl bg-[#FFF1ED] border border-[#FECDD3] flex items-center gap-3 text-sm text-[#E11D48]">
+            <div className="mb-6 p-4 rounded-xl bg-[#FEF2F2] border border-[#FECDD3] flex items-center gap-3 text-sm text-[#DC2626]">
               <AlertCircle className="w-5 h-5 shrink-0" />
               <span>{error}</span>
             </div>
@@ -68,7 +72,7 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1.5">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
                 Full Name
               </label>
               <div className="relative flex items-center">
@@ -88,7 +92,7 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1.5">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
                 Company / Business Name
               </label>
               <div className="relative flex items-center">
@@ -108,7 +112,7 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1.5">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
                 Personal Client URL Slug
               </label>
               <div className="relative flex items-center">
@@ -125,13 +129,13 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
                   style={{ paddingLeft: '2.75rem' }}
                 />
               </div>
-              <p className="mt-1 text-[11px] text-[#64748B] font-mono">
-                Your vanity URL: <span className="text-[#4667E8] font-bold">mycockpit.ai/{slug || 'yourname'}</span>
+              <p className="mt-1 text-[11px] text-[#667085] font-mono">
+                Your vanity URL: <span className="text-[#D62839] font-bold">mycockpit.ai/{slug || 'yourname'}</span>
               </p>
             </div>
 
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1.5">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
                 Work Email Address
               </label>
               <div className="relative flex items-center">
@@ -151,7 +155,7 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-1.5">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
                 Password
               </label>
               <div className="relative flex items-center">
@@ -174,18 +178,18 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-2 py-3 rounded-xl bg-[#4667E8] hover:bg-[#3855D4] text-white font-semibold text-sm shadow-md shadow-[#4667E8]/25 flex items-center justify-center gap-2 transition-all duration-180 disabled:opacity-50 cursor-pointer"
+              className="w-full mt-2 py-3 rounded-xl bg-[#D62839] hover:bg-[#B91C2C] text-white font-semibold text-sm shadow-md shadow-[#D62839]/25 flex items-center justify-center gap-2 transition-all duration-180 disabled:opacity-50 cursor-pointer"
             >
               <span>{loading ? 'Creating Workspace...' : 'Initialize Cockpit'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
 
-          <div className="mt-6 text-center text-xs text-[#64748B]">
+          <div className="mt-6 text-center text-xs text-[#667085]">
             Already have an organization?{' '}
             <button
               onClick={onSwitchToLogin}
-              className="text-[#4667E8] hover:text-[#3855D4] font-semibold underline underline-offset-4 cursor-pointer"
+              className="text-[#D62839] hover:text-[#B91C2C] font-semibold underline underline-offset-4 cursor-pointer"
             >
               Sign In
             </button>

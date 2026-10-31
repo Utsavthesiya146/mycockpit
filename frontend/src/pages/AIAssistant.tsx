@@ -34,15 +34,15 @@ export const AIAssistant: React.FC = () => {
   const fetchConversations = async () => {
     try {
       const data: any = await api.get('/ai/conversations');
-      setConversations(data);
-      if (data.length > 0 && !activeConvId) {
+      setConversations(data || []);
+      if (data && data.length > 0 && !activeConvId) {
         loadConversation(data[0].id);
-      } else if (data.length === 0) {
+      } else if (!data || data.length === 0) {
         // Default welcoming message
         setMessages([
           {
             role: 'assistant',
-            content: `Hello ${user?.name || 'there'}! I am your **MY COCKPIT AI Personal Business Assistant** for **${tenant?.name || 'your workspace'}**.\n\nI have real-time, zero-leakage read access to your live MySQL business data—invoices, payments, calendar meetings, CRM leads, and pending customer follow-ups.\n\nClick any of the suggested prompts below or ask me any question!`,
+            content: `Hello ${user?.name || 'there'}! I am your **MY COCKPIT AI Personal Business Assistant** for **${tenant?.name || 'your workspace'}**.\n\nI have real-time, zero-leakage read access to your live business data—invoices, payments, calendar meetings, CRM leads, and pending customer follow-ups.\n\nClick any of the suggested prompts below or ask me any question!`,
             citations: ['MY COCKPIT AI Core Database']
           }
         ]);
@@ -111,63 +111,63 @@ export const AIAssistant: React.FC = () => {
   };
 
   return (
-    <div className="h-[calc(100vh-8.5rem)] flex flex-col rounded-3xl bg-white border border-[#E5EAF1] shadow-sm overflow-hidden">
+    <div className="h-[calc(100vh-10rem)] lg:h-[calc(100vh-8.5rem)] flex flex-col rounded-3xl bg-white border border-[#E9EAEE] shadow-xs overflow-hidden">
       {/* Header bar */}
-      <div className="p-4 px-6 border-b border-[#E5EAF1] bg-[#F8FAFC] flex items-center justify-between">
+      <div className="p-3.5 sm:p-4 px-4 sm:px-6 border-b border-[#E9EAEE] bg-[#F8F9FB] flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-[#EEF2FF] text-[#4667E8] flex items-center justify-center shadow-sm">
+          <div className="w-10 h-10 rounded-xl bg-[#FFF1F2] text-[#D62839] border border-[#FECDD3] flex items-center justify-center shadow-xs">
             <Sparkles className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-[#172033] tracking-tight flex items-center gap-2">
-              MY COCKPIT AI Assistant
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#E8F8F5] text-[#0F9D92] border border-[#0F9D92]/20">
-                Live Data Connected
+            <h2 className="text-sm font-bold text-[#20242C] tracking-tight flex items-center gap-2">
+              MY COCKPIT AI Copilot
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#ECFDF5] text-[#059669] border border-[#A7F3D0]">
+                Live Connected
               </span>
             </h2>
-            <p className="text-xs text-[#64748B]">
-              Tenant Workspace: <span className="text-[#4667E8] font-semibold">{tenant?.name || 'Current Organization'}</span>
+            <p className="text-xs text-[#667085]">
+              Workspace: <span className="text-[#D62839] font-semibold">{tenant?.name || 'Current Organization'}</span>
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-xs text-[#64748B] hidden sm:flex items-center gap-1.5 font-medium">
-            <ShieldCheck className="w-4 h-4 text-[#0F9D92]" />
-            Tenant Data Isolation Enforced
+          <span className="text-xs text-[#667085] hidden sm:flex items-center gap-1.5 font-medium">
+            <ShieldCheck className="w-4 h-4 text-[#059669]" />
+            Tenant Isolation Enforced
           </span>
         </div>
       </div>
 
       {/* Messages Scroll Area */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 space-y-4 sm:space-y-6">
         {messages.map((msg, idx) => {
           const isUser = msg.role === 'user';
           return (
-            <div key={idx} className={`flex items-start gap-3.5 ${isUser ? 'flex-row-reverse' : ''}`}>
+            <div key={idx} className={`flex items-start gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
               <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 ${
                 isUser 
-                  ? 'bg-[#4667E8] text-white shadow-sm' 
-                  : 'bg-[#EEF2FF] text-[#4667E8] border border-[#EEF2FF]'
+                  ? 'bg-[#D62839] text-white shadow-xs' 
+                  : 'bg-[#FFF1F2] text-[#D62839] border border-[#FECDD3]'
               }`}>
                 {isUser ? <UserIcon className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
               </div>
 
               <div className={`max-w-2xl rounded-2xl p-4 text-sm ${
                 isUser 
-                  ? 'bg-[#4667E8] text-white shadow-sm' 
-                  : 'bg-[#F8FAFC] text-[#172033] border border-[#E5EAF1] shadow-sm'
+                  ? 'bg-[#D62839] text-white shadow-xs' 
+                  : 'bg-[#F8F9FB] text-[#20242C] border border-[#E9EAEE] shadow-2xs'
               }`}>
-                <div className={`leading-relaxed whitespace-pre-wrap ${isUser ? 'text-white' : 'text-[#172033]'}`}>
+                <div className={`leading-relaxed whitespace-pre-wrap ${isUser ? 'text-white' : 'text-[#20242C]'}`}>
                   {msg.content}
                 </div>
 
                 {/* Citations & Metadata */}
                 {!isUser && msg.citations && msg.citations.length > 0 && (
-                  <div className="mt-3 pt-2.5 border-t border-[#E5EAF1] flex flex-wrap items-center gap-2 text-xs font-medium">
-                    <span className="text-[#64748B]">Verified Source:</span>
+                  <div className="mt-3 pt-2.5 border-t border-[#E9EAEE] flex flex-wrap items-center gap-2 text-xs font-medium">
+                    <span className="text-[#667085]">Verified Source:</span>
                     {msg.citations.map((c, i) => (
-                      <span key={i} className="px-2 py-0.5 rounded-md bg-white border border-[#E5EAF1] text-[#4667E8] font-mono text-[11px]">
+                      <span key={i} className="px-2 py-0.5 rounded-md bg-white border border-[#E9EAEE] text-[#D62839] font-mono text-[11px]">
                         {c}
                       </span>
                     ))}
@@ -179,15 +179,15 @@ export const AIAssistant: React.FC = () => {
         })}
 
         {loading && (
-          <div className="flex items-start gap-3.5">
-            <div className="w-8 h-8 rounded-xl bg-[#EEF2FF] text-[#4667E8] flex items-center justify-center shrink-0">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-xl bg-[#FFF1F2] text-[#D62839] border border-[#FECDD3] flex items-center justify-center shrink-0">
               <Bot className="w-4 h-4" />
             </div>
-            <div className="bg-[#F8FAFC] border border-[#E5EAF1] rounded-2xl p-4 text-xs text-[#64748B] flex items-center gap-2 shadow-sm">
-              <div className="w-2 h-2 rounded-full bg-[#4667E8] animate-bounce" />
-              <div className="w-2 h-2 rounded-full bg-[#4667E8] animate-bounce [animation-delay:0.2s]" />
-              <div className="w-2 h-2 rounded-full bg-[#4667E8] animate-bounce [animation-delay:0.4s]" />
-              <span>Querying verified database records...</span>
+            <div className="bg-[#F8F9FB] border border-[#E9EAEE] rounded-2xl p-4 text-xs text-[#667085] flex items-center gap-2 shadow-2xs">
+              <div className="w-2 h-2 rounded-full bg-[#D62839] animate-bounce" />
+              <div className="w-2 h-2 rounded-full bg-[#D62839] animate-bounce [animation-delay:0.2s]" />
+              <div className="w-2 h-2 rounded-full bg-[#D62839] animate-bounce [animation-delay:0.4s]" />
+              <span>Querying verified database telemetry...</span>
             </div>
           </div>
         )}
@@ -195,13 +195,13 @@ export const AIAssistant: React.FC = () => {
       </div>
 
       {/* Suggested Prompt Pills */}
-      <div className="px-6 py-2.5 bg-[#F8FAFC] border-t border-[#E5EAF1] flex items-center gap-2 overflow-x-auto text-xs">
-        <span className="text-[#64748B] font-semibold shrink-0">Quick Queries:</span>
+      <div className="px-4 sm:px-6 py-2.5 bg-[#F8F9FB] border-t border-[#E9EAEE] flex items-center gap-2 overflow-x-auto text-xs">
+        <span className="text-[#667085] font-semibold shrink-0">Quick Queries:</span>
         {suggestedPrompts.map((prompt, i) => (
           <button
             key={i}
             onClick={() => handleSendMessage(prompt)}
-            className="px-3 py-1.5 rounded-full bg-white hover:bg-[#EEF2FF] hover:text-[#4667E8] text-[#172033] border border-[#E5EAF1] whitespace-nowrap transition-all shadow-sm font-medium"
+            className="px-3 py-1.5 rounded-full bg-white hover:bg-[#FFF1F2] hover:text-[#D62839] hover:border-[#FECDD3] text-[#20242C] border border-[#E9EAEE] whitespace-nowrap transition-all shadow-2xs font-medium cursor-pointer"
           >
             {prompt}
           </button>
@@ -209,25 +209,25 @@ export const AIAssistant: React.FC = () => {
       </div>
 
       {/* Input bar */}
-      <div className="p-4 bg-white border-t border-[#E5EAF1]">
+      <div className="p-3.5 sm:p-4 bg-white border-t border-[#E9EAEE]">
         <form
           onSubmit={(e) => {
             e.preventDefault();
             handleSendMessage();
           }}
-          className="flex items-center gap-3"
+          className="flex items-center gap-2 sm:gap-3"
         >
           <input
             type="text"
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
-            placeholder="Ask anything about invoices, receivables, meetings, follow-ups..."
-            className="flex-1 px-4 py-3 bg-[#F8FAFC] border border-[#E5EAF1] rounded-xl text-sm text-[#172033] placeholder-[#94A3B8] focus:outline-none focus:border-[#4667E8] focus:bg-white transition-all"
+            placeholder="Ask about invoices, receivables, meetings, follow-ups..."
+            className="cockpit-input flex-1 py-3"
           />
           <button
             type="submit"
             disabled={!inputMessage.trim() || loading}
-            className="cockpit-btn-primary px-5 py-3 rounded-xl bg-[#4667E8] text-white font-semibold text-xs flex items-center gap-2 shadow-sm disabled:opacity-50 transition-all shrink-0 hover:bg-[#3b5bd6]"
+            className="cockpit-btn-primary px-4 sm:px-5 py-3 shrink-0"
           >
             <span>Ask</span>
             <Send className="w-3.5 h-3.5" />

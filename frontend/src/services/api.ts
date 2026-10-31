@@ -1,4 +1,26 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
+import { Capacitor } from '@capacitor/core';
+
+export const getApiBaseUrl = (): string => {
+  // 1. Check custom runtime API configuration (stored in localStorage)
+  const customUrl = localStorage.getItem('mycockpit_api_url');
+  if (customUrl && customUrl.trim()) {
+    return customUrl.trim().replace(/\/+$/, '');
+  }
+
+  // 2. Check build-time environment variable
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL.replace(/\/+$/, '');
+  }
+
+  // 3. When running in native mobile application (Capacitor Android / iOS)
+  if (Capacitor.isNativePlatform()) {
+    // Production / Staging API endpoint accessible over the internet
+    return 'https://akiradigital.com/backend/api';
+  }
+
+  // 4. Default web browser relative proxy route
+  return '/api';
+};
 
 class ApiService {
   private getHeaders(): HeadersInit {
@@ -19,8 +41,8 @@ class ApiService {
     // Standardize URL
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     
-    // In dev, try the proxied /api route first, and if unavailable, fall back to direct XAMPP backend
-    let url = `${API_BASE}${cleanEndpoint}`;
+    const base = getApiBaseUrl();
+    let url = `${base}${cleanEndpoint}`;
 
     try {
       let response = await fetch(url, {
@@ -32,7 +54,7 @@ class ApiService {
       });
 
       // If proxied fails with 404 in direct preview mode, fall back to direct Apache URL
-      if (!response.ok && response.status === 404 && API_BASE === '/api') {
+      if (!response.ok && response.status === 404 && base === '/api') {
         const directUrl = `http://localhost/mycockpit/backend/api/index.php${cleanEndpoint}`;
         const directResp = await fetch(directUrl, {
           ...options,

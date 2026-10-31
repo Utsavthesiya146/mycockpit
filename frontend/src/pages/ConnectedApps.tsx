@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Grid, 
   Plus, 
   ExternalLink, 
   Pin, 
@@ -12,9 +11,9 @@ import {
   FileText, 
   BookOpen, 
   Globe, 
-  Trash2,
-  ShieldCheck,
-  Search
+  Trash2, 
+  ShieldCheck, 
+  Search 
 } from 'lucide-react';
 import { api } from '../services/api';
 import { Badge } from '../components/common/Badge';
@@ -39,7 +38,7 @@ export const ConnectedApps: React.FC = () => {
   const fetchApps = async () => {
     try {
       const data: any = await api.get('/apps');
-      setApps(data);
+      setApps(data || []);
     } catch (err) {
       console.error('Failed to load connected apps', err);
     } finally {
@@ -128,15 +127,15 @@ export const ConnectedApps: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-[#172033] tracking-tight">Connected Applications Hub</h2>
-          <p className="text-sm text-[#64748B] mt-0.5">
+          <h2 className="text-2xl font-bold text-[#20242C] tracking-tight">Connected Applications Hub</h2>
+          <p className="text-sm text-[#667085] mt-0.5">
             Single-click launchpad for Google Workspace, BNI Connect, KVV, Right Form, My iNotes and custom business portals
           </p>
         </div>
 
         <button
           onClick={() => setIsAddModalOpen(true)}
-          className="cockpit-btn-primary flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#4667E8] text-white text-sm font-semibold shadow-sm hover:bg-[#3b5bd6] transition-all"
+          className="cockpit-btn-primary"
         >
           <Plus className="w-4 h-4" />
           <span>Add Application Shortcut</span>
@@ -144,16 +143,16 @@ export const ConnectedApps: React.FC = () => {
       </div>
 
       {/* Controls & Filter Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-[#E5EAF1] shadow-sm">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-[#E9EAEE] shadow-xs">
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 text-xs font-semibold">
           {categories.map((cat) => (
             <button
               key={cat.id}
               onClick={() => setActiveCategory(cat.id)}
-              className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${
+              className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap cursor-pointer ${
                 activeCategory === cat.id
-                  ? 'bg-[#4667E8] text-white shadow-sm'
-                  : 'text-[#64748B] hover:text-[#172033] hover:bg-[#F8FAFC]'
+                  ? 'bg-[#D62839] text-white shadow-xs font-bold'
+                  : 'text-[#667085] hover:text-[#20242C] hover:bg-[#FFF1F2]'
               }`}
             >
               {cat.label}
@@ -162,13 +161,13 @@ export const ConnectedApps: React.FC = () => {
         </div>
 
         <div className="relative min-w-[220px]">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B]" />
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8]" />
           <input
             type="text"
             placeholder="Search applications..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 bg-[#F8FAFC] border border-[#E5EAF1] rounded-lg text-xs text-[#172033] focus:outline-none focus:border-[#4667E8] focus:bg-white transition-all"
+            className="cockpit-input pl-9 pr-3 py-1.5 text-xs"
           />
         </div>
       </div>
@@ -182,18 +181,18 @@ export const ConnectedApps: React.FC = () => {
           return (
             <div 
               key={app.id}
-              className="p-5 rounded-2xl bg-white border border-[#E5EAF1] shadow-sm hover:border-[#4667E8]/40 hover:shadow-md transition-all flex flex-col justify-between group"
+              className="p-5 rounded-2xl bg-white border border-[#E9EAEE] shadow-xs hover:border-[#FECDD3] hover:shadow-md transition-all flex flex-col justify-between group"
             >
               <div>
                 <div className="flex items-start justify-between mb-3.5">
-                  <div className="w-12 h-12 rounded-xl bg-[#EEF2FF] text-[#4667E8] flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <div className="w-12 h-12 rounded-xl bg-[#FFF1F2] text-[#D62839] border border-[#FECDD3] flex items-center justify-center group-hover:scale-105 transition-transform">
                     <Icon className="w-6 h-6" />
                   </div>
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => handleTogglePin(app.id)}
-                      className={`p-1.5 rounded-lg transition-colors ${
-                        isPinned ? 'text-amber-500 bg-amber-50' : 'text-[#94A3B8] hover:text-[#172033]'
+                      className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                        isPinned ? 'text-[#D62839] bg-[#FFF1F2]' : 'text-[#94A3B8] hover:text-[#20242C]'
                       }`}
                       title={isPinned ? 'Unpin Application' : 'Pin to Top'}
                     >
@@ -201,7 +200,7 @@ export const ConnectedApps: React.FC = () => {
                     </button>
                     <button
                       onClick={() => handleDeleteApp(app.id)}
-                      className="p-1.5 rounded-lg text-[#94A3B8] hover:text-[#F07865] transition-colors"
+                      className="p-1.5 rounded-lg text-[#94A3B8] hover:text-[#DC2626] transition-colors cursor-pointer"
                       title="Delete Application"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -209,19 +208,19 @@ export const ConnectedApps: React.FC = () => {
                   </div>
                 </div>
 
-                <h3 className="text-base font-bold text-[#172033] tracking-tight">{app.name}</h3>
-                <p className="text-xs text-[#64748B] font-mono truncate mt-0.5 max-w-[240px]">{app.app_url}</p>
+                <h3 className="text-base font-bold text-[#20242C] tracking-tight">{app.name}</h3>
+                <p className="text-xs text-[#667085] font-mono truncate mt-0.5 max-w-[240px]">{app.app_url}</p>
 
                 <div className="mt-3 flex items-center justify-between">
                   <Badge status={app.connection_status} />
-                  <span className="text-[10px] font-semibold text-[#64748B] uppercase tracking-wider">{app.category}</span>
+                  <span className="text-[10px] font-semibold text-[#667085] uppercase tracking-wider">{app.category}</span>
                 </div>
               </div>
 
-              <div className="mt-5 pt-3 border-t border-[#E5EAF1] flex items-center gap-2">
+              <div className="mt-5 pt-3 border-t border-[#E9EAEE] flex items-center gap-2">
                 <button
                   onClick={() => handleLaunch(app.app_url)}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-[#EEF2FF] hover:bg-[#4667E8] text-[#4667E8] hover:text-white text-xs font-semibold transition-all shadow-sm"
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-[#FFF1F2] hover:bg-[#D62839] text-[#D62839] hover:text-white text-xs font-semibold transition-all shadow-xs cursor-pointer"
                 >
                   <span>Launch Portal</span>
                   <ExternalLink className="w-3.5 h-3.5" />
@@ -233,23 +232,23 @@ export const ConnectedApps: React.FC = () => {
       </div>
 
       {filtered.length === 0 && (
-        <div className="p-16 text-center rounded-2xl bg-white border border-[#E5EAF1] shadow-sm">
-          <div className="w-12 h-12 mx-auto rounded-full bg-[#EEF2FF] text-[#4667E8] flex items-center justify-center mb-3">
+        <div className="p-16 text-center rounded-2xl bg-white border border-[#E9EAEE] shadow-xs">
+          <div className="w-12 h-12 mx-auto rounded-full bg-[#FFF1F2] text-[#D62839] border border-[#FECDD3] flex items-center justify-center mb-3">
             <Globe className="w-6 h-6" />
           </div>
-          <h4 className="text-base font-semibold text-[#172033]">No applications found</h4>
-          <p className="text-sm text-[#64748B] mt-1 max-w-sm mx-auto">
+          <h4 className="text-base font-semibold text-[#20242C]">No applications found</h4>
+          <p className="text-sm text-[#667085] mt-1 max-w-sm mx-auto">
             Add shortcuts to external SaaS services, partner networks, or internal enterprise URLs.
           </p>
         </div>
       )}
 
       {/* Security notice regarding external logins */}
-      <div className="p-4 rounded-2xl bg-white border border-[#E5EAF1] shadow-sm flex items-start gap-3 text-xs text-[#64748B]">
-        <ShieldCheck className="w-5 h-5 text-[#0F9D92] shrink-0 mt-0.5" />
+      <div className="p-4 rounded-2xl bg-white border border-[#E9EAEE] shadow-xs flex items-start gap-3 text-xs text-[#667085]">
+        <ShieldCheck className="w-5 h-5 text-[#059669] shrink-0 mt-0.5" />
         <div>
-          <p className="font-semibold text-[#172033]">Security & Authentication Isolation</p>
-          <p className="mt-0.5 leading-relaxed text-[#64748B]">
+          <p className="font-semibold text-[#20242C]">Security & Authentication Isolation</p>
+          <p className="mt-0.5 leading-relaxed text-[#667085]">
             All integrated application portals launch in secure external windows with full origin sandboxing. Third-party passwords and authentication secrets are never retained without explicit OAuth authorization.
           </p>
         </div>
@@ -263,7 +262,7 @@ export const ConnectedApps: React.FC = () => {
       >
         <form onSubmit={handleCreateApp} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-[#64748B] mb-1.5">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-[#667085] mb-1.5">
               Application Name
             </label>
             <input
@@ -272,11 +271,11 @@ export const ConnectedApps: React.FC = () => {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. BNI Connect or Custom ERP"
-              className="w-full px-3.5 py-2.5 bg-[#F8FAFC] border border-[#E5EAF1] rounded-xl text-sm text-[#172033] focus:outline-none focus:border-[#4667E8] focus:bg-white transition-all"
+              className="cockpit-input"
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-[#64748B] mb-1.5">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-[#667085] mb-1.5">
               Application URL
             </label>
             <input
@@ -285,18 +284,18 @@ export const ConnectedApps: React.FC = () => {
               value={appUrl}
               onChange={(e) => setAppUrl(e.target.value)}
               placeholder="https://bniconnectglobal.com"
-              className="w-full px-3.5 py-2.5 bg-[#F8FAFC] border border-[#E5EAF1] rounded-xl text-sm text-[#172033] font-mono focus:outline-none focus:border-[#4667E8] focus:bg-white transition-all"
+              className="cockpit-input font-mono"
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-[#64748B] mb-1.5">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-[#667085] mb-1.5">
                 Category
               </label>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value as any)}
-                className="w-full px-3.5 py-2.5 bg-[#F8FAFC] border border-[#E5EAF1] rounded-xl text-sm text-[#172033] focus:outline-none focus:border-[#4667E8] focus:bg-white transition-all"
+                className="cockpit-input"
               >
                 <option value="business">Business & CRM</option>
                 <option value="productivity">Productivity</option>
@@ -306,13 +305,13 @@ export const ConnectedApps: React.FC = () => {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-[#64748B] mb-1.5">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-[#667085] mb-1.5">
                 Icon Representation
               </label>
               <select
                 value={iconName}
                 onChange={(e) => setIconName(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-[#F8FAFC] border border-[#E5EAF1] rounded-xl text-sm text-[#172033] focus:outline-none focus:border-[#4667E8] focus:bg-white transition-all"
+                className="cockpit-input"
               >
                 <option value="Globe">Globe / Web</option>
                 <option value="Calendar">Calendar</option>
@@ -326,13 +325,13 @@ export const ConnectedApps: React.FC = () => {
             </div>
           </div>
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-[#64748B] mb-1.5">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-[#667085] mb-1.5">
               Connection Status
             </label>
             <select
               value={connectionStatus}
               onChange={(e) => setConnectionStatus(e.target.value as any)}
-              className="w-full px-3.5 py-2.5 bg-[#F8FAFC] border border-[#E5EAF1] rounded-xl text-sm text-[#172033] focus:outline-none focus:border-[#4667E8] focus:bg-white transition-all"
+              className="cockpit-input"
             >
               <option value="launcher_only">Launcher Only (Direct Link)</option>
               <option value="connected">Connected (OAuth / API)</option>
@@ -341,17 +340,17 @@ export const ConnectedApps: React.FC = () => {
             </select>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-[#E5EAF1]">
+          <div className="flex justify-end gap-3 pt-4 border-t border-[#E9EAEE]">
             <button
               type="button"
               onClick={() => setIsAddModalOpen(false)}
-              className="px-4 py-2 rounded-xl text-[#64748B] hover:text-[#172033] text-sm font-semibold transition-colors"
+              className="cockpit-btn-secondary"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="cockpit-btn-primary px-5 py-2 rounded-xl bg-[#4667E8] text-white text-sm font-semibold shadow-sm hover:bg-[#3b5bd6] transition-all"
+              className="cockpit-btn-primary"
             >
               Save Application
             </button>

@@ -27,21 +27,29 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 overflow-y-auto">
       {/* Backdrop */}
       <div 
-        className="fixed inset-0 bg-slate-900/35 backdrop-blur-xs transition-opacity duration-200"
+        className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity duration-200"
         onClick={onClose}
       />
 
-      {/* Modal Dialog */}
-      <div className={`relative w-full ${maxWidth} bg-white border border-[#E5EAF1] rounded-2xl shadow-xl overflow-hidden z-10 transition-all duration-200 animate-in fade-in zoom-in-95`}>
+      {/* Modal Dialog (Native Bottom Sheet on Mobile, Centered Dialog on Desktop) */}
+      <div className={`relative w-full ${maxWidth} bg-white border border-[#E9EAEE] rounded-t-2xl sm:rounded-2xl shadow-xl overflow-hidden z-10 transition-all duration-200 max-h-[90vh] flex flex-col`}>
+        {/* Mobile Pull Handle Indicator */}
+        <div className="sm:hidden flex justify-center pt-2 pb-1 bg-[#F8F9FB]">
+          <div className="w-10 h-1 bg-[#D8DCE3] rounded-full" />
+        </div>
+
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5EAF1] bg-[#F8FAFC]">
-          <h2 className="text-base font-bold text-[#172033] tracking-tight">{title}</h2>
+        <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 sm:py-4 border-b border-[#E9EAEE] bg-[#F8F9FB] shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-2 h-5 bg-[#D62839] rounded-full" />
+            <h2 className="text-base font-bold text-[#20242C] tracking-tight">{title}</h2>
+          </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-[#64748B] hover:text-[#172033] hover:bg-[#E2E8F0] transition-colors"
+            className="p-1.5 rounded-lg text-[#667085] hover:text-[#D62839] hover:bg-[#FFF1F2] transition-colors cursor-pointer"
             aria-label="Close dialog"
           >
             <X className="w-4 h-4" />
@@ -49,7 +57,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
         </div>
 
         {/* Content Body */}
-        <div className="p-6 max-h-[82vh] overflow-y-auto">
+        <div className="p-5 sm:p-6 overflow-y-auto flex-1 safe-area-bottom">
           {children}
         </div>
       </div>

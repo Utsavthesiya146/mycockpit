@@ -4,8 +4,7 @@ import {
   Sparkles, 
   Link as LinkIcon, 
   Check, 
-  ArrowRightLeft, 
-  Bell
+  ArrowRightLeft
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import type { NavTab } from './Sidebar';
@@ -65,39 +64,40 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, setIsSi
   };
 
   return (
-    <header className="sticky top-0 z-30 h-16 bg-white/95 backdrop-blur-md border-b border-[#E5EAF1] px-4 sm:px-6 flex items-center justify-between shadow-2xs">
+    <header className="sticky top-0 z-30 h-16 bg-white/95 backdrop-blur-md border-b border-[#E9EAEE] px-4 sm:px-6 flex items-center justify-between shadow-2xs">
       {/* Left: Mobile trigger & Page Title */}
       <div className="flex items-center gap-3">
         <button
           onClick={() => setIsSidebarOpen(true)}
-          className="p-2 rounded-xl text-[#64748B] hover:text-[#172033] hover:bg-[#F1F5F9] transition-colors lg:hidden"
-          aria-label="Open navigation"
+          className="p-2 rounded-xl text-[#667085] hover:text-[#D62839] hover:bg-[#FFF1F2] transition-colors lg:hidden cursor-pointer"
+          aria-label="Open navigation drawer"
         >
           <Menu className="w-5 h-5" />
         </button>
-        <div>
-          <h1 className="text-base sm:text-lg font-bold text-[#172033] tracking-tight">
+        <div className="flex items-center gap-2">
+          <div className="w-1.5 h-4 bg-[#D62839] rounded-full hidden sm:block" />
+          <h1 className="text-base sm:text-lg font-bold text-[#20242C] tracking-tight">
             {getTabTitle(activeTab)}
           </h1>
         </div>
       </div>
 
       {/* Right Controls: Personal URL, Demo Switcher, AI Summon */}
-      <div className="flex items-center gap-2.5 sm:gap-3.5">
-        {/* Quick Demo Switcher (Only visible in verified local dev mode) */}
+      <div className="flex items-center gap-2 sm:gap-3">
+        {/* Quick Demo Switcher (Only visible in verified dev mode) */}
         {isDevMode && (
-          <div className="hidden lg:flex items-center gap-1 p-1 bg-[#F1F5F9] border border-[#E5EAF1] rounded-xl text-xs">
-            <div className="flex items-center gap-1 px-2 text-[#64748B]">
-              <ArrowRightLeft className="w-3.5 h-3.5 text-[#4667E8]" />
+          <div className="hidden lg:flex items-center gap-1 p-1 bg-[#F8F9FB] border border-[#E9EAEE] rounded-xl text-xs">
+            <div className="flex items-center gap-1 px-2 text-[#667085]">
+              <ArrowRightLeft className="w-3.5 h-3.5 text-[#D62839]" />
               <span className="font-semibold text-[10px] uppercase tracking-wider">Dev Switch:</span>
             </div>
             <button
               disabled={switching}
               onClick={() => handleDemoSwitch('admin')}
-              className={`px-2.5 py-1 rounded-lg font-medium transition-all duration-180 ${
+              className={`px-2.5 py-1 rounded-lg font-medium transition-all duration-180 cursor-pointer ${
                 user?.role === 'super_admin'
-                  ? 'bg-white text-[#D97706] font-bold shadow-2xs border border-[#FDE68A]'
-                  : 'text-[#64748B] hover:text-[#172033] hover:bg-white/60'
+                  ? 'bg-[#D62839] text-white font-bold shadow-2xs'
+                  : 'text-[#667085] hover:text-[#20242C] hover:bg-white'
               }`}
             >
               Super Admin
@@ -105,24 +105,24 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, setIsSi
             <button
               disabled={switching}
               onClick={() => handleDemoSwitch('clientA')}
-              className={`px-2.5 py-1 rounded-lg font-medium transition-all duration-180 ${
+              className={`px-2.5 py-1 rounded-lg font-medium transition-all duration-180 cursor-pointer ${
                 user?.tenant_slug === 'utsav'
-                  ? 'bg-[#4667E8] text-white font-bold shadow-2xs'
-                  : 'text-[#64748B] hover:text-[#172033] hover:bg-white/60'
+                  ? 'bg-[#D62839] text-white font-bold shadow-2xs'
+                  : 'text-[#667085] hover:text-[#20242C] hover:bg-white'
               }`}
             >
-              Client A (Utsav)
+              Client A (Acme)
             </button>
             <button
               disabled={switching}
               onClick={() => handleDemoSwitch('clientB')}
-              className={`px-2.5 py-1 rounded-lg font-medium transition-all duration-180 ${
+              className={`px-2.5 py-1 rounded-lg font-medium transition-all duration-180 cursor-pointer ${
                 user?.tenant_slug === 'rahul'
-                  ? 'bg-[#4667E8] text-white font-bold shadow-2xs'
-                  : 'text-[#64748B] hover:text-[#172033] hover:bg-white/60'
+                  ? 'bg-[#D62839] text-white font-bold shadow-2xs'
+                  : 'text-[#667085] hover:text-[#20242C] hover:bg-white'
               }`}
             >
-              Client B (Rahul)
+              Client B (Nexus)
             </button>
           </div>
         )}
@@ -132,11 +132,11 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, setIsSi
           <button
             onClick={copyUrl}
             title="Click to copy Personal Client URL"
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-[#F8FAFC] text-[#172033] border border-[#E5EAF1] text-xs font-mono transition-all duration-180 shadow-2xs"
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-[#FFF1F2] text-[#20242C] hover:text-[#D62839] border border-[#E9EAEE] hover:border-[#FECDD3] text-xs font-mono transition-all duration-180 shadow-2xs cursor-pointer"
           >
-            <LinkIcon className="w-3.5 h-3.5 text-[#4667E8]" />
+            <LinkIcon className="w-3.5 h-3.5 text-[#D62839]" />
             <span>akiradigital.com/{user.tenant_slug}</span>
-            {copied ? <Check className="w-3.5 h-3.5 text-[#0F9D92]" /> : null}
+            {copied ? <Check className="w-3.5 h-3.5 text-[#059669]" /> : null}
           </button>
         )}
 
@@ -145,7 +145,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, setIsSi
           onClick={() => setActiveTab('ai')}
           className="cockpit-btn-primary"
         >
-          <Sparkles className="w-3.5 h-3.5" />
+          <Sparkles className="w-3.5 h-3.5 text-white" />
           <span className="hidden sm:inline">Ask AI Copilot</span>
         </button>
       </div>

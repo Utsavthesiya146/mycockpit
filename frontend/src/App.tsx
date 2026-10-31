@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
+import { BottomNav } from './components/layout/BottomNav';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { Dashboard } from './pages/Dashboard';
@@ -16,6 +17,8 @@ import { AIAssistant } from './pages/AIAssistant';
 import { SuperAdmin } from './pages/SuperAdmin';
 import { SettingsPage } from './pages/Settings';
 import type { NavTab } from './components/layout/Sidebar';
+import { App as CapApp } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 
 const AppContent: React.FC = () => {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -31,12 +34,39 @@ const AppContent: React.FC = () => {
     }
   }, []);
 
+  // Android Native Hardware Back Button Handler
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    let backHandler: any;
+    const registerBackHandler = async () => {
+      backHandler = await CapApp.addListener('backButton', () => {
+        if (isSidebarOpen) {
+          setIsSidebarOpen(false);
+        } else if (activeTab !== 'dashboard') {
+          setActiveTab('dashboard');
+        } else {
+          CapApp.minimizeApp();
+        }
+      });
+    };
+
+    registerBackHandler();
+
+    return () => {
+      if (backHandler && typeof backHandler.remove === 'function') {
+        backHandler.remove();
+      }
+    };
+  }, [isSidebarOpen, activeTab]);
+
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center">
+      <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center p-4">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-12 h-12 border-4 border-[#4667E8]/20 border-t-[#4667E8] rounded-full animate-spin" />
-          <p className="text-xs font-semibold text-[#64748B]">Initializing MY COCKPIT AI Platform...</p>
+          <div className="w-12 h-12 border-4 border-[#D62839]/20 border-t-[#D62839] rounded-full animate-spin" />
+          <p className="text-xs font-bold text-[#20242C] tracking-tight">Initializing MY COCKPIT AI Platform...</p>
+          <p className="text-[11px] text-[#667085]">Connecting secure workspace session</p>
         </div>
       </div>
     );
@@ -79,8 +109,8 @@ const AppContent: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-[#172033] flex antialiased">
-      {/* Sidebar Navigation */}
+    <div className="min-h-screen bg-[#FAFAFA] text-[#20242C] flex antialiased">
+      {/* Sidebar Navigation (Desktop Drawer & Mobile Full Drawer) */}
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -96,9 +126,16 @@ const AppContent: React.FC = () => {
           setIsSidebarOpen={setIsSidebarOpen}
         />
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+        <main className="flex-1 p-3.5 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto pb-24 lg:pb-8">
           {renderActiveView()}
         </main>
+
+        {/* Mobile Native App Bottom Navigation */}
+        <BottomNav
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          openDrawer={() => setIsSidebarOpen(true)}
+        />
       </div>
     </div>
   );

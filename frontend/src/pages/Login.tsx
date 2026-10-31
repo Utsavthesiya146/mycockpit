@@ -13,11 +13,11 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const isDevMode = import.meta.env.DEV || 
+  // One-click demo switcher is strictly restricted to development environments and NEVER included in release builds
+  const isDevMode = import.meta.env.DEV && (
     window.location.hostname === 'localhost' || 
-    window.location.hostname === '127.0.0.1' || 
-    window.location.hostname.includes('onrender.com') || 
-    window.location.hostname.includes('railway.app');
+    window.location.hostname === '127.0.0.1'
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,29 +45,29 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex flex-col justify-center items-center px-4 sm:px-6 lg:px-8 relative overflow-hidden">
-      {/* Gentle ambient tints */}
-      <div className="absolute top-1/4 -left-32 w-96 h-96 bg-[#EEF2FF] rounded-full blur-3xl pointer-events-none opacity-70" />
-      <div className="absolute bottom-1/4 -right-32 w-96 h-96 bg-[#E8F8F5] rounded-full blur-3xl pointer-events-none opacity-60" />
+    <div className="min-h-screen bg-[#FAFAFA] flex flex-col justify-center items-center px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+      {/* Warm ambient tints */}
+      <div className="absolute top-1/4 -left-32 w-96 h-96 bg-[#FFF1F2] rounded-full blur-3xl pointer-events-none opacity-80" />
+      <div className="absolute bottom-1/4 -right-32 w-96 h-96 bg-[#FFF1F2] rounded-full blur-3xl pointer-events-none opacity-60" />
 
       <div className="w-full max-w-md space-y-6 z-10 py-8">
         {/* Brand Header */}
         <div className="text-center">
-          <div className="inline-flex w-14 h-14 rounded-2xl bg-[#4667E8] items-center justify-center shadow-lg shadow-[#4667E8]/25 mb-4">
-            <Layers className="w-7 h-7 text-white" />
+          <div className="inline-flex w-14 h-14 rounded-2xl bg-[#D62839] items-center justify-center shadow-lg shadow-[#D62839]/25 mb-4 text-white">
+            <Layers className="w-7 h-7" />
           </div>
-          <h1 className="text-3xl font-extrabold text-[#172033] tracking-tight">
-            MY COCKPIT <span className="text-[#4667E8]">AI</span>
+          <h1 className="text-3xl font-extrabold text-[#20242C] tracking-tight">
+            MY COCKPIT <span className="text-[#D62839]">AI</span>
           </h1>
-          <p className="mt-2 text-sm text-[#64748B] font-medium">
+          <p className="mt-2 text-sm text-[#667085] font-medium">
             One Dashboard. Every Business. Your Personal AI.
           </p>
         </div>
 
         {/* Login Box */}
-        <div className="bg-white border border-[#E5EAF1] rounded-3xl p-8 shadow-xl shadow-slate-200/50">
+        <div className="bg-white border border-[#E9EAEE] rounded-3xl p-6 sm:p-8 shadow-xl shadow-slate-200/40">
           {error && (
-            <div className="mb-6 p-4 rounded-xl bg-[#FFF1ED] border border-[#FECDD3] flex items-center gap-3 text-sm text-[#E11D48]">
+            <div className="mb-6 p-4 rounded-xl bg-[#FEF2F2] border border-[#FECDD3] flex items-center gap-3 text-sm text-[#DC2626]">
               <AlertCircle className="w-5 h-5 shrink-0" />
               <span>{error}</span>
             </div>
@@ -75,7 +75,7 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-2">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-2">
                 Work Email Address
               </label>
               <div className="relative flex items-center">
@@ -95,7 +95,7 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#64748B] mb-2">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-2">
                 Password
               </label>
               <div className="relative flex items-center">
@@ -117,19 +117,19 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 rounded-xl bg-[#4667E8] hover:bg-[#3855D4] text-white font-semibold text-sm shadow-md shadow-[#4667E8]/25 flex items-center justify-center gap-2 transition-all duration-180 disabled:opacity-50 cursor-pointer mt-2"
+              className="w-full py-3 rounded-xl bg-[#D62839] hover:bg-[#B91C2C] text-white font-semibold text-sm shadow-md shadow-[#D62839]/25 flex items-center justify-center gap-2 transition-all duration-180 disabled:opacity-50 cursor-pointer mt-2"
             >
               <span>{loading ? 'Authenticating...' : 'Sign In to Cockpit'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
 
-          {/* Quick Demo Switcher Section (Gated for Local Development Verification) */}
+          {/* Quick Demo Switcher Section */}
           {isDevMode && (
-            <div className="mt-8 pt-6 border-t border-[#E5EAF1]">
+            <div className="mt-8 pt-6 border-t border-[#E9EAEE]">
               <div className="flex items-center justify-center gap-1.5 mb-3">
-                <span className="text-[11px] font-bold text-[#64748B] uppercase tracking-wider">
-                  Local Dev Demo Accounts
+                <span className="text-[11px] font-bold text-[#667085] uppercase tracking-wider">
+                  1-Click Demo Accounts
                 </span>
               </div>
               <div className="grid grid-cols-1 gap-2.5">
@@ -148,36 +148,36 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
                 <button
                   type="button"
                   onClick={() => handleDemoClick('clientA')}
-                  className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-[#EEF2FF] hover:bg-[#E0E7FF] border border-[#C7D2FE] text-[#4667E8] text-xs font-semibold transition-all duration-180 group cursor-pointer"
+                  className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-[#FFF1F2] hover:bg-[#FFE4E6] border border-[#FECDD3] text-[#D62839] text-xs font-semibold transition-all duration-180 group cursor-pointer"
                 >
                   <div className="flex items-center gap-2.5">
                     <Building className="w-4 h-4" />
                     <span>Client A: Acme Innovations</span>
                   </div>
-                  <span className="text-[10px] font-mono text-[#3855D4]">utsav@acme.com</span>
+                  <span className="text-[10px] font-mono text-[#B91C2C]">utsav@acme.com</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => handleDemoClick('clientB')}
-                  className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-[#E8F8F5] hover:bg-[#CCFBF1] border border-[#B2EBE4] text-[#0F9D92] text-xs font-semibold transition-all duration-180 group cursor-pointer"
+                  className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-[#FFF1F2] hover:bg-[#FFE4E6] border border-[#FECDD3] text-[#D62839] text-xs font-semibold transition-all duration-180 group cursor-pointer"
                 >
                   <div className="flex items-center gap-2.5">
                     <Rocket className="w-4 h-4" />
                     <span>Client B: Nexus Digital</span>
                   </div>
-                  <span className="text-[10px] font-mono text-[#0B7A71]">rahul@nexus.com</span>
+                  <span className="text-[10px] font-mono text-[#B91C2C]">rahul@nexus.com</span>
                 </button>
               </div>
             </div>
           )}
 
           {/* Registration link */}
-          <div className="mt-6 text-center text-xs text-[#64748B]">
+          <div className="mt-6 text-center text-xs text-[#667085]">
             Need an enterprise organization workspace?{' '}
             <button
               onClick={onSwitchToRegister}
-              className="text-[#4667E8] hover:text-[#3855D4] font-semibold underline underline-offset-4 cursor-pointer"
+              className="text-[#D62839] hover:text-[#B91C2C] font-semibold underline underline-offset-4 cursor-pointer"
             >
               Register New Organization
             </button>
