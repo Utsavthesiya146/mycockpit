@@ -77,6 +77,7 @@ class AppHubController {
                 `source_key` VARCHAR(50) NOT NULL,
                 `name` VARCHAR(100) NOT NULL,
                 `category` VARCHAR(50) DEFAULT 'referral',
+                `sync_mode` VARCHAR(50) DEFAULT 'manual_import',
                 `status` VARCHAR(50) DEFAULT 'manual_csv_import',
                 `api_key` VARCHAR(150) NULL,
                 `webhook_secret` VARCHAR(150) NULL,
@@ -98,13 +99,19 @@ class AppHubController {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
             try {
-                $srcColStmt = $db->query("SHOW COLUMNS FROM `lead_sources_config` LIKE 'status'");
-                if ($srcCol = $srcColStmt->fetch(PDO::FETCH_ASSOC)) {
-                    $srcType = strtolower((string)($srcCol['Type'] ?? ''));
-                    if (str_starts_with($srcType, 'enum')) {
-                        $db->exec("ALTER TABLE `lead_sources_config` 
-                            MODIFY COLUMN `status` VARCHAR(50) DEFAULT 'manual_csv_import'");
+                $srcColStmt = $db->query("SHOW COLUMNS FROM `lead_sources_config`");
+                $srcCols = [];
+                while ($sc = $srcColStmt->fetch(PDO::FETCH_ASSOC)) {
+                    $srcCols[] = strtolower($sc['Field']);
+                    if (strtolower($sc['Field']) === 'status') {
+                        $srcType = strtolower((string)($sc['Type'] ?? ''));
+                        if (str_starts_with($srcType, 'enum')) {
+                            $db->exec("ALTER TABLE `lead_sources_config` MODIFY COLUMN `status` VARCHAR(50) DEFAULT 'manual_csv_import'");
+                        }
                     }
+                }
+                if (!in_array('sync_mode', $srcCols)) {
+                    $db->exec("ALTER TABLE `lead_sources_config` ADD COLUMN `sync_mode` VARCHAR(50) DEFAULT 'manual_import' AFTER `category`");
                 }
             } catch (\Throwable $e) {}
 

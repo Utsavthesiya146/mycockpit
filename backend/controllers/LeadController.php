@@ -737,6 +737,11 @@ class LeadController {
         $tenantId = TenantMiddleware::resolveTenantId($currentUser);
         $db = Database::getConnection();
 
+        // Ensure schema compatibility including sync_mode column
+        try {
+            AppHubController::ensureSchemaCompatibility($db);
+        } catch (\Throwable $e) {}
+
         // Auto-seed standard lead sources if missing for this tenant
         try {
             $stdSources = [
