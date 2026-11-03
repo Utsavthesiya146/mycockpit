@@ -272,6 +272,21 @@ try {
     if (preg_match('#^/apps/([0-9]+)/pin$#', $path, $matches) && $method === 'POST') {
         AppHubController::togglePin($currentUser, (int)$matches[1]);
     }
+    if (preg_match('#^/apps/([0-9]+)/connect$#', $path, $matches) && $method === 'POST') {
+        AppHubController::connectPortal($currentUser, (int)$matches[1]);
+    }
+    if (preg_match('#^/apps/([0-9]+)/test-connection$#', $path, $matches) && $method === 'POST') {
+        AppHubController::testConnection($currentUser, (int)$matches[1]);
+    }
+    if (preg_match('#^/apps/([0-9]+)/disconnect$#', $path, $matches) && $method === 'POST') {
+        AppHubController::disconnectPortal($currentUser, (int)$matches[1]);
+    }
+    if (preg_match('#^/apps/([0-9]+)/sync-now$#', $path, $matches) && $method === 'POST') {
+        AppHubController::syncPortalNow($currentUser, (int)$matches[1]);
+    }
+    if (preg_match('#^/apps/([0-9]+)/portal-referrals$#', $path, $matches) && $method === 'GET') {
+        AppHubController::getPortalReferrals($currentUser, (int)$matches[1]);
+    }
 
     // Personal AI Assistant
     if ($path === '/ai/chat' && $method === 'POST') {

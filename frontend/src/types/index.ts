@@ -302,15 +302,23 @@ export interface Payment {
 
 export interface ConnectedApp {
   id: number;
+  tenant_id?: number;
   name: string;
   category: 'productivity' | 'communication' | 'cloud' | 'business' | 'custom';
   icon_name: string;
   custom_icon_url?: string;
   app_url: string;
-  connection_status: 'connected' | 'launcher_only' | 'config_required' | 'unsupported';
-  auth_type: 'direct_link' | 'oauth' | 'api_key';
+  connection_status: 'connected' | 'launcher_only' | 'config_required' | 'unsupported' | 'disconnected' | 'expired' | 'captcha_required' | 'auth_required';
+  auth_type: 'direct_link' | 'oauth' | 'api_key' | 'credentials' | 'session';
   is_pinned: number;
   settings_json?: Record<string, any>;
+  source_key?: 'eaf' | 'bni' | 'kvv' | string | null;
+  is_portal?: boolean;
+  session_status?: 'active' | 'expired' | 'captcha_required' | 'mfa_required' | 'disconnected' | 'auth_required';
+  has_stored_credentials?: boolean;
+  last_synced_at?: string | null;
+  last_error?: string | null;
+  sync_count?: number;
 }
 
 export interface AIMessage {

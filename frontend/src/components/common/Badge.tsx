@@ -63,12 +63,15 @@ export const Badge: React.FC<BadgeProps> = ({ status, variant, dot, children }) 
       case 'cancelled':
       case 'suspended':
       case 'terminated':
+      case 'expired':
         return 'bg-[#FEF2F2] text-[#DC2626] border-[#FECDD3] font-bold';
 
       case 'high':
       case 'auth required':
       case 'authentication required':
       case 'config required':
+      case 'captcha required':
+      case 'mfa required':
       case 'on leave':
         return 'bg-[#FEF3C7] text-[#D97706] border-[#FDE68A]';
 
@@ -78,6 +81,7 @@ export const Badge: React.FC<BadgeProps> = ({ status, variant, dot, children }) 
       case 'draft':
       case 'medium':
       case 'low':
+      case 'disconnected':
       case 'manual import only':
       case 'unsupported':
       case 'inactive':
