@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Layers, ShieldCheck, Building, Rocket, ArrowRight, Lock, Mail, AlertCircle } from 'lucide-react';
+import { Layers, ArrowRight, Lock, Mail, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 interface LoginProps {
@@ -7,17 +7,11 @@ interface LoginProps {
 }
 
 export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
-  const { login, switchDemoAccount } = useAuth();
-  const [email, setEmail] = useState('');
+  const { login } = useAuth();
+  const [email, setEmail] = useState('utsav@acme.com');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-
-  // One-click demo switcher is strictly restricted to development environments and NEVER included in release builds
-  const isDevMode = import.meta.env.DEV && (
-    window.location.hostname === 'localhost' || 
-    window.location.hostname === '127.0.0.1'
-  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,18 +21,6 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
       await login(email, password);
     } catch (err: any) {
       setError(err.message || 'Login failed. Please verify credentials.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDemoClick = async (target: 'admin' | 'clientA' | 'clientB') => {
-    setError('');
-    setLoading(true);
-    try {
-      await switchDemoAccount(target);
-    } catch (err: any) {
-      setError(err.message || 'Failed to authenticate demo account.');
     } finally {
       setLoading(false);
     }
@@ -87,7 +69,7 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@company.com"
+                  placeholder="utsav@acme.com"
                   className="cockpit-input has-icon"
                   style={{ paddingLeft: '2.75rem' }}
                 />
@@ -123,54 +105,6 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
-
-          {/* Quick Demo Switcher Section */}
-          {isDevMode && (
-            <div className="mt-8 pt-6 border-t border-[#E9EAEE]">
-              <div className="flex items-center justify-center gap-1.5 mb-3">
-                <span className="text-[11px] font-bold text-[#667085] uppercase tracking-wider">
-                  1-Click Demo Accounts
-                </span>
-              </div>
-              <div className="grid grid-cols-1 gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => handleDemoClick('admin')}
-                  className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-[#FEF3C7] hover:bg-[#FDE68A] border border-[#FDE68A] text-[#D97706] text-xs font-semibold transition-all duration-180 group cursor-pointer"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <ShieldCheck className="w-4 h-4" />
-                    <span>Super Admin Portal</span>
-                  </div>
-                  <span className="text-[10px] font-mono text-[#B45309]">admin@mycockpit.ai</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleDemoClick('clientA')}
-                  className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-[#FFF1F2] hover:bg-[#FFE4E6] border border-[#FECDD3] text-[#D62839] text-xs font-semibold transition-all duration-180 group cursor-pointer"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Building className="w-4 h-4" />
-                    <span>Client A: Acme Innovations</span>
-                  </div>
-                  <span className="text-[10px] font-mono text-[#B91C2C]">utsav@acme.com</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleDemoClick('clientB')}
-                  className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-[#FFF1F2] hover:bg-[#FFE4E6] border border-[#FECDD3] text-[#D62839] text-xs font-semibold transition-all duration-180 group cursor-pointer"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Rocket className="w-4 h-4" />
-                    <span>Client B: Nexus Digital</span>
-                  </div>
-                  <span className="text-[10px] font-mono text-[#B91C2C]">rahul@nexus.com</span>
-                </button>
-              </div>
-            </div>
-          )}
 
           {/* Registration link */}
           <div className="mt-6 text-center text-xs text-[#667085]">

@@ -11,7 +11,6 @@ interface AuthContextType {
   login: (email: string, pass: string) => Promise<void>;
   register: (payload: any) => Promise<void>;
   logout: () => void;
-  switchDemoAccount: (target: 'admin' | 'clientA' | 'clientB') => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
 
@@ -100,17 +99,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setTenant(null);
   };
 
-  const switchDemoAccount = async (target: 'admin' | 'clientA' | 'clientB') => {
-    const creds = {
-      admin: { email: 'admin@mycockpit.ai', pass: 'AdminPassword123!' },
-      clientA: { email: 'utsav@acme.com', pass: 'Password123!' },
-      clientB: { email: 'rahul@nexus.com', pass: 'Password123!' },
-    };
-
-    const targetCreds = creds[target];
-    await login(targetCreds.email, targetCreds.pass);
-  };
-
   return (
     <AuthContext.Provider
       value={{
@@ -122,7 +110,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         register,
         logout,
-        switchDemoAccount,
         refreshProfile
       }}
     >

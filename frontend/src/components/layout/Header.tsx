@@ -3,8 +3,7 @@ import {
   Menu, 
   Sparkles, 
   Link as LinkIcon, 
-  Check, 
-  ArrowRightLeft
+  Check 
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import type { NavTab } from './Sidebar';
@@ -16,16 +15,8 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, setIsSidebarOpen }) => {
-  const { user, switchDemoAccount } = useAuth();
+  const { user } = useAuth();
   const [copied, setCopied] = useState(false);
-  const [switching, setSwitching] = useState(false);
-
-  // Development mode check: demo switcher active in local dev and cloud preview domains
-  const isDevMode = import.meta.env.DEV || 
-    window.location.hostname === 'localhost' || 
-    window.location.hostname === '127.0.0.1' || 
-    window.location.hostname.includes('onrender.com') || 
-    window.location.hostname.includes('railway.app');
 
   const getTabTitle = (tab: NavTab) => {
     switch (tab) {
@@ -56,15 +47,6 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, setIsSi
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleDemoSwitch = async (target: 'admin' | 'clientA' | 'clientB') => {
-    setSwitching(true);
-    try {
-      await switchDemoAccount(target);
-    } finally {
-      setSwitching(false);
-    }
-  };
-
   return (
     <header className="sticky top-0 z-30 h-16 bg-white/95 backdrop-blur-md border-b border-[#E9EAEE] px-4 sm:px-6 flex items-center justify-between shadow-2xs">
       {/* Left: Mobile trigger & Page Title */}
@@ -84,51 +66,8 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, setIsSi
         </div>
       </div>
 
-      {/* Right Controls: Personal URL, Demo Switcher, AI Summon */}
+      {/* Right Controls: Personal URL, AI Summon */}
       <div className="flex items-center gap-2 sm:gap-3">
-        {/* Quick Demo Switcher (Only visible in verified dev mode) */}
-        {isDevMode && (
-          <div className="hidden lg:flex items-center gap-1 p-1 bg-[#F8F9FB] border border-[#E9EAEE] rounded-xl text-xs">
-            <div className="flex items-center gap-1 px-2 text-[#667085]">
-              <ArrowRightLeft className="w-3.5 h-3.5 text-[#D62839]" />
-              <span className="font-semibold text-[10px] uppercase tracking-wider">Dev Switch:</span>
-            </div>
-            <button
-              disabled={switching}
-              onClick={() => handleDemoSwitch('admin')}
-              className={`px-2.5 py-1 rounded-lg font-medium transition-all duration-180 cursor-pointer ${
-                user?.role === 'super_admin'
-                  ? 'bg-[#D62839] text-white font-bold shadow-2xs'
-                  : 'text-[#667085] hover:text-[#20242C] hover:bg-white'
-              }`}
-            >
-              Super Admin
-            </button>
-            <button
-              disabled={switching}
-              onClick={() => handleDemoSwitch('clientA')}
-              className={`px-2.5 py-1 rounded-lg font-medium transition-all duration-180 cursor-pointer ${
-                user?.tenant_slug === 'utsav'
-                  ? 'bg-[#D62839] text-white font-bold shadow-2xs'
-                  : 'text-[#667085] hover:text-[#20242C] hover:bg-white'
-              }`}
-            >
-              Client A (Acme)
-            </button>
-            <button
-              disabled={switching}
-              onClick={() => handleDemoSwitch('clientB')}
-              className={`px-2.5 py-1 rounded-lg font-medium transition-all duration-180 cursor-pointer ${
-                user?.tenant_slug === 'rahul'
-                  ? 'bg-[#D62839] text-white font-bold shadow-2xs'
-                  : 'text-[#667085] hover:text-[#20242C] hover:bg-white'
-              }`}
-            >
-              Client B (Nexus)
-            </button>
-          </div>
-        )}
-
         {/* Personal Client URL Badge */}
         {user?.tenant_slug && (
           <button
@@ -137,7 +76,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, setIsSi
             className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-[#FFF1F2] text-[#20242C] hover:text-[#D62839] border border-[#E9EAEE] hover:border-[#FECDD3] text-xs font-mono transition-all duration-180 shadow-2xs cursor-pointer"
           >
             <LinkIcon className="w-3.5 h-3.5 text-[#D62839]" />
-            <span>akiradigital.com/{user.tenant_slug}</span>
+            <span>localhost:5173/{user.tenant_slug}</span>
             {copied ? <Check className="w-3.5 h-3.5 text-[#059669]" /> : null}
           </button>
         )}
