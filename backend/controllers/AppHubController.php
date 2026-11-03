@@ -78,7 +78,7 @@ class AppHubController {
             if (!$check->fetchColumn()) {
                 $ins = $db->prepare("INSERT INTO connected_apps 
                     (tenant_id, name, category, icon_name, app_url, connection_status, auth_type, is_pinned)
-                    VALUES (?, ?, ?, ?, ?, 'launcher_only', 'direct_link', 1)");
+                    VALUES (?, ?, ?, ?, ?, 'disconnected', 'direct_link', 1)");
                 $ins->execute([$tenantId, $p['name'], $p['category'], $p['icon'], $p['url']]);
             }
         }
@@ -114,7 +114,7 @@ class AppHubController {
                 $sess = $sStmt->fetch(PDO::FETCH_ASSOC);
 
                 // Query lead_sources_config
-                $cStmt = $db->prepare("SELECT last_sync_at, last_error_message, sync_count 
+                $cStmt = $db->prepare("SELECT status, last_sync_at, last_error_message, sync_count 
                     FROM lead_sources_config 
                     WHERE tenant_id = ? AND source_key = ? LIMIT 1");
                 $cStmt->execute([$tenantId, $sourceKey]);
@@ -122,15 +122,22 @@ class AppHubController {
 
                 $sessionStatus = $sess['session_status'] ?? 'disconnected';
                 $hasStoredCreds = !empty($sess['has_creds']);
+                $cfgStatus = $cfg['status'] ?? null;
+                $lastError = $cfg['last_error_message'] ?? null;
 
-                // Determine honest UI connection_status
-                if ($sessionStatus === 'active') {
+                // Determine honest UI connection_status according to the Authentication Truth Rule:
+                // An app is ONLY connected if session is active, no active error exists, and config is connected
+                if ($sessionStatus === 'active' && empty($lastError) && $cfgStatus === 'connected') {
                     $app['connection_status'] = 'connected';
-                } elseif ($sessionStatus === 'expired') {
-                    $app['connection_status'] = 'expired';
                 } elseif ($sessionStatus === 'captcha_required') {
                     $app['connection_status'] = 'captcha_required';
-                } elseif ($sessionStatus === 'auth_required' || $hasStoredCreds) {
+                } elseif ($sessionStatus === 'mfa_required') {
+                    $app['connection_status'] = 'mfa_required';
+                } elseif ($sessionStatus === 'expired') {
+                    $app['connection_status'] = 'expired';
+                } elseif ($sessionStatus === 'auth_required' || $cfgStatus === 'auth_required' || !empty($lastError)) {
+                    $app['connection_status'] = 'auth_required';
+                } elseif ($hasStoredCreds) {
                     $app['connection_status'] = 'auth_required';
                 } else {
                     $app['connection_status'] = 'disconnected';
@@ -139,7 +146,7 @@ class AppHubController {
                 $app['session_status'] = $sessionStatus;
                 $app['has_stored_credentials'] = $hasStoredCreds;
                 $app['last_synced_at'] = $cfg['last_sync_at'] ?? null;
-                $app['last_error'] = $cfg['last_error_message'] ?? null;
+                $app['last_error'] = $lastError;
                 $app['sync_count'] = (int)($cfg['sync_count'] ?? 0);
             } else {
                 $app['is_portal'] = false;
@@ -189,7 +196,7 @@ class AppHubController {
                     ON DUPLICATE KEY UPDATE session_status = 'captcha_required', last_validated_at = NOW()")
                     ->execute([$tenantId]);
 
-                $db->prepare("UPDATE connected_apps SET connection_status = 'config_required', updated_at = NOW() WHERE id = ?")
+                $db->prepare("UPDATE connected_apps SET connection_status = 'captcha_required', updated_at = NOW() WHERE id = ?")
                     ->execute([$id]);
 
                 Response::error('CAPTCHA / Security verification challenge detected on EAF Connect. Interactive challenge required.', 403, [
@@ -210,7 +217,7 @@ class AppHubController {
                     ON DUPLICATE KEY UPDATE session_status = 'expired', encrypted_session_data = NULL, last_validated_at = NOW()")
                     ->execute([$tenantId]);
 
-                $db->prepare("UPDATE connected_apps SET connection_status = 'config_required', updated_at = NOW() WHERE id = ?")
+                $db->prepare("UPDATE connected_apps SET connection_status = 'auth_required', updated_at = NOW() WHERE id = ?")
                     ->execute([$id]);
 
                 Response::error('Authentication failed: ' . $errMsg, 401, [
@@ -286,7 +293,7 @@ class AppHubController {
         $cStmt->execute([$encrypted, $tenantId, $sourceKey]);
 
         // Update connected_apps status
-        $db->prepare("UPDATE connected_apps SET connection_status = 'config_required', updated_at = NOW() WHERE id = ?")
+        $db->prepare("UPDATE connected_apps SET connection_status = 'auth_required', updated_at = NOW() WHERE id = ?")
             ->execute([$id]);
 
         Response::success([
@@ -355,6 +362,9 @@ class AppHubController {
                         ->execute([$tenantId]);
                 }
 
+                $db->prepare("UPDATE lead_sources_config SET status = 'connected', last_error_message = NULL, last_error_at = NULL, updated_at = NOW() WHERE tenant_id = ? AND source_key = 'eaf'")
+                    ->execute([$tenantId]);
+
                 $db->prepare("UPDATE connected_apps SET connection_status = 'connected', updated_at = NOW() WHERE id = ?")
                     ->execute([$id]);
 
@@ -371,21 +381,29 @@ class AppHubController {
             if (($validation['status'] ?? '') === 'captcha_required') {
                 $db->prepare("UPDATE lead_platform_sessions SET session_status = 'captcha_required', last_validated_at = NOW() WHERE tenant_id = ? AND source_key = 'eaf'")
                     ->execute([$tenantId]);
+                $db->prepare("UPDATE lead_sources_config SET status = 'auth_required', last_error_message = 'CAPTCHA challenge required', last_error_at = NOW(), updated_at = NOW() WHERE tenant_id = ? AND source_key = 'eaf'")
+                    ->execute([$tenantId]);
+                $db->prepare("UPDATE connected_apps SET connection_status = 'captcha_required', updated_at = NOW() WHERE id = ?")
+                    ->execute([$id]);
+
                 Response::error('CAPTCHA / Security challenge detected on EAF Connect. Please complete challenge in browser.', 403, [
                     'session_status' => 'captcha_required',
                     'connection_status' => 'captcha_required'
                 ]);
             }
 
+            $errMsg = $validation['message'] ?? 'EAF Connect session has expired or is invalid. Re-authentication required.';
             $db->prepare("UPDATE lead_platform_sessions SET session_status = 'expired', last_validated_at = NOW() WHERE tenant_id = ? AND source_key = 'eaf'")
                 ->execute([$tenantId]);
-            $db->prepare("UPDATE connected_apps SET connection_status = 'config_required', updated_at = NOW() WHERE id = ?")
+            $db->prepare("UPDATE lead_sources_config SET status = 'auth_required', last_error_message = ?, last_error_at = NOW(), updated_at = NOW() WHERE tenant_id = ? AND source_key = 'eaf'")
+                ->execute([$errMsg, $tenantId]);
+            $db->prepare("UPDATE connected_apps SET connection_status = 'expired', updated_at = NOW() WHERE id = ?")
                 ->execute([$id]);
 
-            Response::error('EAF Connect session has expired or is invalid. Re-authentication required.', 401, [
+            Response::error($errMsg, 401, [
                 'session_status' => 'expired',
                 'connection_status' => 'expired',
-                'message' => $validation['message'] ?? 'Session expired'
+                'message' => $errMsg
             ]);
         }
 
@@ -424,7 +442,7 @@ class AppHubController {
         $db->prepare("UPDATE lead_sources_config SET encrypted_credentials = NULL, status = 'manual_csv_import', last_error_message = NULL, updated_at = NOW() WHERE tenant_id = ? AND source_key = ?")
             ->execute([$tenantId, $sourceKey]);
 
-        $db->prepare("UPDATE connected_apps SET connection_status = 'launcher_only', updated_at = NOW() WHERE id = ?")
+        $db->prepare("UPDATE connected_apps SET connection_status = 'disconnected', updated_at = NOW() WHERE id = ?")
             ->execute([$id]);
 
         Response::success([

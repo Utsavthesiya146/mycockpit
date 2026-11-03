@@ -197,6 +197,7 @@ assertTest($unauthorizedSession['status'] === 'disconnected', "Tenant 2 cannot r
 // Cleanup test records
 $db->prepare("DELETE FROM `crm_leads` WHERE `id` IN (?, ?, ?)")->execute([$testLeadId, $bniLeadId, $kvvLeadId]);
 $db->prepare("DELETE FROM `lead_writeback_queue` WHERE `source_lead_id` IN ('TEST-EAF-AUTO-01', 'BNI-SLIP-TEST-01', 'KVV-REF-TEST-01')")->execute();
+$db->prepare("UPDATE `lead_platform_sessions` SET `encrypted_session_data` = NULL, `session_status` = 'disconnected' WHERE `tenant_id` IN (?, ?) AND `source_key` IN ('eaf', 'bni')")->execute([$tenantIdA, $tenantIdB]);
 try {
     $db->prepare("DELETE FROM `u594406910_eafv2`.`referrals` WHERE `referral_code` = 'TEST-EAF-AUTO-01'")->execute();
 } catch (\Throwable $e) {}

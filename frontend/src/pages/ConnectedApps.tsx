@@ -158,6 +158,7 @@ export const ConnectedApps: React.FC = () => {
         type: 'error',
         message: err.message || 'Failed to save portal connection.'
       });
+      fetchApps();
     } finally {
       setIsConnecting(false);
     }
@@ -180,6 +181,7 @@ export const ConnectedApps: React.FC = () => {
         type: 'error',
         message: err.message || 'Test connection check failed.'
       });
+      fetchApps();
     } finally {
       setIsTesting(false);
     }
@@ -365,9 +367,13 @@ export const ConnectedApps: React.FC = () => {
                 </div>
                 <p className="text-xs text-[#667085] font-mono truncate mt-0.5 max-w-[240px]">{app.app_url}</p>
 
-                <div className="mt-3 flex items-center justify-between">
-                  <Badge status={app.connection_status} />
-                  <span className="text-[10px] font-semibold text-[#667085] uppercase tracking-wider">{app.category}</span>
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <div className="shrink-0">
+                    <Badge status={app.connection_status} />
+                  </div>
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold text-[#667085] bg-[#F8F9FB] border border-[#E9EAEE] uppercase tracking-wider">
+                    {app.category}
+                  </span>
                 </div>
               </div>
 
@@ -396,18 +402,18 @@ export const ConnectedApps: React.FC = () => {
                     <button
                       onClick={() => handleOpenConnectModal(app)}
                       className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold transition-all shadow-xs cursor-pointer ${
-                        app.connection_status === 'connected'
+                        app.connection_status === 'connected' && !app.last_error
                           ? 'bg-[#ECFDF5] hover:bg-[#059669] text-[#059669] hover:text-white border border-[#A7F3D0]'
-                          : app.connection_status === 'expired' || app.connection_status === 'captcha_required'
+                          : app.connection_status === 'expired' || app.connection_status === 'captcha_required' || app.connection_status === 'auth_required' || app.connection_status === 'error' || app.last_error
                           ? 'bg-[#FEF2F2] hover:bg-[#DC2626] text-[#DC2626] hover:text-white border border-[#FECDD3]'
                           : 'bg-[#FFF1F2] hover:bg-[#D62839] text-[#D62839] hover:text-white border border-[#FECDD3]'
                       }`}
                     >
                       <Link2 className="w-3.5 h-3.5" />
                       <span>
-                        {app.connection_status === 'connected'
+                        {app.connection_status === 'connected' && !app.last_error
                           ? 'Manage Connection'
-                          : app.connection_status === 'expired' || app.connection_status === 'captcha_required'
+                          : app.connection_status === 'expired' || app.connection_status === 'captcha_required' || app.connection_status === 'auth_required' || app.connection_status === 'error' || app.last_error
                           ? 'Reconnect Portal'
                           : 'Connect Portal'}
                       </span>

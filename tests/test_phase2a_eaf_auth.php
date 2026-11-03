@@ -234,6 +234,9 @@ $valExpired = $driver->validateSession(1, [
 ]);
 assertTest($valExpired['status'] === 'expired', "Invalid token session marked 'expired'");
 
+// Cleanup test session to prevent test pollution of live tenant state
+$db->prepare("UPDATE `lead_platform_sessions` SET `encrypted_session_data` = NULL, `session_status` = 'disconnected' WHERE `source_key` = 'eaf'")->execute();
+
 echo "\n====================================================================\n";
 echo "   PHASE 2A TEST RESULTS: {$passed} PASSED | {$failed} FAILED       \n";
 echo "====================================================================\n";

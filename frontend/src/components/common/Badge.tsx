@@ -64,6 +64,7 @@ export const Badge: React.FC<BadgeProps> = ({ status, variant, dot, children }) 
       case 'suspended':
       case 'terminated':
       case 'expired':
+      case 'error':
         return 'bg-[#FEF2F2] text-[#DC2626] border-[#FECDD3] font-bold';
 
       case 'high':
