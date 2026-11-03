@@ -19,7 +19,7 @@ class AppHubController {
 
     /**
      * Ensure database schema compatibility for Render / MySQL 8 strict mode.
-     * Safely widens rigid ENUM status columns to VARCHAR(50) without data loss.
+     * Safely widens rigid ENUM status columns to VARCHAR(50) and creates required tables.
      */
     public static function ensureSchemaCompatibility(?PDO $db = null): void {
         if (self::$schemaMigrated) {
@@ -41,7 +41,24 @@ class AppHubController {
                 }
             }
 
-            // 2. Check and convert lead_platform_sessions.session_status
+            // 2. Ensure lead_platform_sessions table exists and has VARCHAR(50) session_status
+            $db->exec("CREATE TABLE IF NOT EXISTS `lead_platform_sessions` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `tenant_id` INT NOT NULL,
+                `source_key` VARCHAR(50) NOT NULL,
+                `session_status` VARCHAR(50) DEFAULT 'disconnected',
+                `encrypted_session_data` TEXT NULL,
+                `last_validated_at` DATETIME NULL,
+                `session_expires_at` DATETIME NULL,
+                `rate_limit_reset_at` DATETIME NULL,
+                `notes` TEXT NULL,
+                `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY `uk_tenant_platform_session` (`tenant_id`, `source_key`),
+                INDEX `idx_session_tenant_source` (`tenant_id`, `source_key`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+            // Check if existing lead_platform_sessions has ENUM session_status
             try {
                 $sessColStmt = $db->query("SHOW COLUMNS FROM `lead_platform_sessions` LIKE 'session_status'");
                 if ($sessCol = $sessColStmt->fetch(PDO::FETCH_ASSOC)) {
@@ -51,11 +68,35 @@ class AppHubController {
                             MODIFY COLUMN `session_status` VARCHAR(50) DEFAULT 'disconnected'");
                     }
                 }
-            } catch (\Throwable $e) {
-                // Table may not exist yet or already altered
-            }
+            } catch (\Throwable $e) {}
 
-            // 3. Check and convert lead_sources_config.status
+            // 3. Ensure lead_sources_config table exists and has VARCHAR(50) status
+            $db->exec("CREATE TABLE IF NOT EXISTS `lead_sources_config` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `tenant_id` INT NOT NULL,
+                `source_key` VARCHAR(50) NOT NULL,
+                `name` VARCHAR(100) NOT NULL,
+                `category` VARCHAR(50) DEFAULT 'referral',
+                `status` VARCHAR(50) DEFAULT 'manual_csv_import',
+                `api_key` VARCHAR(150) NULL,
+                `webhook_secret` VARCHAR(150) NULL,
+                `settings_json` LONGTEXT NULL,
+                `encrypted_credentials` TEXT NULL,
+                `last_sync_at` DATETIME NULL,
+                `sync_checkpoint` VARCHAR(255) NULL,
+                `sync_interval_minutes` INT DEFAULT 15,
+                `last_error_message` TEXT NULL,
+                `last_error_at` DATETIME NULL,
+                `retry_count` INT DEFAULT 0,
+                `auto_assign_user_id` INT NULL,
+                `sync_count` INT DEFAULT 0,
+                `is_enabled` TINYINT(1) DEFAULT 1,
+                `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX `idx_sources_tenant` (`tenant_id`),
+                INDEX `idx_sources_key` (`source_key`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
             try {
                 $srcColStmt = $db->query("SHOW COLUMNS FROM `lead_sources_config` LIKE 'status'");
                 if ($srcCol = $srcColStmt->fetch(PDO::FETCH_ASSOC)) {
@@ -65,9 +106,28 @@ class AppHubController {
                             MODIFY COLUMN `status` VARCHAR(50) DEFAULT 'manual_csv_import'");
                     }
                 }
-            } catch (\Throwable $e) {
-                // Table may not exist yet or already altered
-            }
+            } catch (\Throwable $e) {}
+
+            // 4. Ensure lead_writeback_queue table exists
+            $db->exec("CREATE TABLE IF NOT EXISTS `lead_writeback_queue` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `tenant_id` INT NOT NULL,
+                `lead_id` INT NOT NULL,
+                `source_platform` VARCHAR(50) NOT NULL,
+                `source_lead_id` VARCHAR(100) NOT NULL,
+                `action_type` VARCHAR(50) NOT NULL,
+                `proposed_payload` JSON NOT NULL,
+                `original_snapshot` JSON NULL,
+                `status` VARCHAR(50) DEFAULT 'pending_confirmation',
+                `conflict_details` JSON NULL,
+                `error_message` TEXT NULL,
+                `retry_count` INT DEFAULT 0,
+                `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX `idx_wb_queue_tenant_status` (`tenant_id`, `status`),
+                INDEX `idx_wb_queue_lead` (`lead_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
         } catch (\Throwable $e) {
             error_log('Schema compatibility check notice: ' . $e->getMessage());
         }
