@@ -148,6 +148,17 @@ class EAFWebAutomationDriver implements PlatformAutomationDriverInterface {
         $res = curl_exec($ch);
         $postHttpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $redirectUrl = curl_getinfo($ch, CURLINFO_REDIRECT_URL);
+        $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+        $headers = is_string($res) ? substr($res, 0, $headerSize) : '';
+        $body = is_string($res) ? substr($res, $headerSize) : '';
+
+        // Extract location header if present (handles relative or lower-case HTTP/2 headers)
+        $locationHeader = null;
+        if (preg_match('/^location:\s*(.+)$/im', $headers, $locMatch)) {
+            $locationHeader = trim($locMatch[1]);
+        }
+        $effectiveRedirect = $redirectUrl ?: $locationHeader;
+
         $postCookies = curl_getinfo($ch, CURLINFO_COOKIELIST) ?: $loginCookies;
         curl_close($ch);
 
@@ -160,46 +171,104 @@ class EAFWebAutomationDriver implements PlatformAutomationDriverInterface {
             ];
         }
 
-        // Check redirect location
-        $isRedirectToLogin = ($redirectUrl && (str_contains($redirectUrl, 'member_login') || str_contains($redirectUrl, 'index.php/member_login')));
+        // Check redirect location: if redirected back to member_login, credentials were explicitly rejected
+        $isRedirectToLogin = ($effectiveRedirect && (
+            str_contains($effectiveRedirect, 'member_login') 
+            || str_contains($effectiveRedirect, 'index.php/member_login')
+        ));
         
         if ($isRedirectToLogin) {
             return [
                 'status' => 'auth_failed',
                 'message' => 'Invalid email or password on EAF Connect.',
-                'reason' => 'invalid_credentials'
+                'reason' => 'invalid_credentials',
+                'diagnostics' => [
+                    'post_http_code' => $postHttpCode,
+                    'redirect_location' => $effectiveRedirect ? parse_url($effectiveRedirect, PHP_URL_PATH) : null,
+                    'redirected_to_login' => true
+                ]
             ];
         }
 
-        // Check for member area redirect (e.g. /member/dashboard or /member/connect)
-        $isMemberRedirect = ($redirectUrl && str_contains($redirectUrl, '/member/'));
+        // Check for member area redirect or standard HTTP redirect status codes
+        $isMemberRedirect = ($effectiveRedirect && str_contains($effectiveRedirect, '/member/'));
+        $isRedirectOrOk = in_array($postHttpCode, [200, 301, 302, 303, 307, 308], true);
 
-        if ($isMemberRedirect || $postHttpCode === 200 || $postHttpCode === 303) {
+        if ($isMemberRedirect || $isRedirectOrOk) {
             // Step 3: Verify the session by requesting /member/dashboard
             $dashCh = curl_init($this->baseUrl . '/member/dashboard');
-            curl_setopt_array($dashCh, [
+            $dashOpts = [
                 CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_TIMEOUT => 12,
+                CURLOPT_TIMEOUT => 15,
                 CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
                 CURLOPT_SSL_VERIFYPEER => false,
                 CURLOPT_SSL_VERIFYHOST => false,
                 CURLOPT_COOKIEFILE => '',
                 CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            ]);
+                CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                CURLOPT_HTTPHEADER => [
+                    'Origin: ' . $this->baseUrl,
+                    'Referer: ' . $this->baseUrl . '/member_login'
+                ]
+            ];
+
+            // Extract cookie pairs to support both in-memory engine and explicit Cookie header
+            $cookiePairs = [];
+            foreach ($postCookies as $cl) {
+                $parts = preg_split('/\s+/', trim($cl));
+                if (count($parts) >= 7) {
+                    $cName = $parts[5];
+                    $cVal = $parts[6];
+                    $cookiePairs[$cName] = "{$cName}={$cVal}";
+                }
+            }
+            if (preg_match_all('/^Set-Cookie:\s*([^=]+)=([^;]+)/im', $headers, $scMatches)) {
+                for ($i = 0; $i < count($scMatches[0]); $i++) {
+                    $scName = trim($scMatches[1][$i]);
+                    $scVal = trim($scMatches[2][$i]);
+                    $cookiePairs[$scName] = "{$scName}={$scVal}";
+                }
+            }
+            if (!empty($cookiePairs)) {
+                $dashOpts[CURLOPT_COOKIE] = implode('; ', $cookiePairs);
+            }
+
+            curl_setopt_array($dashCh, $dashOpts);
             foreach ($postCookies as $cl) {
                 curl_setopt($dashCh, CURLOPT_COOKIELIST, $cl);
             }
+
             $dashBody = curl_exec($dashCh);
             $dashCode = curl_getinfo($dashCh, CURLINFO_HTTP_CODE);
             $dashUrl = curl_getinfo($dashCh, CURLINFO_EFFECTIVE_URL);
             $finalCookies = curl_getinfo($dashCh, CURLINFO_COOKIELIST) ?: $postCookies;
             curl_close($dashCh);
 
-            // If dashboard returned 200 and not redirected back to member_login
-            if ($dashCode === 200 && !str_contains((string)$dashUrl, 'member_login') && !str_contains((string)$dashBody, 'name="csrf_test_name"')) {
+            // Accurate verification: ensure not redirected to login form AND has authenticated dashboard markers
+            $isLoginPage = str_contains((string)$dashUrl, 'member_login') 
+                || (is_string($dashBody) && (
+                    str_contains($dashBody, 'action="https://eafconnect.com/loginCheck"')
+                    || str_contains($dashBody, 'action="loginCheck"')
+                    || str_contains($dashBody, 'Sign In to Member Portal')
+                    || str_contains($dashBody, 'Member Login - EAF Connect')
+                ));
+
+            $hasDashboardMarker = is_string($dashBody) && (
+                str_contains($dashBody, 'Member Dashboard')
+                || str_contains($dashBody, '/logout')
+                || str_contains($dashBody, 'member/connect')
+                || str_contains((string)$dashUrl, 'member/dashboard')
+            );
+
+            if ($dashCode === 200 && !$isLoginPage && $hasDashboardMarker) {
                 $cookieJarContent = implode("\n", $finalCookies);
                 $cookieMap = $this->parseCookieJar($cookieJarContent);
+                foreach ($cookiePairs as $cp) {
+                    list($k, $v) = explode('=', $cp, 2);
+                    if (empty($cookieMap[$k])) {
+                        $cookieMap[$k] = $v;
+                    }
+                }
 
                 return [
                     'status' => 'active',
@@ -208,16 +277,32 @@ class EAFWebAutomationDriver implements PlatformAutomationDriverInterface {
                     'cookies' => $cookieMap,
                     'ci_session' => $cookieMap['ci_session'] ?? null,
                     'is_live' => true,
-                    'verified_at' => date('Y-m-d H:i:s')
+                    'verified_at' => date('Y-m-d H:i:s'),
+                    'diagnostics' => [
+                        'http_code' => $dashCode,
+                        'authenticated' => true,
+                        'dashboard_verified' => true
+                    ]
                 ];
             }
         }
 
-        // If we got here, login was not successful
+        // If we got here, login was not verified
         return [
             'status' => 'auth_failed',
             'message' => 'EAF Connect login could not be verified. Please check your credentials.',
-            'reason' => 'login_unverified'
+            'reason' => 'login_unverified',
+            'diagnostics' => [
+                'login_page_http_code' => $httpCode,
+                'csrf_token_found' => !empty($csrfToken),
+                'initial_cookies_count' => count($loginCookies),
+                'post_http_code' => $postHttpCode,
+                'redirect_location' => $effectiveRedirect ? parse_url($effectiveRedirect, PHP_URL_PATH) : null,
+                'dashboard_http_code' => $dashCode ?? null,
+                'dashboard_final_path' => isset($dashUrl) ? parse_url($dashUrl, PHP_URL_PATH) : null,
+                'contains_login_form' => $isLoginPage ?? null,
+                'has_dashboard_markers' => $hasDashboardMarker ?? null
+            ]
         ];
     }
 
@@ -328,8 +413,22 @@ class EAFWebAutomationDriver implements PlatformAutomationDriverInterface {
         $redirect = curl_getinfo($ch, CURLINFO_REDIRECT_URL);
         curl_close($ch);
 
-        // Check if active (HTTP 200 without redirect to login)
-        if ($httpCode === 200 && is_string($res) && !str_contains($res, 'name="csrf_test_name"')) {
+        // Check if active (HTTP 200 with dashboard markers and not login page)
+        $isLoginPage = ($redirect && str_contains($redirect, 'member_login'))
+            || (is_string($res) && (
+                str_contains($res, 'action="https://eafconnect.com/loginCheck"')
+                || str_contains($res, 'action="loginCheck"')
+                || str_contains($res, 'Sign In to Member Portal')
+                || str_contains($res, 'Member Login - EAF Connect')
+            ));
+
+        $hasDashboardMarker = is_string($res) && (
+            str_contains($res, 'Member Dashboard') 
+            || str_contains($res, '/logout') 
+            || str_contains($res, 'member/connect')
+        );
+
+        if ($httpCode === 200 && !$isLoginPage && $hasDashboardMarker) {
             return ['status' => 'active', 'message' => 'EAF session active and verified (GET /member/dashboard HTTP 200).'];
         }
 

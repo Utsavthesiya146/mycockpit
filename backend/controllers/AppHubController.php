@@ -217,7 +217,8 @@ class AppHubController {
                     'session_status' => 'expired',
                     'connection_status' => 'auth_required',
                     'source_key' => 'eaf',
-                    'reason' => $authResult['reason'] ?? 'auth_failed'
+                    'reason' => $authResult['reason'] ?? 'auth_failed',
+                    'diagnostics' => $authResult['diagnostics'] ?? null
                 ]);
             }
 
