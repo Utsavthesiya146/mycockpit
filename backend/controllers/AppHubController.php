@@ -128,6 +128,97 @@ class AppHubController {
                 INDEX `idx_wb_queue_lead` (`lead_id`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
+            // 5. Ensure lead_activities table exists
+            $db->exec("CREATE TABLE IF NOT EXISTS `lead_activities` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `tenant_id` INT NOT NULL,
+                `lead_id` INT NOT NULL,
+                `user_id` INT NULL,
+                `activity_type` VARCHAR(50) NOT NULL,
+                `title` VARCHAR(255) NOT NULL,
+                `description` TEXT NULL,
+                `activity_date` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                `metadata` JSON NULL,
+                `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                INDEX `idx_lead_act_tenant` (`tenant_id`),
+                INDEX `idx_lead_act_lead` (`lead_id`),
+                INDEX `idx_lead_act_date` (`activity_date`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+            // 6. Ensure lead_sync_logs table exists
+            $db->exec("CREATE TABLE IF NOT EXISTS `lead_sync_logs` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `tenant_id` INT NOT NULL,
+                `source_key` VARCHAR(50) NOT NULL,
+                `sync_type` VARCHAR(50) NOT NULL,
+                `status` VARCHAR(50) NOT NULL,
+                `leads_fetched` INT DEFAULT 0,
+                `leads_created` INT DEFAULT 0,
+                `leads_updated` INT DEFAULT 0,
+                `leads_skipped` INT DEFAULT 0,
+                `checkpoint_before` VARCHAR(255) NULL,
+                `checkpoint_after` VARCHAR(255) NULL,
+                `error_details` TEXT NULL,
+                `execution_time_ms` INT DEFAULT 0,
+                `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                INDEX `idx_sync_logs_tenant` (`tenant_id`, `source_key`),
+                INDEX `idx_sync_logs_date` (`created_at`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+            // 7. Ensure crm_leads tracking columns exist
+            try {
+                $colsStmt = $db->query("SHOW COLUMNS FROM `crm_leads`");
+                $existingCols = [];
+                while ($c = $colsStmt->fetch(PDO::FETCH_ASSOC)) {
+                    $existingCols[] = strtolower($c['Field']);
+                }
+                if (!in_array('service_requirement', $existingCols)) {
+                    $db->exec("ALTER TABLE `crm_leads` ADD COLUMN `service_requirement` VARCHAR(255) NULL AFTER `source`");
+                }
+                if (!in_array('priority', $existingCols)) {
+                    $db->exec("ALTER TABLE `crm_leads` ADD COLUMN `priority` VARCHAR(50) DEFAULT 'medium' AFTER `status`");
+                }
+                if (!in_array('assigned_to', $existingCols)) {
+                    $db->exec("ALTER TABLE `crm_leads` ADD COLUMN `assigned_to` INT NULL AFTER `service_requirement`");
+                }
+                if (!in_array('source_lead_id', $existingCols)) {
+                    $db->exec("ALTER TABLE `crm_leads` ADD COLUMN `source_lead_id` VARCHAR(100) NULL AFTER `assigned_to`");
+                }
+                if (!in_array('last_contact_date', $existingCols)) {
+                    $db->exec("ALTER TABLE `crm_leads` ADD COLUMN `last_contact_date` DATETIME NULL AFTER `source_lead_id`");
+                }
+                if (!in_array('next_followup_date', $existingCols)) {
+                    $db->exec("ALTER TABLE `crm_leads` ADD COLUMN `next_followup_date` DATETIME NULL AFTER `last_contact_date`");
+                }
+                if (!in_array('sync_status', $existingCols)) {
+                    $db->exec("ALTER TABLE `crm_leads` ADD COLUMN `sync_status` VARCHAR(50) DEFAULT 'manual' AFTER `source_lead_id`");
+                }
+                if (!in_array('source_platform', $existingCols)) {
+                    $db->exec("ALTER TABLE `crm_leads` ADD COLUMN `source_platform` VARCHAR(50) NULL AFTER `sync_status`");
+                }
+            } catch (\Throwable $e) {}
+
+            // 8. Ensure follow_ups tracking columns exist
+            try {
+                $fuColsStmt = $db->query("SHOW COLUMNS FROM `follow_ups`");
+                $fuExistingCols = [];
+                while ($fc = $fuColsStmt->fetch(PDO::FETCH_ASSOC)) {
+                    $fuExistingCols[] = strtolower($fc['Field']);
+                }
+                if (!in_array('contact_method', $fuExistingCols)) {
+                    $db->exec("ALTER TABLE `follow_ups` ADD COLUMN `contact_method` VARCHAR(50) DEFAULT 'call' AFTER `title`");
+                }
+                if (!in_array('assigned_to', $fuExistingCols)) {
+                    $db->exec("ALTER TABLE `follow_ups` ADD COLUMN `assigned_to` INT NULL AFTER `lead_id`");
+                }
+                if (!in_array('outcome', $fuExistingCols)) {
+                    $db->exec("ALTER TABLE `follow_ups` ADD COLUMN `outcome` VARCHAR(255) NULL AFTER `notes`");
+                }
+                if (!in_array('completed_at', $fuExistingCols)) {
+                    $db->exec("ALTER TABLE `follow_ups` ADD COLUMN `completed_at` DATETIME NULL AFTER `status`");
+                }
+            } catch (\Throwable $e) {}
+
         } catch (\Throwable $e) {
             error_log('Schema compatibility check notice: ' . $e->getMessage());
         }
