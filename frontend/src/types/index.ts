@@ -54,8 +54,68 @@ export interface Customer {
   outstanding_balance?: number;
 }
 
+export interface LeadActivity {
+  id: number;
+  lead_id: number;
+  user_id?: number | null;
+  user_name?: string;
+  activity_type: 'call' | 'email' | 'meeting' | 'whatsapp' | 'note' | 'status_change' | 'import' | 'system';
+  title: string;
+  description?: string;
+  activity_date: string;
+  metadata?: any;
+}
+
+export interface LeadSourceConfig {
+  id: number;
+  tenant_id?: number;
+  source_key: string;
+  name: string;
+  category: string;
+  status: 'live_api_sync' | 'connected_syncing' | 'connected' | 'user_export_available' | 'email_integration_available' | 'manual_csv_import' | 'manual_import_only' | 'webhook_configured' | 'auth_required' | 'api_access_required' | 'blocked' | 'unsupported' | 'syncing' | 'launcher_only' | 'csv_import_available' | 'configuration_required';
+  sync_mode?: 'api_pull' | 'webhook_push' | 'manual_import' | 'unsupported';
+  api_key?: string;
+  webhook_secret?: string;
+  last_sync_at?: string;
+  sync_checkpoint?: string;
+  sync_interval_minutes?: number;
+  last_error_message?: string;
+  last_error_at?: string;
+  retry_count?: number;
+  auto_assign_user_id?: number | null;
+  auto_assign_user_name?: string;
+  is_enabled?: boolean | number;
+  has_credentials?: boolean;
+  masked_credentials?: Record<string, string>;
+  sync_count: number;
+  total_leads?: number;
+  won_leads?: number;
+  pending_followups?: number;
+  total_leads_count?: number;
+  converted_leads_count?: number;
+}
+
+export interface LeadSyncLog {
+  id: number;
+  tenant_id: number;
+  source_key: string;
+  source_name?: string;
+  sync_type: 'cron' | 'manual' | 'webhook' | 'test';
+  status: 'success' | 'failed' | 'partial';
+  leads_fetched: number;
+  leads_created: number;
+  leads_updated: number;
+  leads_skipped: number;
+  checkpoint_before?: string;
+  checkpoint_after?: string;
+  error_details?: string;
+  execution_time_ms: number;
+  created_at: string;
+}
+
 export interface Lead {
   id: number;
+  tenant_id?: number;
   name: string;
   company?: string;
   email?: string;
@@ -63,8 +123,59 @@ export interface Lead {
   value: number;
   status: 'new' | 'contacted' | 'qualified' | 'proposal' | 'won' | 'lost';
   source?: string;
+  source_platform?: string;
+  service_requirement?: string;
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  assigned_to?: number | null;
+  assigned_user_name?: string;
+  assigned_user_email?: string;
+  source_lead_id?: string;
+  sync_status?: 'synced' | 'manual' | 'webhook' | 'pending_retry' | 'error';
+  last_contact_date?: string;
+  next_followup_date?: string;
   notes?: string;
   created_at: string;
+  updated_at?: string;
+  pending_followups_count?: number;
+  activities_count?: number;
+  next_scheduled_followup?: string;
+  calculated_followup_status?: 'today' | 'overdue' | 'pending' | 'completed' | 'no_followup' | 'won' | 'lost';
+  external_sync_status?: 'synced' | 'pending_writeback' | 'conflict' | 'failed' | 'manual_required' | 'not_applicable';
+  last_external_sync_at?: string;
+  external_snapshot_json?: any;
+  follow_ups?: Followup[];
+  activities?: LeadActivity[];
+}
+
+export interface PlatformCapability {
+  platform_key: string;
+  display_name: string;
+  capabilities: {
+    read_leads: string;
+    update_status: string;
+    add_notes: string;
+    update_followup: string;
+    update_contact: string;
+    assign_lead: string;
+    writeback_verified: string;
+  };
+}
+
+export interface WritebackQueueItem {
+  id: number;
+  tenant_id: number;
+  lead_id: number;
+  source_platform: string;
+  source_lead_id: string;
+  action_type: string;
+  proposed_payload: any;
+  original_snapshot?: any;
+  status: 'pending_confirmation' | 'queued' | 'in_progress' | 'synced' | 'conflict_detected' | 'failed' | 'manual_action_required';
+  conflict_details?: any;
+  error_message?: string;
+  retry_count: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Employee {
@@ -115,11 +226,23 @@ export interface Followup {
   id: number;
   customer_id?: number;
   customer_name?: string;
+  customer_phone?: string;
+  customer_email?: string;
   lead_id?: number;
   lead_name?: string;
+  lead_company?: string;
+  lead_phone?: string;
+  lead_email?: string;
+  lead_source?: string;
+  lead_service?: string;
   title: string;
   notes?: string;
   scheduled_at: string;
+  contact_method?: 'call' | 'email' | 'meeting' | 'whatsapp' | 'other';
+  assigned_to?: number;
+  assigned_user_name?: string;
+  outcome?: string;
+  completed_at?: string;
   status: 'pending' | 'completed' | 'overdue';
   calculated_status?: string;
 }

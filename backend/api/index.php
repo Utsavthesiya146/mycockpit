@@ -13,13 +13,21 @@ require_once __DIR__ . '/../config/Database.php';
 require_once __DIR__ . '/../config/Config.php';
 require_once __DIR__ . '/../utils/Response.php';
 require_once __DIR__ . '/../utils/JWT.php';
+require_once __DIR__ . '/../utils/Encryption.php';
 require_once __DIR__ . '/../middleware/AuthMiddleware.php';
 require_once __DIR__ . '/../middleware/TenantMiddleware.php';
+require_once __DIR__ . '/../services/connectors/LeadConnectorInterface.php';
+require_once __DIR__ . '/../services/connectors/EAFConnector.php';
+require_once __DIR__ . '/../services/connectors/BNIConnector.php';
+require_once __DIR__ . '/../services/connectors/KVVConnector.php';
+require_once __DIR__ . '/../services/connectors/SEOConnector.php';
+require_once __DIR__ . '/../services/SyncEngine.php';
 require_once __DIR__ . '/../controllers/AuthController.php';
 require_once __DIR__ . '/../controllers/TenantController.php';
 require_once __DIR__ . '/../controllers/DashboardController.php';
 require_once __DIR__ . '/../controllers/FinancialController.php';
 require_once __DIR__ . '/../controllers/CrmController.php';
+require_once __DIR__ . '/../controllers/LeadController.php';
 require_once __DIR__ . '/../controllers/HrmController.php';
 require_once __DIR__ . '/../controllers/CalendarController.php';
 require_once __DIR__ . '/../controllers/TaskController.php';
@@ -35,6 +43,7 @@ use Cockpit\Controllers\TenantController;
 use Cockpit\Controllers\DashboardController;
 use Cockpit\Controllers\FinancialController;
 use Cockpit\Controllers\CrmController;
+use Cockpit\Controllers\LeadController;
 use Cockpit\Controllers\HrmController;
 use Cockpit\Controllers\CalendarController;
 use Cockpit\Controllers\TaskController;
@@ -47,7 +56,7 @@ use Cockpit\Controllers\AIController;
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '*';
 header("Access-Control-Allow-Origin: {$origin}");
 header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Tenant-Slug");
+header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Tenant-Slug, X-Tenant-Key");
 header("Access-Control-Allow-Credentials: true");
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -95,6 +104,11 @@ try {
         TenantController::getBySlug($matches[1]);
     }
 
+    // Public Lead Webhook Intake for SEO & Website Form Integrations
+    if ($path === '/leads/webhook' && $method === 'POST') {
+        LeadController::webhookIntake();
+    }
+
     // Authenticated Endpoints (Strict JWT & Status Verification)
     $currentUser = AuthMiddleware::authenticate();
 
@@ -121,21 +135,81 @@ try {
     if ($path === '/dashboard/stats' && $method === 'GET') {
         DashboardController::getStats($currentUser);
     }
+    if ($path === '/dashboard/lead-stats' && $method === 'GET') {
+        LeadController::getDashboardStats($currentUser);
+    }
     if ($path === '/financial/summary' && $method === 'GET') {
         FinancialController::getSummary($currentUser);
     }
 
-    // CRM
+    // CRM Customers
     if ($path === '/crm/customers') {
         if ($method === 'GET') CrmController::listCustomers($currentUser);
         if ($method === 'POST') CrmController::createCustomer($currentUser);
     }
+
+    // Centralized Lead Management & Integration Sources
     if ($path === '/crm/leads') {
-        if ($method === 'GET') CrmController::listLeads($currentUser);
-        if ($method === 'POST') CrmController::createLead($currentUser);
+        if ($method === 'GET') LeadController::listLeads($currentUser);
+        if ($method === 'POST') LeadController::createLead($currentUser);
+    }
+    if ($path === '/crm/leads/import' && $method === 'POST') {
+        LeadController::importLeads($currentUser);
+    }
+    if (preg_match('#^/crm/leads/([0-9]+)$#', $path, $matches)) {
+        if ($method === 'GET') LeadController::getLead($currentUser, (int)$matches[1]);
+        if ($method === 'PUT' || $method === 'POST') LeadController::updateLead($currentUser, (int)$matches[1]);
     }
     if (preg_match('#^/crm/leads/([0-9]+)/status$#', $path, $matches) && $method === 'POST') {
-        CrmController::updateLeadStatus($currentUser, (int)$matches[1]);
+        LeadController::updateLeadStatus($currentUser, (int)$matches[1]);
+    }
+    if (preg_match('#^/crm/leads/([0-9]+)/assign$#', $path, $matches) && $method === 'POST') {
+        LeadController::assignLead($currentUser, (int)$matches[1]);
+    }
+    if (preg_match('#^/crm/leads/([0-9]+)/activities$#', $path, $matches) && $method === 'POST') {
+        LeadController::logActivity($currentUser, (int)$matches[1]);
+    }
+    if (preg_match('#^/crm/leads/([0-9]+)/queue-writeback$#', $path, $matches) && $method === 'POST') {
+        LeadController::queueLeadWriteback($currentUser, (int)$matches[1]);
+    }
+    if (preg_match('#^/crm/leads/queue/([0-9]+)/execute$#', $path, $matches) && $method === 'POST') {
+        LeadController::executeLeadWriteback($currentUser, (int)$matches[1]);
+    }
+    if (preg_match('#^/crm/leads/queue/([0-9]+)/resolve$#', $path, $matches) && $method === 'POST') {
+        LeadController::resolveLeadConflict($currentUser, (int)$matches[1]);
+    }
+    if (preg_match('#^/crm/leads/([0-9]+)/sync-status$#', $path, $matches) && $method === 'GET') {
+        LeadController::getLeadWritebackStatus($currentUser, (int)$matches[1]);
+    }
+    if ($path === '/crm/automation/capabilities' && $method === 'GET') {
+        LeadController::getPlatformCapabilityMatrix($currentUser);
+    }
+    if ($path === '/crm/automation/session' && $method === 'POST') {
+        LeadController::savePlatformSession($currentUser);
+    }
+    if (preg_match('#^/crm/automation/session/([a-zA-Z0-9_-]+)$#', $path, $matches) && $method === 'GET') {
+        LeadController::getPlatformSession($currentUser, $matches[1]);
+    }
+    if ($path === '/crm/lead-sources' && $method === 'GET') {
+        LeadController::listSources($currentUser);
+    }
+    if ($path === '/crm/lead-sources/sync-logs' && $method === 'GET') {
+        LeadController::getSyncLogs($currentUser);
+    }
+    if (preg_match('#^/crm/lead-sources/([0-9]+)/status$#', $path, $matches) && $method === 'POST') {
+        LeadController::updateSourceStatus($currentUser, (int)$matches[1]);
+    }
+    if (preg_match('#^/crm/lead-sources/([0-9]+)/configure$#', $path, $matches) && $method === 'POST') {
+        LeadController::configureSource($currentUser, (int)$matches[1]);
+    }
+    if (preg_match('#^/crm/lead-sources/([0-9]+)/test-connection$#', $path, $matches) && $method === 'POST') {
+        LeadController::testSourceConnection($currentUser, (int)$matches[1]);
+    }
+    if (preg_match('#^/crm/lead-sources/([0-9]+)/sync-now$#', $path, $matches) && $method === 'POST') {
+        LeadController::syncSourceNow($currentUser, (int)$matches[1]);
+    }
+    if ($path === '/crm/lead-sources/embed-code' && $method === 'GET') {
+        LeadController::getEmbedCode($currentUser);
     }
 
     // HRM
@@ -169,6 +243,9 @@ try {
     }
     if (preg_match('#^/followups/([0-9]+)/toggle$#', $path, $matches) && $method === 'POST') {
         FollowupController::toggleStatus($currentUser, (int)$matches[1]);
+    }
+    if (preg_match('#^/followups/([0-9]+)/complete$#', $path, $matches) && $method === 'POST') {
+        FollowupController::completeFollowup($currentUser, (int)$matches[1]);
     }
 
     // Invoices & Payments

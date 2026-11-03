@@ -14,12 +14,16 @@ import {
   LogOut, 
   Layers,
   ChevronRight,
-  X
+  X,
+  Zap,
+  RefreshCw
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 export type NavTab = 
   | 'dashboard' 
+  | 'leads'
+  | 'integrations'
   | 'invoices' 
   | 'crm' 
   | 'hrm' 
@@ -45,9 +49,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpe
 
   const navItems = [
     { id: 'dashboard' as NavTab, label: 'Cockpit Overview', icon: LayoutDashboard },
-    { id: 'ai' as NavTab, label: 'Personal AI Agent', icon: Sparkles, badge: 'Live', badgeRed: true },
+    { id: 'leads' as NavTab, label: 'Centralized Leads', icon: Users2, badge: 'All Sources', badgeRed: true },
+    { id: 'integrations' as NavTab, label: 'Lead Sync Hub', icon: Zap },
+    { id: 'ai' as NavTab, label: 'Personal AI Agent', icon: Sparkles, badge: 'Live' },
     { id: 'invoices' as NavTab, label: 'Invoices & Finance', icon: Receipt },
-    { id: 'crm' as NavTab, label: 'CRM & Pipeline', icon: Users2 },
+    { id: 'crm' as NavTab, label: 'CRM & Accounts', icon: Layers },
     { id: 'hrm' as NavTab, label: 'HRM & Team', icon: Building2 },
     { id: 'calendar' as NavTab, label: 'Calendar & Meetings', icon: Calendar },
     { id: 'tasks' as NavTab, label: 'Tasks & Priority', icon: CheckSquare },

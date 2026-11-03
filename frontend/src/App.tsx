@@ -16,20 +16,27 @@ import { ConnectedApps } from './pages/ConnectedApps';
 import { AIAssistant } from './pages/AIAssistant';
 import { SuperAdmin } from './pages/SuperAdmin';
 import { SettingsPage } from './pages/Settings';
+import { Leads } from './pages/Leads';
+import { Integrations } from './pages/Integrations';
 import type { NavTab } from './components/layout/Sidebar';
 import { App as CapApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 
 const AppContent: React.FC = () => {
   const { isAuthenticated, isLoading, user } = useAuth();
-  const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
+  const [activeTab, setActiveTab] = useState<NavTab>(() => {
+    const path = window.location.pathname.toLowerCase().replace(/^\//, '').trim();
+    if (path === 'leads') return 'leads';
+    if (path === 'integrations') return 'integrations';
+    return 'dashboard';
+  });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [authView, setAuthView] = useState<'login' | 'register'>('login');
 
-  // Check URL pathname on initial load for personal client URL routing (e.g. /utsav, /rahul)
+  // Check URL pathname on initial load for personal client URL routing (e.g. /utsav, /rahul, /leads)
   useEffect(() => {
     const path = window.location.pathname.replace(/^\//, '').trim();
-    if (path && !['login', 'register', 'admin', 'api'].includes(path.toLowerCase())) {
+    if (path && !['login', 'register', 'admin', 'api', 'leads', 'integrations'].includes(path.toLowerCase())) {
       console.log(`Navigating to personal client route: /${path}`);
     }
   }, []);
@@ -83,6 +90,10 @@ const AppContent: React.FC = () => {
     switch (activeTab) {
       case 'dashboard':
         return <Dashboard setActiveTab={setActiveTab} />;
+      case 'leads':
+        return <Leads onNavigateToIntegrations={() => setActiveTab('integrations')} />;
+      case 'integrations':
+        return <Integrations />;
       case 'invoices':
         return <Invoices />;
       case 'crm':

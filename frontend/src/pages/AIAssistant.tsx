@@ -23,12 +23,18 @@ export const AIAssistant: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const suggestedPrompts = [
+    "Show all my BNI leads.",
+    "Show my pending KVV leads.",
+    "Which EAF leads need follow-up?",
+    "Show all SEO leads.",
+    "Which leads have not been contacted?",
+    "Show today's follow-ups.",
+    "Which leads are overdue?",
+    "Which employee has pending follow-ups?",
+    "Summarize all lead activities.",
+    "Suggest the next action for a lead.",
     "What is my pending payment amount?",
-    "How many meetings do I have today?",
-    "Which customers need follow-up?",
-    "Show my overdue invoices.",
-    "Summarize my business activities.",
-    "What are today's priority tasks?"
+    "How many meetings do I have today?"
   ];
 
   const fetchConversations = async () => {

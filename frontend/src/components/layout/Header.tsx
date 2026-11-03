@@ -30,6 +30,8 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, setIsSi
   const getTabTitle = (tab: NavTab) => {
     switch (tab) {
       case 'dashboard': return 'Cockpit Overview';
+      case 'leads': return 'Centralized All Leads Portfolio';
+      case 'integrations': return 'Universal Lead Sync Hub';
       case 'invoices': return 'Invoices & Financial Intelligence';
       case 'crm': return 'Customer Relationship & Pipeline';
       case 'hrm': return 'Human Resources & Team Directory';

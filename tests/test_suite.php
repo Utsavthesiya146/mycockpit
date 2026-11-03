@@ -16,10 +16,16 @@ require_once __DIR__ . '/../backend/config/Database.php';
 require_once __DIR__ . '/../backend/config/Config.php';
 require_once __DIR__ . '/../backend/utils/JWT.php';
 require_once __DIR__ . '/../backend/utils/Response.php';
+require_once __DIR__ . '/../backend/controllers/LeadController.php';
+require_once __DIR__ . '/../backend/controllers/FollowupController.php';
+require_once __DIR__ . '/../backend/controllers/AIController.php';
 
 use Cockpit\Config\Database;
 use Cockpit\Config\Config;
 use Cockpit\Utils\JWT;
+use Cockpit\Controllers\LeadController;
+use Cockpit\Controllers\FollowupController;
+use Cockpit\Controllers\AIController;
 
 class CockpitTestSuite {
     private int $passed = 0;
@@ -37,6 +43,14 @@ class CockpitTestSuite {
         $this->testFinancialCalculations();
         $this->testPartialPaymentTransaction();
         $this->testCrossTenantAccessRejection();
+
+        // HK Sir Centralized Lead Management & Follow-up Verification
+        $this->testLeadSourcesConfig();
+        $this->testLeadListingAndViews();
+        $this->testLeadFollowupManagement();
+        $this->testAIAgentLeadIntelligence();
+        $this->testTenantLeadBoundaries();
+        $this->testDuplicateLeadDetection();
 
         echo "\n=======================================================\n";
         echo "TEST SUMMARY: {$this->passed} Passed, {$this->failed} Failed\n";
@@ -165,6 +179,69 @@ class CockpitTestSuite {
         $res = $stmt->fetch();
 
         $this->assert("Cross-Tenant Query Block", $res === false, "Cross-tenant record leaked!");
+    }
+
+    private function testLeadSourcesConfig(): void {
+        $db = Database::getConnection();
+        $stmt = $db->prepare("SELECT COUNT(*) FROM lead_sources_config WHERE tenant_id = 1");
+        $stmt->execute();
+        $count = (int)$stmt->fetchColumn();
+        $this->assert("Lead Sources Configured for Tenant 1", $count >= 4, "Configured sources: {$count}");
+    }
+
+    private function testLeadListingAndViews(): void {
+        $db = Database::getConnection();
+        $stmt = $db->prepare("SELECT COUNT(*) FROM crm_leads WHERE tenant_id = 1");
+        $stmt->execute();
+        $count = (int)$stmt->fetchColumn();
+        $this->assert("Centralized Leads Listing for Tenant 1", $count >= 5, "Total leads: {$count}");
+    }
+
+    private function testLeadFollowupManagement(): void {
+        $db = Database::getConnection();
+        $stmt = $db->prepare("
+            SELECT 
+                SUM(CASE WHEN scheduled_at < NOW() AND status = 'pending' THEN 1 ELSE 0 END) AS overdue_count,
+                SUM(CASE WHEN DATE(scheduled_at) = CURRENT_DATE AND status = 'pending' THEN 1 ELSE 0 END) AS today_count,
+                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_count
+            FROM follow_ups 
+            WHERE tenant_id = 1
+        ");
+        $stmt->execute();
+        $res = $stmt->fetch();
+        $this->assert(
+            "Follow-up Engine (Overdue, Today, Completed)", 
+            (int)$res['overdue_count'] >= 1 && (int)$res['today_count'] >= 1 && (int)$res['completed_count'] >= 1,
+            json_encode($res)
+        );
+    }
+
+    private function testAIAgentLeadIntelligence(): void {
+        require_once __DIR__ . '/../backend/controllers/AIController.php';
+        $method = new \ReflectionMethod(\Cockpit\Controllers\AIController::class, 'processBusinessQuery');
+        $method->setAccessible(true);
+        $res = $method->invoke(null, 1, 'Show all my BNI leads');
+        $this->assert(
+            "AI Agent BNI Lead Query", 
+            str_contains($res['text'], 'BNI') && !empty($res['citations']),
+            $res['text']
+        );
+    }
+
+    private function testTenantLeadBoundaries(): void {
+        $db = Database::getConnection();
+        $stmt = $db->prepare("SELECT id FROM crm_leads WHERE tenant_id = 1 AND source_lead_id = 'BNI-MUM-2026-101'");
+        $stmt->execute();
+        $res = $stmt->fetch();
+        $this->assert("Tenant Boundary Isolation for Leads", $res === false, "Client B lead leaked into Client A!");
+    }
+
+    private function testDuplicateLeadDetection(): void {
+        $db = Database::getConnection();
+        $stmt = $db->prepare("SELECT id FROM crm_leads WHERE tenant_id = 1 AND email = ?");
+        $stmt->execute(['rajesh@mehtatextiles.demo']);
+        $res = $stmt->fetch();
+        $this->assert("Duplicate Detection Finds Matching Record", $res !== false);
     }
 }
 

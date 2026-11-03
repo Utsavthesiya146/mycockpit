@@ -1,22 +1,96 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Building2, Mail, Phone, MapPin, Hash } from 'lucide-react';
+import { 
+  Plus, 
+  Search, 
+  Building2, 
+  Mail, 
+  Phone, 
+  MapPin, 
+  Calendar, 
+  Clock, 
+  User, 
+  CheckCircle2, 
+  AlertTriangle, 
+  MessageSquare, 
+  Upload, 
+  Download, 
+  ExternalLink, 
+  Sparkles, 
+  Filter, 
+  RefreshCw, 
+  Layers, 
+  ChevronRight,
+  PhoneCall,
+  Check,
+  Globe,
+  Briefcase,
+  Copy,
+  SlidersHorizontal,
+  X
+} from 'lucide-react';
 import { api } from '../services/api';
 import { Badge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
-import type { Customer, Lead } from '../types';
+import type { Customer, Lead, LeadActivity, LeadSourceConfig, Employee } from '../types';
 
 export const CRM: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'customers' | 'leads'>('leads');
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [activeTab, setActiveTab] = useState<'leads' | 'customers' | 'sources'>('leads');
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [leadSources, setLeadSources] = useState<LeadSourceConfig[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Filters
+  const [activeView, setActiveView] = useState<string>('all'); 
+  // 'all' | 'new' | 'pending' | 'today' | 'overdue' | 'completed' | 'no_followup' | 'won' | 'lost'
+  const [sourceFilter, setSourceFilter] = useState<string>('all');
+  const [priorityFilter, setPriorityFilter] = useState<string>('all');
+  const [assignedFilter, setAssignedFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
+  const [displayMode, setDisplayMode] = useState<'cards' | 'pipeline'>('cards');
 
   // Modals
-  const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
   const [isLeadModalOpen, setIsLeadModalOpen] = useState(false);
+  const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
+  const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
 
-  // New Customer Form
+  // New Lead Form State
+  const [leadName, setLeadName] = useState('');
+  const [leadCompany, setLeadCompany] = useState('');
+  const [leadEmail, setLeadEmail] = useState('');
+  const [leadPhone, setLeadPhone] = useState('');
+  const [leadValue, setLeadValue] = useState<number>(100000);
+  const [leadSource, setLeadSource] = useState('BNI Connect');
+  const [leadService, setLeadService] = useState('');
+  const [leadPriority, setLeadPriority] = useState<Lead['priority']>('medium');
+  const [leadStatus, setLeadStatus] = useState<Lead['status']>('new');
+  const [leadAssignedTo, setLeadAssignedTo] = useState<string>('');
+  const [leadNotes, setLeadNotes] = useState('');
+  const [leadNextFollowup, setLeadNextFollowup] = useState('');
+  const [leadContactMethod, setLeadContactMethod] = useState<'call' | 'email' | 'meeting' | 'whatsapp'>('call');
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
+  const [forceDuplicate, setForceDuplicate] = useState(false);
+
+  // Activity Log Modal State
+  const [actType, setActType] = useState<'call' | 'email' | 'meeting' | 'whatsapp' | 'note'>('call');
+  const [actTitle, setActTitle] = useState('');
+  const [actDescription, setActDescription] = useState('');
+  const [actOutcome, setActOutcome] = useState('');
+  const [actNextDate, setActNextDate] = useState('');
+  const [actNextMethod, setActNextMethod] = useState<'call' | 'email' | 'meeting' | 'whatsapp'>('call');
+
+  // Import Leads State
+  const [importSourceKey, setImportSourceKey] = useState('bni');
+  const [importDuplicateStrategy, setImportDuplicateStrategy] = useState<'skip' | 'update'>('skip');
+  const [importCsvText, setImportCsvText] = useState('');
+  const [importStatusMsg, setImportStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // New Customer Form State
   const [custName, setCustName] = useState('');
   const [custCompany, setCustCompany] = useState('');
   const [custEmail, setCustEmail] = useState('');
@@ -24,31 +98,37 @@ export const CRM: React.FC = () => {
   const [custCity, setCustCity] = useState('');
   const [custTaxId, setCustTaxId] = useState('');
 
-  // New Lead Form
-  const [leadName, setLeadName] = useState('');
-  const [leadCompany, setLeadCompany] = useState('');
-  const [leadValue, setLeadValue] = useState<number>(100000);
-  const [leadSource, setLeadSource] = useState('Direct Referral');
-  const [leadStatus, setLeadStatus] = useState<Lead['status']>('new');
+  // Copy notification state
+  const [copiedToken, setCopiedToken] = useState(false);
 
   const fetchData = async () => {
     try {
-      const [cData, lData]: any = await Promise.all([
+      const [lData, cData, sData, eData]: any = await Promise.all([
+        api.get('/crm/leads'),
         api.get('/crm/customers'),
-        api.get('/crm/leads')
+        api.get('/crm/lead-sources'),
+        api.get('/hrm/employees')
       ]);
-      setCustomers(cData || []);
       setLeads(lData || []);
+      setCustomers(cData || []);
+      setLeadSources(sData || []);
+      setEmployees(eData || []);
     } catch (err) {
       console.error('Failed to load CRM data', err);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
   useEffect(() => {
     fetchData();
   }, []);
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchData();
+  };
 
   const handleCreateCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,21 +156,51 @@ export const CRM: React.FC = () => {
 
   const handleCreateLead = async (e: React.FormEvent) => {
     e.preventDefault();
+    setDuplicateWarning(null);
     try {
       await api.post('/crm/leads', {
         name: leadName,
         company: leadCompany,
+        email: leadEmail,
+        phone: leadPhone,
         value: leadValue,
         source: leadSource,
-        status: leadStatus
+        service_requirement: leadService,
+        priority: leadPriority,
+        status: leadStatus,
+        assigned_to: leadAssignedTo ? Number(leadAssignedTo) : null,
+        notes: leadNotes,
+        next_followup_date: leadNextFollowup || null,
+        contact_method: leadContactMethod,
+        force_duplicate: forceDuplicate
       });
       setIsLeadModalOpen(false);
-      setLeadName('');
-      setLeadCompany('');
+      resetLeadForm();
       fetchData();
     } catch (err: any) {
-      alert(err.message || 'Error creating lead');
+      if (err.data && err.data.duplicate) {
+        setDuplicateWarning(err.message || 'A lead with matching contact details already exists.');
+      } else {
+        alert(err.message || 'Error creating lead');
+      }
     }
+  };
+
+  const resetLeadForm = () => {
+    setLeadName('');
+    setLeadCompany('');
+    setLeadEmail('');
+    setLeadPhone('');
+    setLeadValue(100000);
+    setLeadSource('BNI Connect');
+    setLeadService('');
+    setLeadPriority('medium');
+    setLeadStatus('new');
+    setLeadAssignedTo('');
+    setLeadNotes('');
+    setLeadNextFollowup('');
+    setDuplicateWarning(null);
+    setForceDuplicate(false);
   };
 
   const handleLeadStatusChange = async (leadId: number, newStatus: string) => {
@@ -102,6 +212,108 @@ export const CRM: React.FC = () => {
     }
   };
 
+  const handleOpenDetail = async (lead: Lead) => {
+    setSelectedLead(lead);
+    setIsDetailDrawerOpen(true);
+    // Fetch latest fresh details including timeline activities
+    try {
+      const detailed: any = await api.get(`/crm/leads/${lead.id}`);
+      if (detailed) {
+        setSelectedLead(detailed);
+      }
+    } catch (err) {
+      console.error('Error fetching lead details:', err);
+    }
+  };
+
+  const handleOpenActivityModal = (lead: Lead) => {
+    setSelectedLead(lead);
+    setActType('call');
+    setActTitle(`Call with ${lead.name}`);
+    setActDescription('');
+    setActOutcome('');
+    setActNextDate('');
+    setActNextMethod('call');
+    setIsActivityModalOpen(true);
+  };
+
+  const handleLogActivity = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedLead) return;
+
+    try {
+      await api.post(`/crm/leads/${selectedLead.id}/activities`, {
+        activity_type: actType,
+        title: actTitle,
+        description: actDescription,
+        outcome: actOutcome,
+        next_followup_date: actNextDate || null,
+        next_contact_method: actNextMethod
+      });
+      setIsActivityModalOpen(false);
+      // Refresh lead details if open
+      if (isDetailDrawerOpen) {
+        const detailed: any = await api.get(`/crm/leads/${selectedLead.id}`);
+        setSelectedLead(detailed);
+      }
+      fetchData();
+    } catch (err: any) {
+      alert(err.message || 'Error logging touchpoint');
+    }
+  };
+
+  const handleImportCsv = async () => {
+    setImportStatusMsg(null);
+    if (!importCsvText.trim()) {
+      setImportStatusMsg({ type: 'error', text: 'Please paste CSV content with header columns.' });
+      return;
+    }
+
+    try {
+      const lines = importCsvText.trim().split('\n');
+      if (lines.length < 2) {
+        setImportStatusMsg({ type: 'error', text: 'CSV must contain at least a header line and one data row.' });
+        return;
+      }
+
+      const headers = lines[0].split(',').map(h => h.trim().replace(/^["']|["']$/g, ''));
+      const parsedLeads: any[] = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        if (!lines[i].trim()) continue;
+        const row = lines[i].split(',').map(c => c.trim().replace(/^["']|["']$/g, ''));
+        const leadObj: any = {};
+        headers.forEach((h, idx) => {
+          leadObj[h] = row[idx] || '';
+        });
+        parsedLeads.push(leadObj);
+      }
+
+      const res: any = await api.post('/crm/leads/import', {
+        leads: parsedLeads,
+        source_key: importSourceKey,
+        duplicate_strategy: importDuplicateStrategy
+      });
+
+      setImportStatusMsg({
+        type: 'success',
+        text: `Import completed! Successfully imported ${res.imported} leads, skipped ${res.skipped_duplicates} duplicates, updated ${res.updated} records.`
+      });
+      setImportCsvText('');
+      fetchData();
+    } catch (err: any) {
+      setImportStatusMsg({ type: 'error', text: err.message || 'Failed to parse or import CSV data.' });
+    }
+  };
+
+  const handleCopyWebhookUrl = (secret: string) => {
+    const origin = window.location.origin;
+    const url = `${origin}/backend/api/leads/webhook?token=${secret}`;
+    navigator.clipboard.writeText(url);
+    setCopiedToken(true);
+    setTimeout(() => setCopiedToken(false), 2000);
+  };
+
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
@@ -110,58 +322,624 @@ export const CRM: React.FC = () => {
     }).format(val || 0);
   };
 
+  // 9 Required Views from HK Sir
+  const viewTabs = [
+    { id: 'all', label: 'All Leads', count: leads.length },
+    { id: 'new', label: 'New Leads', count: leads.filter(l => l.status === 'new').length, badgeColor: 'bg-[#FFF1F2] text-[#D62839]' },
+    { id: 'pending', label: 'Pending Follow-ups', count: leads.filter(l => l.calculated_followup_status === 'pending' || (l.next_followup_date && new Date(l.next_followup_date) >= new Date() && l.status !== 'won' && l.status !== 'lost')).length },
+    { id: 'today', label: 'Today\'s Follow-ups', count: leads.filter(l => l.calculated_followup_status === 'today' || (l.next_followup_date && new Date(l.next_followup_date).toDateString() === new Date().toDateString() && l.status !== 'won' && l.status !== 'lost')).length, badgeColor: 'bg-[#FEF3C7] text-[#D97706]' },
+    { id: 'overdue', label: 'Overdue Follow-ups', count: leads.filter(l => l.calculated_followup_status === 'overdue' || (l.next_followup_date && new Date(l.next_followup_date) < new Date() && l.status !== 'won' && l.status !== 'lost')).length, badgeColor: 'bg-[#FEF2F2] text-[#DC2626]' },
+    { id: 'completed', label: 'Completed Follow-ups', count: leads.filter(l => Boolean((l.activities_count && l.activities_count > 0) || l.status === 'contacted' || l.status === 'qualified' || l.status === 'proposal')).length },
+    { id: 'no_followup', label: 'Leads Without Follow-up', count: leads.filter(l => !l.next_followup_date && l.status !== 'won' && l.status !== 'lost').length, badgeColor: 'bg-[#F1F5F9] text-[#64748B]' },
+    { id: 'won', label: 'Converted Leads', count: leads.filter(l => l.status === 'won').length, badgeColor: 'bg-[#ECFDF5] text-[#059669]' },
+    { id: 'lost', label: 'Lost Leads', count: leads.filter(l => l.status === 'lost').length }
+  ];
+
+  // Lead Sources defined by HK Sir
+  const sourceOptions = [
+    'All Sources',
+    'BNI Connect',
+    'KVV Leads',
+    'EAF Connect',
+    'SEO / Website',
+    'Manually Added',
+    'Custom'
+  ];
+
+  // Filtered Leads
+  const filteredLeads = leads.filter(lead => {
+    // 1. View Filter
+    if (activeView === 'new' && lead.status !== 'new') return false;
+    if (activeView === 'won' && lead.status !== 'won') return false;
+    if (activeView === 'lost' && lead.status !== 'lost') return false;
+    if (activeView === 'no_followup' && (lead.next_followup_date || lead.status === 'won' || lead.status === 'lost')) return false;
+    if (activeView === 'today') {
+      if (!lead.next_followup_date || lead.status === 'won' || lead.status === 'lost') return false;
+      const isToday = new Date(lead.next_followup_date).toDateString() === new Date().toDateString();
+      if (!isToday && lead.calculated_followup_status !== 'today') return false;
+    }
+    if (activeView === 'overdue') {
+      if (!lead.next_followup_date || lead.status === 'won' || lead.status === 'lost') return false;
+      const isOverdue = new Date(lead.next_followup_date) < new Date();
+      if (!isOverdue && lead.calculated_followup_status !== 'overdue') return false;
+    }
+    if (activeView === 'pending') {
+      if (!lead.next_followup_date || lead.status === 'won' || lead.status === 'lost') return false;
+      const isPending = new Date(lead.next_followup_date) >= new Date();
+      if (!isPending && lead.calculated_followup_status !== 'pending') return false;
+    }
+
+    // 2. Source Filter
+    if (sourceFilter !== 'all' && sourceFilter !== 'All Sources') {
+      const srcNorm = (lead.source || '').toLowerCase();
+      const filterNorm = sourceFilter.toLowerCase();
+      if (!srcNorm.includes(filterNorm) && !filterNorm.includes(srcNorm)) return false;
+    }
+
+    // 3. Priority Filter
+    if (priorityFilter !== 'all' && lead.priority !== priorityFilter) return false;
+
+    // 4. Assigned Filter
+    if (assignedFilter !== 'all' && lead.assigned_to !== Number(assignedFilter)) return false;
+
+    // 5. Search Text Filter
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      const matchName = lead.name.toLowerCase().includes(q);
+      const matchCompany = (lead.company || '').toLowerCase().includes(q);
+      const matchEmail = (lead.email || '').toLowerCase().includes(q);
+      const matchPhone = (lead.phone || '').toLowerCase().includes(q);
+      const matchService = (lead.service_requirement || '').toLowerCase().includes(q);
+      const matchSource = (lead.source || '').toLowerCase().includes(q);
+      if (!matchName && !matchCompany && !matchEmail && !matchPhone && !matchService && !matchSource) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
   const pipelineStages: { id: Lead['status']; label: string; headerColor: string }[] = [
     { id: 'new', label: 'New Inquiries', headerColor: 'text-[#D62839]' },
     { id: 'contacted', label: 'Contacted', headerColor: 'text-[#D97706]' },
     { id: 'qualified', label: 'Qualified', headerColor: 'text-[#B91C2C]' },
     { id: 'proposal', label: 'Proposal Sent', headerColor: 'text-[#D62839]' },
     { id: 'won', label: 'Won / Closed', headerColor: 'text-[#059669]' },
+    { id: 'lost', label: 'Lost / Closed', headerColor: 'text-[#64748B]' }
   ];
 
   return (
     <div className="space-y-6">
-      {/* Subnav & Actions */}
+      {/* Top Header & Section Navigation */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-1.5 p-1 bg-white border border-[#E9EAEE] rounded-xl text-xs font-semibold shadow-2xs">
+        <div>
+          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-[#FFF1F2] border border-[#FECDD3] text-[#D62839] text-xs font-semibold mb-2">
+            <span className="w-2 h-2 rounded-full bg-[#D62839] animate-pulse" />
+            <span>HK Sir's Centralized Lead Intelligence Hub</span>
+          </div>
+          <h2 className="text-2xl font-extrabold text-[#20242C] tracking-tight">
+            Centralized Lead Management & Follow-ups
+          </h2>
+          <p className="text-sm text-[#667085] mt-0.5">
+            Unified intake for BNI, KVV, EAF Connect, SEO Website forms and manual sales touchpoints
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="p-2.5 rounded-xl bg-white hover:bg-[#FFF1F2] text-[#667085] hover:text-[#D62839] border border-[#E9EAEE] hover:border-[#FECDD3] transition-all shadow-2xs cursor-pointer"
+            title="Refresh Live Data"
+          >
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+          </button>
+
+          <button
+            onClick={() => setIsImportModalOpen(true)}
+            className="px-3.5 py-2 rounded-xl bg-white text-[#20242C] hover:text-[#D62839] border border-[#E9EAEE] hover:border-[#FECDD3] text-xs font-bold transition-all shadow-2xs flex items-center gap-2 cursor-pointer"
+          >
+            <Upload className="w-3.5 h-3.5 text-[#D62839]" />
+            <span>Import Leads (CSV)</span>
+          </button>
+
+          <button
+            onClick={() => {
+              resetLeadForm();
+              setIsLeadModalOpen(true);
+            }}
+            className="cockpit-btn-primary"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add New Lead</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Primary Module Tabs */}
+      <div className="flex items-center justify-between border-b border-[#E9EAEE] pb-1 gap-2 overflow-x-auto">
+        <div className="flex items-center gap-2">
           <button
             onClick={() => setActiveTab('leads')}
-            className={`px-4 py-2 rounded-lg transition-all duration-180 cursor-pointer ${
-              activeTab === 'leads' ? 'bg-[#D62839] text-white shadow-xs font-bold' : 'text-[#667085] hover:text-[#20242C] hover:bg-[#FFF1F2]'
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === 'leads'
+                ? 'bg-[#D62839] text-white shadow-xs'
+                : 'bg-white text-[#667085] hover:text-[#20242C] hover:bg-[#FFF1F2]'
             }`}
           >
-            Sales Pipeline ({leads.length})
+            <Layers className="w-4 h-4" />
+            <span>Unified Leads Hub ({leads.length})</span>
           </button>
+
+          <button
+            onClick={() => setActiveTab('sources')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === 'sources'
+                ? 'bg-[#D62839] text-white shadow-xs'
+                : 'bg-white text-[#667085] hover:text-[#20242C] hover:bg-[#FFF1F2]'
+            }`}
+          >
+            <Globe className="w-4 h-4" />
+            <span>Lead Sources & Integrations ({leadSources.length})</span>
+          </button>
+
           <button
             onClick={() => setActiveTab('customers')}
-            className={`px-4 py-2 rounded-lg transition-all duration-180 cursor-pointer ${
-              activeTab === 'customers' ? 'bg-[#D62839] text-white shadow-xs font-bold' : 'text-[#667085] hover:text-[#20242C] hover:bg-[#FFF1F2]'
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === 'customers'
+                ? 'bg-[#D62839] text-white shadow-xs'
+                : 'bg-white text-[#667085] hover:text-[#20242C] hover:bg-[#FFF1F2]'
             }`}
           >
-            Customers Directory ({customers.length})
+            <Building2 className="w-4 h-4" />
+            <span>Customers Directory ({customers.length})</span>
           </button>
         </div>
 
-        <div className="flex items-center gap-2.5">
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-2.5 text-[#94A3B8]" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Filter records..."
-              className="cockpit-input pl-9 pr-3 py-1.5 text-xs w-48 sm:w-64"
-            />
+        {activeTab === 'leads' && (
+          <div className="hidden sm:flex items-center bg-white border border-[#E9EAEE] p-1 rounded-xl shadow-2xs">
+            <button
+              onClick={() => setDisplayMode('cards')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all ${
+                displayMode === 'cards' ? 'bg-[#FFF1F2] text-[#D62839] font-bold' : 'text-[#667085]'
+              }`}
+            >
+              List Cards
+            </button>
+            <button
+              onClick={() => setDisplayMode('pipeline')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all ${
+                displayMode === 'pipeline' ? 'bg-[#FFF1F2] text-[#D62839] font-bold' : 'text-[#667085]'
+              }`}
+            >
+              Pipeline Kanban
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ============================================================== */}
+      {/* TAB 1: UNIFIED LEADS HUB (WITH THE 9 MANDATORY VIEWS) */}
+      {/* ============================================================== */}
+      {activeTab === 'leads' && (
+        <div className="space-y-4">
+          {/* HK Sir's 9 Operational Views Horizontal Bar */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs font-medium no-scrollbar">
+            {viewTabs.map((tab) => {
+              const isActive = activeView === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveView(tab.id)}
+                  className={`px-3 py-1.5 rounded-xl border whitespace-nowrap transition-all duration-180 flex items-center gap-1.5 cursor-pointer ${
+                    isActive
+                      ? 'bg-[#FFF1F2] text-[#D62839] border-[#FECDD3] font-bold shadow-2xs'
+                      : 'bg-white text-[#667085] border-[#E9EAEE] hover:border-[#FECDD3] hover:text-[#20242C]'
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                  <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full border ${
+                    tab.badgeColor || (isActive ? 'bg-[#D62839] text-white border-[#D62839]' : 'bg-[#F8F9FB] text-[#667085] border-[#E9EAEE]')
+                  }`}>
+                    {tab.count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
-          {activeTab === 'leads' ? (
-            <button
-              onClick={() => setIsLeadModalOpen(true)}
-              className="cockpit-btn-primary"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Add Lead</span>
-            </button>
-          ) : (
+          {/* Search & Source Filter Controls */}
+          <div className="p-4 bg-white rounded-2xl border border-[#E9EAEE] shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex-1 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 absolute left-3 top-2.5 text-[#94A3B8]" />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search leads by name, company, phone, email, service..."
+                  className="cockpit-input pl-9 pr-3 py-2 text-xs w-full"
+                />
+              </div>
+
+              {/* Source Dropdown */}
+              <div className="sm:w-44">
+                <select
+                  value={sourceFilter}
+                  onChange={(e) => setSourceFilter(e.target.value)}
+                  className="cockpit-input py-2 text-xs w-full cursor-pointer bg-white"
+                >
+                  {sourceOptions.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Priority Dropdown */}
+              <div className="sm:w-36">
+                <select
+                  value={priorityFilter}
+                  onChange={(e) => setPriorityFilter(e.target.value)}
+                  className="cockpit-input py-2 text-xs w-full cursor-pointer bg-white"
+                >
+                  <option value="all">All Priorities</option>
+                  <option value="urgent">Urgent</option>
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between sm:justify-end gap-3 text-xs text-[#667085] font-semibold">
+              <span>Showing {filteredLeads.length} of {leads.length} leads</span>
+              {(sourceFilter !== 'all' || activeView !== 'all' || priorityFilter !== 'all' || search) && (
+                <button
+                  onClick={() => {
+                    setActiveView('all');
+                    setSourceFilter('all');
+                    setPriorityFilter('all');
+                    setSearch('');
+                  }}
+                  className="text-[#D62839] hover:underline cursor-pointer"
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* A. CARDS VIEW (MOBILE-FIRST & FRIENDLY) */}
+          {displayMode === 'cards' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredLeads.map((lead) => {
+                const isWon = lead.status === 'won';
+                const isLost = lead.status === 'lost';
+                const isOverdue = lead.next_followup_date && new Date(lead.next_followup_date) < new Date() && !isWon && !isLost;
+                const isToday = lead.next_followup_date && new Date(lead.next_followup_date).toDateString() === new Date().toDateString() && !isWon && !isLost;
+                const hasNoFollowup = !lead.next_followup_date && !isWon && !isLost;
+
+                return (
+                  <div
+                    key={lead.id}
+                    className={`rounded-2xl border p-5 transition-all duration-200 flex flex-col justify-between shadow-xs hover:shadow-md ${
+                      isOverdue 
+                        ? 'bg-[#FEF2F2]/60 border-[#FECDD3]' 
+                        : isToday 
+                          ? 'bg-[#FFFBEB]/60 border-[#FDE68A]' 
+                          : hasNoFollowup 
+                            ? 'bg-[#F8FAFC] border-[#E2E8F0]' 
+                            : 'bg-white border-[#E9EAEE] hover:border-[#FECDD3]'
+                    }`}
+                  >
+                    <div>
+                      {/* Top Bar: Source Badge & Priority */}
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#FFF1F2] text-[#D62839] border border-[#FECDD3]">
+                          <Globe className="w-3 h-3" />
+                          <span>{lead.source || 'General'}</span>
+                        </span>
+
+                        <div className="flex items-center gap-1.5">
+                          {lead.priority === 'urgent' && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#DC2626] text-white">URGENT</span>
+                          )}
+                          {lead.priority === 'high' && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FEF2F2] text-[#DC2626] border border-[#FECDD3]">HIGH</span>
+                          )}
+                          <span className="text-[11px] font-mono text-[#94A3B8]">#{lead.id}</span>
+                        </div>
+                      </div>
+
+                      {/* Lead Contact Info */}
+                      <div className="cursor-pointer" onClick={() => handleOpenDetail(lead)}>
+                        <h3 className="text-base font-extrabold text-[#20242C] tracking-tight hover:text-[#D62839] transition-colors">
+                          {lead.name}
+                        </h3>
+                        {lead.company && (
+                          <p className="text-xs font-semibold text-[#667085] flex items-center gap-1.5 mt-0.5">
+                            <Building2 className="w-3.5 h-3.5 text-[#D62839]" />
+                            <span>{lead.company}</span>
+                          </p>
+                        )}
+                        {lead.service_requirement && (
+                          <div className="mt-2.5 p-2 rounded-xl bg-white border border-[#E9EAEE] text-xs text-[#20242C]">
+                            <span className="font-bold text-[#D62839]">Requirement: </span>
+                            <span>{lead.service_requirement}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Follow-up Status Strip */}
+                      <div className="mt-3.5 pt-3 border-t border-[#E9EAEE] space-y-1.5 text-xs">
+                        {isOverdue && (
+                          <div className="flex items-center gap-1.5 text-[#DC2626] font-bold">
+                            <AlertTriangle className="w-3.5 h-3.5" />
+                            <span>Follow-up Overdue: {new Date(lead.next_followup_date!).toLocaleDateString([], { month: 'short', day: 'numeric' })} at {new Date(lead.next_followup_date!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                        )}
+                        {isToday && (
+                          <div className="flex items-center gap-1.5 text-[#D97706] font-bold">
+                            <Clock className="w-3.5 h-3.5" />
+                            <span>Follow-up Scheduled Today at {new Date(lead.next_followup_date!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                        )}
+                        {!isOverdue && !isToday && lead.next_followup_date && !isWon && !isLost && (
+                          <div className="flex items-center gap-1.5 text-[#667085]">
+                            <Calendar className="w-3.5 h-3.5 text-[#D62839]" />
+                            <span>Next: {new Date(lead.next_followup_date).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
+                          </div>
+                        )}
+                        {hasNoFollowup && (
+                          <div className="flex items-center gap-1.5 text-[#64748B] font-semibold">
+                            <Clock className="w-3.5 h-3.5 text-[#94A3B8]" />
+                            <span>⚠️ No follow-up scheduled yet</span>
+                          </div>
+                        )}
+                        {isWon && (
+                          <div className="flex items-center gap-1.5 text-[#059669] font-bold">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Lead Converted Successfully</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Bottom Action Footer */}
+                    <div className="mt-4 pt-3.5 border-t border-[#E9EAEE] flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1">
+                        {lead.phone && (
+                          <a
+                            href={`tel:${lead.phone}`}
+                            className="p-2 rounded-xl bg-white hover:bg-[#FFF1F2] text-[#667085] hover:text-[#D62839] border border-[#E9EAEE] hover:border-[#FECDD3] transition-all cursor-pointer shadow-2xs"
+                            title={`Call ${lead.name} (${lead.phone})`}
+                          >
+                            <PhoneCall className="w-3.5 h-3.5 text-[#059669]" />
+                          </a>
+                        )}
+                        {lead.phone && (
+                          <a
+                            href={`https://wa.me/${lead.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hello ${lead.name}, connecting with you from My Cockpit regarding your requirement for ${lead.service_requirement || 'our solutions'}.`)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-2 rounded-xl bg-white hover:bg-[#FFF1F2] text-[#667085] hover:text-[#D62839] border border-[#E9EAEE] hover:border-[#FECDD3] transition-all cursor-pointer shadow-2xs"
+                            title="Chat on WhatsApp"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5 text-[#25D366]" />
+                          </a>
+                        )}
+                        {lead.email && (
+                          <a
+                            href={`mailto:${lead.email}?subject=${encodeURIComponent(`Inquiry Follow-up: ${lead.service_requirement || 'My Cockpit'}`)}`}
+                            className="p-2 rounded-xl bg-white hover:bg-[#FFF1F2] text-[#667085] hover:text-[#D62839] border border-[#E9EAEE] hover:border-[#FECDD3] transition-all cursor-pointer shadow-2xs"
+                            title={`Email ${lead.email}`}
+                          >
+                            <Mail className="w-3.5 h-3.5 text-[#3B82F6]" />
+                          </a>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => handleOpenActivityModal(lead)}
+                          className="px-2.5 py-1.5 rounded-lg bg-[#FFF1F2] hover:bg-[#D62839] text-[#D62839] hover:text-white border border-[#FECDD3] text-[11px] font-bold transition-all cursor-pointer"
+                        >
+                          Log Activity
+                        </button>
+                        <button
+                          onClick={() => handleOpenDetail(lead)}
+                          className="p-1.5 rounded-lg text-[#667085] hover:text-[#D62839] hover:bg-[#FFF1F2] transition-all cursor-pointer"
+                          title="View Full Details"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {filteredLeads.length === 0 && (
+                <div className="col-span-full py-16 text-center bg-white rounded-2xl border border-dashed border-[#E9EAEE] p-6 space-y-3">
+                  <div className="w-12 h-12 rounded-2xl bg-[#FFF1F2] text-[#D62839] flex items-center justify-center mx-auto">
+                    <Filter className="w-6 h-6" />
+                  </div>
+                  <h4 className="text-base font-bold text-[#20242C]">No leads match your current filter view</h4>
+                  <p className="text-xs text-[#667085] max-w-sm mx-auto">
+                    Try switching tabs above, clearing search terms, or add a new lead from BNI, KVV, EAF, or manual entry.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setActiveView('all');
+                      setSourceFilter('all');
+                      setSearch('');
+                    }}
+                    className="cockpit-btn-primary inline-flex"
+                  >
+                    Reset All Filters
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* B. PIPELINE KANBAN VIEW */}
+          {displayMode === 'pipeline' && (
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-3.5 overflow-x-auto pb-4">
+              {pipelineStages.map((stage) => {
+                const stageLeads = filteredLeads.filter(l => l.status === stage.id);
+                const stageTotal = stageLeads.reduce((sum, l) => sum + Number(l.value), 0);
+
+                return (
+                  <div key={stage.id} className="min-w-[240px] bg-white rounded-2xl border border-[#E9EAEE] p-3.5 flex flex-col shadow-xs">
+                    <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-[#E9EAEE]">
+                      <div>
+                        <h4 className={`text-xs font-bold uppercase tracking-wider ${stage.headerColor}`}>{stage.label}</h4>
+                        <p className="text-[11px] font-mono text-[#20242C] font-bold mt-0.5">{formatCurrency(stageTotal)}</p>
+                      </div>
+                      <span className="w-5 h-5 rounded-full bg-[#FFF1F2] text-[10px] font-bold text-[#D62839] border border-[#FECDD3] flex items-center justify-center">
+                        {stageLeads.length}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2.5 flex-1 overflow-y-auto max-h-[65vh]">
+                      {stageLeads.map((lead) => (
+                        <div 
+                          key={lead.id} 
+                          className="p-3 rounded-xl bg-[#F8F9FB] border border-[#E9EAEE] hover:border-[#FECDD3] hover:shadow-xs transition-all cursor-pointer"
+                          onClick={() => handleOpenDetail(lead)}
+                        >
+                          <div className="flex items-center justify-between text-[10px] font-semibold text-[#D62839] mb-1">
+                            <span>{lead.source}</span>
+                            <span className="font-mono text-[#94A3B8]">#{lead.id}</span>
+                          </div>
+                          <h5 className="text-xs font-bold text-[#20242C] tracking-tight">{lead.name}</h5>
+                          {lead.company && <p className="text-[11px] text-[#667085] truncate">{lead.company}</p>}
+                          
+                          <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-[#E9EAEE] text-[11px]">
+                            <span className="font-mono font-bold text-[#059669]">{formatCurrency(Number(lead.value))}</span>
+                            <select
+                              value={lead.status}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => handleLeadStatusChange(lead.id, e.target.value)}
+                              className="bg-white text-[10px] text-[#20242C] border border-[#E9EAEE] rounded-md px-1.5 py-0.5 focus:outline-none focus:border-[#D62839] cursor-pointer"
+                            >
+                              <option value="new">New</option>
+                              <option value="contacted">Contacted</option>
+                              <option value="qualified">Qualified</option>
+                              <option value="proposal">Proposal</option>
+                              <option value="won">Won</option>
+                              <option value="lost">Lost</option>
+                            </select>
+                          </div>
+                        </div>
+                      ))}
+                      {stageLeads.length === 0 && (
+                        <div className="text-center py-6 text-[10px] text-[#94A3B8] border border-dashed border-[#E9EAEE] rounded-xl bg-[#FAFAFA]">
+                          No leads in this stage
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* TAB 2: LEAD SOURCES & INTEGRATIONS HUB */}
+      {/* ============================================================== */}
+      {activeTab === 'sources' && (
+        <div className="space-y-6">
+          <div className="p-6 rounded-2xl bg-white border border-[#E9EAEE] shadow-xs">
+            <h3 className="text-lg font-extrabold text-[#20242C] tracking-tight">
+              External Lead Sources & Integration Architecture
+            </h3>
+            <p className="text-xs text-[#667085] mt-1 max-w-2xl leading-relaxed">
+              In accordance with enterprise CRM security guidelines, each lead channel provides authorized integration methods: direct webhook intake, batch CSV importer with duplicate detection, and instant launchpads.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {leadSources.map((src) => {
+              const isConnected = src.status === 'connected';
+              const isCsv = src.status === 'csv_import_available';
+
+              return (
+                <div key={src.id} className="p-5 rounded-2xl bg-white border border-[#E9EAEE] shadow-xs hover:border-[#FECDD3] transition-all flex flex-col justify-between">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="w-10 h-10 rounded-xl bg-[#FFF1F2] text-[#D62839] flex items-center justify-center font-bold">
+                        <Globe className="w-5 h-5" />
+                      </div>
+                      <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${
+                        isConnected 
+                          ? 'bg-[#ECFDF5] text-[#059669] border-[#A7F3D0]' 
+                          : 'bg-[#FFF1F2] text-[#D62839] border-[#FECDD3]'
+                      }`}>
+                        {isConnected ? 'Connected & Active' : 'CSV Import Ready'}
+                      </span>
+                    </div>
+
+                    <div>
+                      <h4 className="text-base font-extrabold text-[#20242C]">{src.name}</h4>
+                      <p className="text-xs text-[#667085] mt-0.5">Category: {src.category}</p>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-[#F8F9FB] border border-[#E9EAEE] space-y-1 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[#667085]">Total Leads Captured:</span>
+                        <span className="font-mono font-bold text-[#20242C]">{src.total_leads_count || 0}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[#667085]">Converted to Won:</span>
+                        <span className="font-mono font-bold text-[#059669]">{src.converted_leads_count || 0}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[#667085]">Sync Count:</span>
+                        <span className="font-mono text-[#667085]">{src.sync_count || 0} batches</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-[#E9EAEE] space-y-2">
+                    {src.source_key === 'website_seo' ? (
+                      <button
+                        onClick={() => handleCopyWebhookUrl(src.webhook_secret || '')}
+                        className="w-full py-2 px-3 rounded-xl bg-[#FFF1F2] text-[#D62839] hover:bg-[#D62839] hover:text-white border border-[#FECDD3] text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>{copiedToken ? 'Webhook URL Copied!' : 'Copy Form Webhook URL'}</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setImportSourceKey(src.source_key);
+                          setIsImportModalOpen(true);
+                        }}
+                        className="w-full py-2 px-3 rounded-xl bg-[#FFF1F2] text-[#D62839] hover:bg-[#D62839] hover:text-white border border-[#FECDD3] text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Import {src.name} Leads</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* TAB 3: CUSTOMERS DIRECTORY */}
+      {/* ============================================================== */}
+      {activeTab === 'customers' && (
+        <div className="rounded-2xl bg-white border border-[#E9EAEE] overflow-hidden shadow-xs">
+          <div className="p-4 border-b border-[#E9EAEE] flex items-center justify-between">
+            <h3 className="text-base font-extrabold text-[#20242C]">Client Organization Directory</h3>
             <button
               onClick={() => setIsCustomerModalOpen(true)}
               className="cockpit-btn-primary"
@@ -169,240 +947,257 @@ export const CRM: React.FC = () => {
               <Plus className="w-3.5 h-3.5" />
               <span>Add Customer</span>
             </button>
-          )}
-        </div>
-      </div>
-
-      {/* SALES PIPELINE KANBAN VIEW */}
-      {activeTab === 'leads' && (
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 overflow-x-auto pb-4">
-          {pipelineStages.map((stage) => {
-            const stageLeads = leads.filter(l => l.status === stage.id && 
-              (l.name.toLowerCase().includes(search.toLowerCase()) || (l.company || '').toLowerCase().includes(search.toLowerCase()))
-            );
-            const stageTotal = stageLeads.reduce((sum, l) => sum + Number(l.value), 0);
-
-            return (
-              <div key={stage.id} className="min-w-[260px] bg-white rounded-2xl border border-[#E9EAEE] p-4 flex flex-col shadow-xs">
-                <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#E9EAEE]">
-                  <div>
-                    <h3 className={`text-xs font-bold uppercase tracking-wider ${stage.headerColor}`}>{stage.label}</h3>
-                    <p className="text-[11px] font-mono text-[#20242C] font-bold mt-0.5">{formatCurrency(stageTotal)}</p>
-                  </div>
-                  <span className="w-5 h-5 rounded-full bg-[#FFF1F2] text-[11px] font-bold text-[#D62839] border border-[#FECDD3] flex items-center justify-center">
-                    {stageLeads.length}
-                  </span>
-                </div>
-
-                <div className="space-y-2.5 flex-1 overflow-y-auto max-h-[65vh]">
-                  {stageLeads.map((lead) => (
-                    <div key={lead.id} className="p-3.5 rounded-xl bg-[#F8F9FB] border border-[#E9EAEE] hover:border-[#FECDD3] hover:shadow-xs transition-all duration-180">
-                      <h4 className="text-sm font-bold text-[#20242C] tracking-tight">{lead.name}</h4>
-                      {lead.company && <p className="text-xs text-[#667085] mt-0.5">{lead.company}</p>}
-                      <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-[#E9EAEE] text-xs">
-                        <span className="font-mono font-bold text-[#059669]">{formatCurrency(Number(lead.value))}</span>
-                        <select
-                          value={lead.status}
-                          onChange={(e) => handleLeadStatusChange(lead.id, e.target.value)}
-                          className="bg-white text-[11px] text-[#20242C] border border-[#E9EAEE] rounded-lg px-2 py-1 focus:outline-none focus:border-[#D62839] cursor-pointer"
-                        >
-                          <option value="new">New</option>
-                          <option value="contacted">Contacted</option>
-                          <option value="qualified">Qualified</option>
-                          <option value="proposal">Proposal</option>
-                          <option value="won">Won</option>
-                          <option value="lost">Lost</option>
-                        </select>
-                      </div>
-                    </div>
-                  ))}
-                  {stageLeads.length === 0 && (
-                    <div className="text-center py-8 text-[11px] text-[#94A3B8] border border-dashed border-[#E9EAEE] rounded-xl bg-[#FAFAFA]">
-                      No opportunities in this stage
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* CUSTOMERS DIRECTORY */}
-      {activeTab === 'customers' && (
-        <div className="rounded-2xl bg-white border border-[#E9EAEE] overflow-hidden shadow-xs">
-          {/* Mobile Card List View for Phones */}
-          <div className="sm:hidden divide-y divide-[#E9EAEE]">
-            {customers.map((c) => (
-              <div key={c.id} className="p-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-bold text-[#20242C]">{c.name}</h4>
-                  <Badge status={c.status} />
-                </div>
-                {c.company && (
-                  <p className="text-xs text-[#667085] flex items-center gap-1.5">
-                    <Building2 className="w-3.5 h-3.5 text-[#D62839]" />
-                    <span>{c.company}</span>
-                  </p>
-                )}
-                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#667085] pt-1">
-                  {c.email && (
-                    <span className="flex items-center gap-1 font-mono">
-                      <Mail className="w-3 h-3 text-[#94A3B8]" />
-                      {c.email}
-                    </span>
-                  )}
-                  {c.phone && (
-                    <span className="flex items-center gap-1 font-mono">
-                      <Phone className="w-3 h-3 text-[#94A3B8]" />
-                      {c.phone}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
           </div>
 
-          {/* Desktop Table View */}
-          <div className="hidden sm:block overflow-x-auto">
-            <table className="w-full text-left text-sm text-[#20242C]">
-              <thead className="bg-[#F8F9FB] text-xs uppercase font-bold text-[#667085] border-b border-[#E9EAEE]">
-                <tr>
-                  <th className="px-6 py-4">Client Contact</th>
-                  <th className="px-6 py-4">Company Organization</th>
-                  <th className="px-6 py-4">Contact Details</th>
-                  <th className="px-6 py-4">Region / City</th>
-                  <th className="px-6 py-4">GST / Tax ID</th>
-                  <th className="px-6 py-4 text-center">Status</th>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-[#F8F9FB] border-b border-[#E9EAEE] text-[#667085] font-bold">
+                  <th className="py-3 px-4">Customer / Organization</th>
+                  <th className="py-3 px-4">Contact Details</th>
+                  <th className="py-3 px-4">City / Region</th>
+                  <th className="py-3 px-4">Invoiced Total</th>
+                  <th className="py-3 px-4">Outstanding Balance</th>
+                  <th className="py-3 px-4">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E9EAEE]">
                 {customers.map((c) => (
-                  <tr key={c.id} className="hover:bg-[#FFF1F2]/30 transition-colors">
-                    <td className="px-6 py-4 font-bold text-[#20242C]">
-                      {c.name}
+                  <tr key={c.id} className="hover:bg-[#FFF1F2]/20 transition-colors">
+                    <td className="py-3.5 px-4">
+                      <div className="font-bold text-[#20242C] text-sm">{c.name}</div>
+                      {c.company && <div className="text-[#667085] text-[11px]">{c.company}</div>}
                     </td>
-                    <td className="px-6 py-4 text-[#667085] font-medium">
-                      {c.company || '—'}
+                    <td className="py-3.5 px-4 space-y-0.5">
+                      {c.phone && <div className="font-mono text-[#20242C]">{c.phone}</div>}
+                      {c.email && <div className="text-[#667085]">{c.email}</div>}
                     </td>
-                    <td className="px-6 py-4 text-xs font-mono">
-                      <p className="text-[#20242C] font-medium">{c.email || 'No email'}</p>
-                      <p className="text-[#667085]">{c.phone || 'No phone'}</p>
+                    <td className="py-3.5 px-4 text-[#667085]">{c.city || 'India'}</td>
+                    <td className="py-3.5 px-4 font-mono font-bold text-[#20242C]">
+                      {formatCurrency(Number(c.total_invoiced || 0))}
                     </td>
-                    <td className="px-6 py-4 text-xs text-[#667085]">
-                      {c.city || 'India'}
+                    <td className="py-3.5 px-4 font-mono font-bold text-[#DC2626]">
+                      {formatCurrency(Number(c.outstanding_balance || 0))}
                     </td>
-                    <td className="px-6 py-4 text-xs font-mono text-[#667085]">
-                      {c.tax_id || '—'}
-                    </td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="py-3.5 px-4">
                       <Badge status={c.status} />
                     </td>
                   </tr>
                 ))}
-                {customers.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="text-center py-12 text-[#94A3B8] text-sm">
-                      No customers found. Click "Add Customer" to register one.
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
           </div>
         </div>
       )}
 
-      {/* CREATE CUSTOMER MODAL */}
+      {/* ============================================================== */}
+      {/* MODAL 1: ADD NEW LEAD (WITH ALL HK SIR REQUIREMENTS) */}
+      {/* ============================================================== */}
       <Modal
-        isOpen={isCustomerModalOpen}
-        onClose={() => setIsCustomerModalOpen(false)}
-        title="Add Customer Organization"
+        isOpen={isLeadModalOpen}
+        onClose={() => setIsLeadModalOpen(false)}
+        title="Add New Business Lead"
+        maxWidth="max-w-2xl"
       >
-        <form onSubmit={handleCreateCustomer} className="space-y-4">
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
-              Contact Full Name
-            </label>
-            <input
-              type="text"
-              required
-              value={custName}
-              onChange={(e) => setCustName(e.target.value)}
-              placeholder="e.g. Ramesh Patel"
-              className="cockpit-input"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
-              Company Name
-            </label>
-            <input
-              type="text"
-              value={custCompany}
-              onChange={(e) => setCustCompany(e.target.value)}
-              placeholder="e.g. TechCorp Solutions Ltd"
-              className="cockpit-input"
-            />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <form onSubmit={handleCreateLead} className="space-y-4">
+          {duplicateWarning && (
+            <div className="p-3.5 rounded-xl bg-[#FEF2F2] border border-[#FECDD3] text-[#DC2626] text-xs space-y-2">
+              <div className="flex items-center gap-2 font-bold">
+                <AlertTriangle className="w-4 h-4" />
+                <span>Duplicate Lead Detection Alert</span>
+              </div>
+              <p>{duplicateWarning}</p>
+              <label className="flex items-center gap-2 pt-1 font-semibold text-[#20242C] cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={forceDuplicate}
+                  onChange={(e) => setForceDuplicate(e.target.checked)}
+                  className="rounded text-[#D62839] focus:ring-[#D62839]"
+                />
+                <span>Allow duplicate anyway and save this lead</span>
+              </label>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
-                Email
+              <label className="block text-xs font-bold text-[#20242C] mb-1">
+                Full Name / Contact Person *
+              </label>
+              <input
+                type="text"
+                required
+                value={leadName}
+                onChange={(e) => setLeadName(e.target.value)}
+                placeholder="e.g. Rajesh Mehta"
+                className="cockpit-input w-full text-xs"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[#20242C] mb-1">
+                Company / Organization
+              </label>
+              <input
+                type="text"
+                value={leadCompany}
+                onChange={(e) => setLeadCompany(e.target.value)}
+                placeholder="e.g. Mehta Exports Pvt Ltd"
+                className="cockpit-input w-full text-xs"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[#20242C] mb-1">
+                Phone Number
+              </label>
+              <input
+                type="text"
+                value={leadPhone}
+                onChange={(e) => setLeadPhone(e.target.value)}
+                placeholder="+91 9825012345"
+                className="cockpit-input w-full text-xs"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[#20242C] mb-1">
+                Email Address
               </label>
               <input
                 type="email"
-                value={custEmail}
-                onChange={(e) => setCustEmail(e.target.value)}
-                placeholder="contact@company.com"
-                className="cockpit-input"
+                value={leadEmail}
+                onChange={(e) => setLeadEmail(e.target.value)}
+                placeholder="rajesh@mehtaexports.demo"
+                className="cockpit-input w-full text-xs"
               />
             </div>
+
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
-                Phone
+              <label className="block text-xs font-bold text-[#20242C] mb-1">
+                Lead Source *
+              </label>
+              <select
+                value={leadSource}
+                onChange={(e) => setLeadSource(e.target.value)}
+                className="cockpit-input w-full text-xs bg-white cursor-pointer"
+              >
+                <option value="BNI Connect">BNI Connect</option>
+                <option value="KVV Leads">KVV Leads</option>
+                <option value="EAF Connect">EAF Connect</option>
+                <option value="SEO / Website">SEO / Website</option>
+                <option value="Manually Added">Manually Added</option>
+                <option value="Direct Referral">Direct Referral</option>
+                <option value="Custom Source">Custom Source</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[#20242C] mb-1">
+                Estimated Value (₹)
+              </label>
+              <input
+                type="number"
+                value={leadValue}
+                onChange={(e) => setLeadValue(Number(e.target.value))}
+                className="cockpit-input w-full text-xs font-mono"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-bold text-[#20242C] mb-1">
+                Service / Requirement Details *
               </label>
               <input
                 type="text"
-                value={custPhone}
-                onChange={(e) => setCustPhone(e.target.value)}
-                placeholder="+91 9876543210"
-                className="cockpit-input font-mono"
+                value={leadService}
+                onChange={(e) => setLeadService(e.target.value)}
+                placeholder="e.g. Cloud ERP, Logistics Tracker, E-commerce Portal..."
+                className="cockpit-input w-full text-xs"
               />
             </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
-                City / Region
+              <label className="block text-xs font-bold text-[#20242C] mb-1">
+                Assigned Employee / Team Member
+              </label>
+              <select
+                value={leadAssignedTo}
+                onChange={(e) => setLeadAssignedTo(e.target.value)}
+                className="cockpit-input w-full text-xs bg-white cursor-pointer"
+              >
+                <option value="">Unassigned</option>
+                {employees.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.first_name} {emp.last_name} ({emp.designation})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[#20242C] mb-1">
+                Priority
+              </label>
+              <select
+                value={leadPriority}
+                onChange={(e) => setLeadPriority(e.target.value as any)}
+                className="cockpit-input w-full text-xs bg-white cursor-pointer"
+              >
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[#20242C] mb-1">
+                Initial Follow-up Date & Time
               </label>
               <input
-                type="text"
-                value={custCity}
-                onChange={(e) => setCustCity(e.target.value)}
-                placeholder="Mumbai"
-                className="cockpit-input"
+                type="datetime-local"
+                value={leadNextFollowup}
+                onChange={(e) => setLeadNextFollowup(e.target.value)}
+                className="cockpit-input w-full text-xs"
               />
             </div>
+
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
-                GST / Tax ID
+              <label className="block text-xs font-bold text-[#20242C] mb-1">
+                Follow-up Contact Method
               </label>
-              <input
-                type="text"
-                value={custTaxId}
-                onChange={(e) => setCustTaxId(e.target.value)}
-                placeholder="27AABCT1234A1Z5"
-                className="cockpit-input font-mono"
+              <select
+                value={leadContactMethod}
+                onChange={(e) => setLeadContactMethod(e.target.value as any)}
+                className="cockpit-input w-full text-xs bg-white cursor-pointer"
+              >
+                <option value="call">Phone Call</option>
+                <option value="whatsapp">WhatsApp Message</option>
+                <option value="email">Email</option>
+                <option value="meeting">In-Person / Video Meeting</option>
+              </select>
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-bold text-[#20242C] mb-1">
+                Notes & Background Information
+              </label>
+              <textarea
+                value={leadNotes}
+                onChange={(e) => setLeadNotes(e.target.value)}
+                rows={3}
+                placeholder="Add meeting notes, referral context, specific customer expectations..."
+                className="cockpit-input w-full text-xs"
               />
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-[#E9EAEE]">
+          <div className="pt-3 border-t border-[#E9EAEE] flex items-center justify-end gap-2.5">
             <button
               type="button"
-              onClick={() => setIsCustomerModalOpen(false)}
-              className="cockpit-btn-secondary"
+              onClick={() => setIsLeadModalOpen(false)}
+              className="px-4 py-2 rounded-xl border border-[#E9EAEE] text-xs font-bold text-[#667085] hover:bg-[#F8F9FB] cursor-pointer"
             >
               Cancel
             </button>
@@ -410,93 +1205,223 @@ export const CRM: React.FC = () => {
               type="submit"
               className="cockpit-btn-primary"
             >
-              Save Customer
+              <span>Save Lead Record</span>
             </button>
           </div>
         </form>
       </Modal>
 
-      {/* CREATE LEAD MODAL */}
+      {/* ============================================================== */}
+      {/* MODAL 2: BATCH CSV LEAD IMPORTER */}
+      {/* ============================================================== */}
       <Modal
-        isOpen={isLeadModalOpen}
-        onClose={() => setIsLeadModalOpen(false)}
-        title="Add Pipeline Lead"
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        title="Batch Lead Importer (CSV / Excel Format)"
+        maxWidth="max-w-2xl"
       >
-        <form onSubmit={handleCreateLead} className="space-y-4">
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
-              Opportunity Title
-            </label>
-            <input
-              type="text"
-              required
-              value={leadName}
-              onChange={(e) => setLeadName(e.target.value)}
-              placeholder="e.g. Enterprise Cloud Integration"
-              className="cockpit-input"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
-              Company
-            </label>
-            <input
-              type="text"
-              value={leadCompany}
-              onChange={(e) => setLeadCompany(e.target.value)}
-              placeholder="e.g. Wipro Digital"
-              className="cockpit-input"
-            />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
-                Deal Value (₹)
-              </label>
-              <input
-                type="number"
-                min="0"
-                required
-                value={leadValue}
-                onChange={(e) => setLeadValue(Number(e.target.value))}
-                className="cockpit-input font-mono"
-              />
+        <div className="space-y-4">
+          <p className="text-xs text-[#667085]">
+            Import business leads from <strong>BNI Connect</strong>, <strong>KVV</strong>, <strong>EAF Connect</strong>, or Website exports. Duplicate detection prevents accidental double-entries.
+          </p>
+
+          {importStatusMsg && (
+            <div className={`p-3.5 rounded-xl text-xs font-semibold ${
+              importStatusMsg.type === 'success' 
+                ? 'bg-[#ECFDF5] text-[#059669] border border-[#A7F3D0]' 
+                : 'bg-[#FEF2F2] text-[#DC2626] border border-[#FECDD3]'
+            }`}>
+              {importStatusMsg.text}
             </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
-                Initial Stage
+              <label className="block text-xs font-bold text-[#20242C] mb-1">
+                Lead Source Origin *
               </label>
               <select
-                value={leadStatus}
-                onChange={(e) => setLeadStatus(e.target.value as any)}
-                className="cockpit-input"
+                value={importSourceKey}
+                onChange={(e) => setImportSourceKey(e.target.value)}
+                className="cockpit-input w-full text-xs bg-white cursor-pointer"
               >
-                <option value="new">New Inquiry</option>
-                <option value="contacted">Contacted</option>
-                <option value="qualified">Qualified</option>
-                <option value="proposal">Proposal Sent</option>
-                <option value="won">Won / Closed</option>
+                <option value="bni">BNI Connect Export</option>
+                <option value="kvv">KVV Leads Portal</option>
+                <option value="eaf">EAF Connect Leads</option>
+                <option value="website_seo">SEO / Website Leads</option>
+                <option value="custom">Custom Lead Spreadsheet</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[#20242C] mb-1">
+                Duplicate Handling Strategy
+              </label>
+              <select
+                value={importDuplicateStrategy}
+                onChange={(e) => setImportDuplicateStrategy(e.target.value as any)}
+                className="cockpit-input w-full text-xs bg-white cursor-pointer"
+              >
+                <option value="skip">Skip duplicates (Safe & Recommended)</option>
+                <option value="update">Update existing matching records</option>
               </select>
             </div>
           </div>
+
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
-              Lead Source
-            </label>
-            <input
-              type="text"
-              value={leadSource}
-              onChange={(e) => setLeadSource(e.target.value)}
-              placeholder="e.g. BNI Connect, Inbound, Direct"
-              className="cockpit-input"
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-bold text-[#20242C]">
+                Paste CSV Data with Headers
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setImportCsvText(
+                    `name,company,email,phone,value,service_requirement,priority,notes\n` +
+                    `Dr. Ananya Roy,HealthFirst Diagnostics,ananya@healthfirst.demo,+91 9724034567,420000,Patient Portal,high,Met at regional forum\n` +
+                    `Kunal Shah,Shah Tech Ventures,kunal@shahtech.demo,+91 9825123456,350000,AI Agent Integration,urgent,Wants demo this week`
+                  );
+                }}
+                className="text-[11px] text-[#D62839] font-bold hover:underline cursor-pointer"
+              >
+                Load Sample Template
+              </button>
+            </div>
+            <textarea
+              value={importCsvText}
+              onChange={(e) => setImportCsvText(e.target.value)}
+              rows={8}
+              placeholder="name,company,email,phone,value,service_requirement,priority,notes..."
+              className="cockpit-input w-full font-mono text-[11px]"
             />
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-[#E9EAEE]">
+          <div className="pt-3 border-t border-[#E9EAEE] flex items-center justify-end gap-2.5">
             <button
               type="button"
-              onClick={() => setIsLeadModalOpen(false)}
-              className="cockpit-btn-secondary"
+              onClick={() => setIsImportModalOpen(false)}
+              className="px-4 py-2 rounded-xl border border-[#E9EAEE] text-xs font-bold text-[#667085] hover:bg-[#F8F9FB] cursor-pointer"
+            >
+              Close
+            </button>
+            <button
+              type="button"
+              onClick={handleImportCsv}
+              className="cockpit-btn-primary"
+            >
+              <Upload className="w-4 h-4" />
+              <span>Process & Import Leads</span>
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ============================================================== */}
+      {/* MODAL 3: LOG ACTIVITY & SCHEDULE NEXT FOLLOW-UP */}
+      {/* ============================================================== */}
+      <Modal
+        isOpen={isActivityModalOpen}
+        onClose={() => setIsActivityModalOpen(false)}
+        title={`Log Follow-up Activity for ${selectedLead?.name || 'Lead'}`}
+        maxWidth="max-w-lg"
+      >
+        <form onSubmit={handleLogActivity} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div>
+              <label className="block text-xs font-bold text-[#20242C] mb-1">
+                Touchpoint Type *
+              </label>
+              <select
+                value={actType}
+                onChange={(e) => {
+                  const val = e.target.value as any;
+                  setActType(val);
+                  setActTitle(`${val.charAt(0).toUpperCase() + val.slice(1)} with ${selectedLead?.name || 'Lead'}`);
+                }}
+                className="cockpit-input w-full text-xs bg-white cursor-pointer"
+              >
+                <option value="call">Phone Call</option>
+                <option value="whatsapp">WhatsApp Message</option>
+                <option value="email">Email</option>
+                <option value="meeting">Meeting (Online/Offline)</option>
+                <option value="note">Internal Note</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[#20242C] mb-1">
+                Activity Title *
+              </label>
+              <input
+                type="text"
+                required
+                value={actTitle}
+                onChange={(e) => setActTitle(e.target.value)}
+                className="cockpit-input w-full text-xs"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-bold text-[#20242C] mb-1">
+                Outcome / Result of this Interaction *
+              </label>
+              <input
+                type="text"
+                required
+                value={actOutcome}
+                onChange={(e) => setActOutcome(e.target.value)}
+                placeholder="e.g. Discussed proposal, requested revised quotation by Friday"
+                className="cockpit-input w-full text-xs"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-bold text-[#20242C] mb-1">
+                Detailed Discussion Notes
+              </label>
+              <textarea
+                value={actDescription}
+                onChange={(e) => setActDescription(e.target.value)}
+                rows={3}
+                placeholder="Key objections, attendees, pricing agreements..."
+                className="cockpit-input w-full text-xs"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[#20242C] mb-1">
+                Next Follow-up Date & Time
+              </label>
+              <input
+                type="datetime-local"
+                value={actNextDate}
+                onChange={(e) => setActNextDate(e.target.value)}
+                className="cockpit-input w-full text-xs"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[#20242C] mb-1">
+                Next Contact Method
+              </label>
+              <select
+                value={actNextMethod}
+                onChange={(e) => setActNextMethod(e.target.value as any)}
+                className="cockpit-input w-full text-xs bg-white cursor-pointer"
+              >
+                <option value="call">Phone Call</option>
+                <option value="whatsapp">WhatsApp Message</option>
+                <option value="email">Email</option>
+                <option value="meeting">Meeting</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="pt-3 border-t border-[#E9EAEE] flex items-center justify-end gap-2.5">
+            <button
+              type="button"
+              onClick={() => setIsActivityModalOpen(false)}
+              className="px-4 py-2 rounded-xl border border-[#E9EAEE] text-xs font-bold text-[#667085] hover:bg-[#F8F9FB] cursor-pointer"
             >
               Cancel
             </button>
@@ -504,7 +1429,211 @@ export const CRM: React.FC = () => {
               type="submit"
               className="cockpit-btn-primary"
             >
-              Save Pipeline Lead
+              <span>Record Touchpoint & Update Lead</span>
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ============================================================== */}
+      {/* DRAWER / MODAL 4: DETAILED LEAD TIMELINE & AUDIT HISTORY */}
+      {/* ============================================================== */}
+      {selectedLead && (
+        <Modal
+          isOpen={isDetailDrawerOpen}
+          onClose={() => setIsDetailDrawerOpen(false)}
+          title={`Lead Profile: ${selectedLead.name}`}
+          maxWidth="max-w-2xl"
+        >
+          <div className="space-y-5">
+            {/* Header Snapshot */}
+            <div className="p-4 rounded-2xl bg-[#F8F9FB] border border-[#E9EAEE] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-extrabold text-[#20242C]">{selectedLead.name}</h3>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#FFF1F2] text-[#D62839] border border-[#FECDD3]">
+                    {selectedLead.source}
+                  </span>
+                </div>
+                {selectedLead.company && (
+                  <p className="text-xs text-[#667085] font-semibold mt-0.5">{selectedLead.company}</p>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                {selectedLead.phone && (
+                  <a
+                    href={`tel:${selectedLead.phone}`}
+                    className="p-2 rounded-xl bg-white hover:bg-[#FFF1F2] text-[#059669] border border-[#E9EAEE] transition-all cursor-pointer shadow-2xs"
+                    title="Call Contact"
+                  >
+                    <PhoneCall className="w-4 h-4" />
+                  </a>
+                )}
+                {selectedLead.phone && (
+                  <a
+                    href={`https://wa.me/${selectedLead.phone.replace(/[^0-9]/g, '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-2 rounded-xl bg-white hover:bg-[#FFF1F2] text-[#25D366] border border-[#E9EAEE] transition-all cursor-pointer shadow-2xs"
+                    title="Chat on WhatsApp"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                  </a>
+                )}
+                {selectedLead.email && (
+                  <a
+                    href={`mailto:${selectedLead.email}`}
+                    className="p-2 rounded-xl bg-white hover:bg-[#FFF1F2] text-[#3B82F6] border border-[#E9EAEE] transition-all cursor-pointer shadow-2xs"
+                    title="Send Email"
+                  >
+                    <Mail className="w-4 h-4" />
+                  </a>
+                )}
+              </div>
+            </div>
+
+            {/* Core Details Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+              <div className="p-3 rounded-xl border border-[#E9EAEE] bg-white">
+                <span className="text-[#667085]">Value Estimate:</span>
+                <p className="font-mono font-bold text-[#059669] text-sm mt-0.5">{formatCurrency(Number(selectedLead.value))}</p>
+              </div>
+
+              <div className="p-3 rounded-xl border border-[#E9EAEE] bg-white">
+                <span className="text-[#667085]">Pipeline Status:</span>
+                <p className="font-bold text-[#20242C] uppercase text-xs mt-0.5">{selectedLead.status}</p>
+              </div>
+
+              <div className="p-3 rounded-xl border border-[#E9EAEE] bg-white">
+                <span className="text-[#667085]">Assigned Person:</span>
+                <p className="font-bold text-[#20242C] text-xs mt-0.5">{selectedLead.assigned_user_name || 'Unassigned'}</p>
+              </div>
+
+              <div className="p-3 rounded-xl border border-[#E9EAEE] bg-white sm:col-span-3">
+                <span className="text-[#667085]">Requirement Details:</span>
+                <p className="font-bold text-[#20242C] text-xs mt-0.5">{selectedLead.service_requirement || 'General Requirement'}</p>
+              </div>
+            </div>
+
+            {/* Follow-up Timeline & Activities Log */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-extrabold text-[#20242C]">Activity & Follow-up History</h4>
+                <button
+                  onClick={() => handleOpenActivityModal(selectedLead)}
+                  className="px-3 py-1 rounded-lg bg-[#D62839] text-white text-xs font-bold hover:bg-[#B91C2C] transition-all cursor-pointer"
+                >
+                  + Add Touchpoint
+                </button>
+              </div>
+
+              <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
+                {(selectedLead.activities || []).map((act: LeadActivity) => (
+                  <div key={act.id} className="p-3 rounded-xl bg-white border border-[#E9EAEE] text-xs space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-[#20242C] flex items-center gap-1.5">
+                        <span className="px-1.5 py-0.5 rounded-md bg-[#FFF1F2] text-[#D62839] text-[10px] uppercase font-mono font-bold">
+                          {act.activity_type}
+                        </span>
+                        <span>{act.title}</span>
+                      </span>
+                      <span className="text-[10px] text-[#94A3B8]">
+                        {new Date(act.activity_date).toLocaleDateString([], { month: 'short', day: 'numeric' })} at {new Date(act.activity_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    {act.description && (
+                      <p className="text-[#667085] leading-relaxed pl-2 border-l-2 border-[#FECDD3] whitespace-pre-line">
+                        {act.description}
+                      </p>
+                    )}
+                  </div>
+                ))}
+
+                {(!selectedLead.activities || selectedLead.activities.length === 0) && (
+                  <div className="text-center py-6 text-xs text-[#94A3B8] border border-dashed border-[#E9EAEE] rounded-xl">
+                    No touchpoints logged yet. Click "+ Add Touchpoint" above to record a call or WhatsApp discussion.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* MODAL 5: ADD NEW CUSTOMER */}
+      <Modal
+        isOpen={isCustomerModalOpen}
+        onClose={() => setIsCustomerModalOpen(false)}
+        title="Add New Customer Organization"
+        maxWidth="max-w-md"
+      >
+        <form onSubmit={handleCreateCustomer} className="space-y-3.5">
+          <div>
+            <label className="block text-xs font-bold text-[#20242C] mb-1">Organization / Client Name *</label>
+            <input
+              type="text"
+              required
+              value={custName}
+              onChange={(e) => setCustName(e.target.value)}
+              placeholder="e.g. Acme Tech Solutions"
+              className="cockpit-input w-full text-xs"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-[#20242C] mb-1">Brand Name / Group</label>
+            <input
+              type="text"
+              value={custCompany}
+              onChange={(e) => setCustCompany(e.target.value)}
+              placeholder="e.g. Acme Global Group"
+              className="cockpit-input w-full text-xs"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-[#20242C] mb-1">Email</label>
+            <input
+              type="email"
+              value={custEmail}
+              onChange={(e) => setCustEmail(e.target.value)}
+              placeholder="billing@acme.com"
+              className="cockpit-input w-full text-xs"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-[#20242C] mb-1">Phone</label>
+            <input
+              type="text"
+              value={custPhone}
+              onChange={(e) => setCustPhone(e.target.value)}
+              placeholder="+91 9820011223"
+              className="cockpit-input w-full text-xs"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-[#20242C] mb-1">City</label>
+            <input
+              type="text"
+              value={custCity}
+              onChange={(e) => setCustCity(e.target.value)}
+              placeholder="e.g. Ahmedabad, Mumbai"
+              className="cockpit-input w-full text-xs"
+            />
+          </div>
+
+          <div className="pt-3 border-t border-[#E9EAEE] flex items-center justify-end gap-2.5">
+            <button
+              type="button"
+              onClick={() => setIsCustomerModalOpen(false)}
+              className="px-4 py-2 rounded-xl border border-[#E9EAEE] text-xs font-bold text-[#667085] hover:bg-[#F8F9FB] cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="cockpit-btn-primary"
+            >
+              <span>Save Customer</span>
             </button>
           </div>
         </form>
