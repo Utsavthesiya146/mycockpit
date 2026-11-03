@@ -35,6 +35,7 @@ import type { ConnectedApp } from '../types';
 export const ConnectedApps: React.FC = () => {
   const [apps, setApps] = useState<ConnectedApp[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -60,11 +61,14 @@ export const ConnectedApps: React.FC = () => {
   const [modalFeedback, setModalFeedback] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
 
   const fetchApps = async () => {
+    setLoading(true);
+    setError(null);
     try {
       const data: any = await api.get('/apps');
-      setApps(data || []);
-    } catch (err) {
+      setApps(Array.isArray(data) ? data : []);
+    } catch (err: any) {
       console.error('Failed to load connected apps', err);
+      setError(err?.message || 'Failed to load connected applications. Please check your connection or session.');
     } finally {
       setLoading(false);
     }
@@ -253,8 +257,37 @@ export const ConnectedApps: React.FC = () => {
     { id: 'custom', label: 'Custom Portals' }
   ];
 
+  const matchesCategory = (app: ConnectedApp, catId: string): boolean => {
+    if (catId === 'all') return true;
+
+    const cat = (app.category || '').toLowerCase();
+    const name = (app.name || '').toLowerCase();
+    const isPortal = Boolean(app.is_portal) || ['eaf', 'bni', 'kvv'].includes(app.source_key || '');
+
+    if (catId === 'business') {
+      return cat === 'business' || isPortal;
+    }
+    if (catId === 'productivity') {
+      return cat === 'productivity' || cat === 'cloud' || name.includes('drive') || name.includes('calendar') || name.includes('notes') || name.includes('form');
+    }
+    if (catId === 'communication') {
+      return cat === 'communication' || name.includes('gmail') || name.includes('mail');
+    }
+    if (catId === 'cloud') {
+      return cat === 'cloud' || name.includes('drive');
+    }
+    if (catId === 'custom') {
+      return isPortal || cat === 'custom';
+    }
+    return cat === catId;
+  };
+
+  const getCategoryCount = (catId: string) => {
+    return apps.filter((app) => matchesCategory(app, catId)).length;
+  };
+
   const filtered = apps.filter((app) => {
-    const matchesCat = activeCategory === 'all' || app.category === activeCategory;
+    const matchesCat = matchesCategory(app, activeCategory);
     const matchesQuery = (app.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
                          (app.app_url || '').toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCat && matchesQuery;
@@ -283,19 +316,27 @@ export const ConnectedApps: React.FC = () => {
       {/* Controls & Filter Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-[#E9EAEE] shadow-xs">
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 text-xs font-semibold">
-          {categories.map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => setActiveCategory(cat.id)}
-              className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap cursor-pointer ${
-                activeCategory === cat.id
-                  ? 'bg-[#D62839] text-white shadow-xs font-bold'
-                  : 'text-[#667085] hover:text-[#20242C] hover:bg-[#FFF1F2]'
-              }`}
-            >
-              {cat.label}
-            </button>
-          ))}
+          {categories.map((cat) => {
+            const count = getCategoryCount(cat.id);
+            return (
+              <button
+                key={cat.id}
+                onClick={() => setActiveCategory(cat.id)}
+                className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                  activeCategory === cat.id
+                    ? 'bg-[#D62839] text-white shadow-xs font-bold'
+                    : 'text-[#667085] hover:text-[#20242C] hover:bg-[#FFF1F2]'
+                }`}
+              >
+                <span>{cat.label}</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                  activeCategory === cat.id ? 'bg-white/20 text-white' : 'bg-[#F8F9FB] text-[#667085]'
+                }`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         <div className="relative min-w-[220px]">
@@ -310,149 +351,185 @@ export const ConnectedApps: React.FC = () => {
         </div>
       </div>
 
-      {/* Applications Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {filtered.map((app) => {
-          const Icon = getIcon(app.icon_name);
-          const isPinned = Number(app.is_pinned) === 1;
-          const isPortal = Boolean(app.is_portal);
-
-          return (
-            <div 
-              key={app.id}
-              className={`p-5 rounded-2xl bg-white border transition-all flex flex-col justify-between h-full min-h-[265px] group shadow-xs ${
-                isPortal 
-                  ? 'border-[#FECDD3] hover:border-[#D62839] hover:shadow-md ring-1 ring-[#FFF1F2]' 
-                  : 'border-[#E9EAEE] hover:border-[#FECDD3] hover:shadow-md'
-              }`}
-            >
+      {/* Applications Display with Loading & Error States */}
+      {loading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
+            <div key={n} className="p-5 rounded-2xl bg-white border border-[#E9EAEE] min-h-[265px] animate-pulse flex flex-col justify-between shadow-xs">
               <div>
                 <div className="flex items-start justify-between mb-3.5">
-                  <div className={`w-12 h-12 rounded-xl border flex items-center justify-center group-hover:scale-105 transition-transform ${
-                    isPortal 
-                      ? 'bg-[#FFF1F2] text-[#D62839] border-[#FECDD3]' 
-                      : 'bg-[#F8F9FB] text-[#20242C] border-[#E9EAEE]'
-                  }`}>
-                    <Icon className="w-6 h-6" />
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => handleTogglePin(app.id)}
-                      className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                        isPinned ? 'text-[#D62839] bg-[#FFF1F2]' : 'text-[#94A3B8] hover:text-[#20242C]'
-                      }`}
-                      title={isPinned ? 'Unpin Application' : 'Pin to Top'}
-                    >
-                      <Pin className="w-3.5 h-3.5" />
-                    </button>
-                    {!isPortal && (
-                      <button
-                        onClick={() => handleDeleteApp(app.id)}
-                        className="p-1.5 rounded-lg text-[#94A3B8] hover:text-[#DC2626] transition-colors cursor-pointer"
-                        title="Delete Application"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
+                  <div className="w-12 h-12 rounded-xl bg-slate-100" />
+                  <div className="w-5 h-5 rounded bg-slate-100" />
                 </div>
-
-                <div className="flex items-center gap-2">
-                  <h3 className="text-base font-bold text-[#20242C] tracking-tight">{app.name}</h3>
-                  {isPortal && (
-                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#FFF1F2] text-[#D62839] border border-[#FECDD3] uppercase tracking-wider">
-                      Master CRM
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-[#667085] font-mono truncate mt-0.5 max-w-[240px]">{app.app_url}</p>
-
-                <div className="mt-3 flex items-center justify-between gap-2">
-                  <div className="shrink-0">
-                    <Badge status={app.connection_status} />
-                  </div>
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold text-[#667085] bg-[#F8F9FB] border border-[#E9EAEE] uppercase tracking-wider">
-                    {app.category}
-                  </span>
-                </div>
+                <div className="h-4 bg-slate-100 rounded w-3/4 mb-2" />
+                <div className="h-3 bg-slate-100 rounded w-1/2 mb-3" />
+                <div className="h-5 bg-slate-100 rounded w-1/3" />
               </div>
+              <div className="h-10 bg-slate-100 rounded-xl" />
+            </div>
+          ))}
+        </div>
+      ) : error ? (
+        <div className="p-10 text-center rounded-2xl bg-white border border-[#FECDD3] shadow-xs">
+          <div className="w-12 h-12 mx-auto rounded-full bg-[#FEF2F2] text-[#DC2626] border border-[#FECDD3] flex items-center justify-center mb-3">
+            <AlertCircle className="w-6 h-6" />
+          </div>
+          <h4 className="text-base font-semibold text-[#20242C]">Unable to load applications</h4>
+          <p className="text-sm text-[#667085] mt-1 max-w-sm mx-auto">{error}</p>
+          <button
+            onClick={fetchApps}
+            className="mt-4 px-4 py-2 rounded-xl bg-[#D62839] hover:bg-[#B91C1C] text-white text-xs font-semibold shadow-xs cursor-pointer inline-flex items-center gap-1.5"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Retry Connection</span>
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {filtered.map((app) => {
+              const Icon = getIcon(app.icon_name);
+              const isPinned = Number(app.is_pinned) === 1;
+              const isPortal = Boolean(app.is_portal);
 
-              {/* Card Footer Actions */}
-              {isPortal ? (
-                <div className="mt-5 pt-3 border-t border-[#E9EAEE] space-y-3">
-                  {/* Real Sync Metadata */}
-                  <div className="bg-[#F8F9FB] p-2.5 rounded-xl border border-[#E9EAEE] text-[11px] space-y-1">
-                    <div className="flex items-center justify-between text-[#667085]">
-                      <span className="flex items-center gap-1 font-medium">
-                        <Clock className="w-3 h-3 text-[#94A3B8]" /> Last Sync:
-                      </span>
-                      <span className="font-semibold text-[#20242C]">
-                        {app.last_synced_at ? new Date(app.last_synced_at).toLocaleDateString() : 'Never'}
+              return (
+                <div 
+                  key={app.id}
+                  className={`p-5 rounded-2xl bg-white border transition-all flex flex-col justify-between h-full min-h-[265px] group shadow-xs ${
+                    isPortal 
+                      ? 'border-[#FECDD3] hover:border-[#D62839] hover:shadow-md ring-1 ring-[#FFF1F2]' 
+                      : 'border-[#E9EAEE] hover:border-[#FECDD3] hover:shadow-md'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-start justify-between mb-3.5">
+                      <div className={`w-12 h-12 rounded-xl border flex items-center justify-center group-hover:scale-105 transition-transform ${
+                        isPortal 
+                          ? 'bg-[#FFF1F2] text-[#D62839] border-[#FECDD3]' 
+                          : 'bg-[#F8F9FB] text-[#20242C] border-[#E9EAEE]'
+                      }`}>
+                        <Icon className="w-6 h-6" />
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleTogglePin(app.id)}
+                          className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                            isPinned ? 'text-[#D62839] bg-[#FFF1F2]' : 'text-[#94A3B8] hover:text-[#20242C]'
+                          }`}
+                          title={isPinned ? 'Unpin Application' : 'Pin to Top'}
+                        >
+                          <Pin className="w-3.5 h-3.5" />
+                        </button>
+                        {!isPortal && (
+                          <button
+                            onClick={() => handleDeleteApp(app.id)}
+                            className="p-1.5 rounded-lg text-[#94A3B8] hover:text-[#DC2626] transition-colors cursor-pointer"
+                            title="Delete Application"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-base font-bold text-[#20242C] tracking-tight">{app.name}</h3>
+                      {isPortal && (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#FFF1F2] text-[#D62839] border border-[#FECDD3] uppercase tracking-wider">
+                          Master CRM
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-[#667085] font-mono truncate mt-0.5 max-w-[240px]">{app.app_url}</p>
+
+                    <div className="mt-3 flex items-center justify-between gap-2">
+                      <div className="shrink-0">
+                        <Badge status={app.connection_status} />
+                      </div>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold text-[#667085] bg-[#F8F9FB] border border-[#E9EAEE] uppercase tracking-wider">
+                        {app.category}
                       </span>
                     </div>
-                    {app.last_error && (
-                      <p className="text-[10px] text-[#DC2626] font-medium truncate" title={app.last_error}>
-                        Error: {app.last_error}
-                      </p>
-                    )}
                   </div>
 
-                  {/* Connect / Reconnect / Manage Buttons */}
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleOpenConnectModal(app)}
-                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold transition-all shadow-xs cursor-pointer ${
-                        app.connection_status === 'connected' && !app.last_error
-                          ? 'bg-[#ECFDF5] hover:bg-[#059669] text-[#059669] hover:text-white border border-[#A7F3D0]'
-                          : app.connection_status === 'expired' || app.connection_status === 'captcha_required' || app.connection_status === 'auth_required' || app.connection_status === 'error' || app.last_error
-                          ? 'bg-[#FEF2F2] hover:bg-[#DC2626] text-[#DC2626] hover:text-white border border-[#FECDD3]'
-                          : 'bg-[#FFF1F2] hover:bg-[#D62839] text-[#D62839] hover:text-white border border-[#FECDD3]'
-                      }`}
-                    >
-                      <Link2 className="w-3.5 h-3.5" />
-                      <span>
-                        {app.connection_status === 'connected' && !app.last_error
-                          ? 'Manage Connection'
-                          : app.connection_status === 'expired' || app.connection_status === 'captcha_required' || app.connection_status === 'auth_required' || app.connection_status === 'error' || app.last_error
-                          ? 'Reconnect Portal'
-                          : 'Connect Portal'}
-                      </span>
-                    </button>
-                    <button
-                      onClick={() => handleLaunch(app.app_url)}
-                      className="p-2 rounded-xl bg-[#F8F9FB] hover:bg-[#FFF1F2] text-[#667085] hover:text-[#D62839] border border-[#E9EAEE] transition-all cursor-pointer"
-                      title={`Visit ${app.name} Portal in new tab`}
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="mt-5 pt-3 border-t border-[#E9EAEE] flex items-center gap-2">
-                  <button
-                    onClick={() => handleLaunch(app.app_url)}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-[#FFF1F2] hover:bg-[#D62839] text-[#D62839] hover:text-white text-xs font-semibold transition-all shadow-xs cursor-pointer"
-                  >
-                    <span>Launch Portal</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                  {/* Card Footer Actions */}
+                  {isPortal ? (
+                    <div className="mt-5 pt-3 border-t border-[#E9EAEE] space-y-3">
+                      {/* Real Sync Metadata */}
+                      <div className="bg-[#F8F9FB] p-2.5 rounded-xl border border-[#E9EAEE] text-[11px] space-y-1">
+                        <div className="flex items-center justify-between text-[#667085]">
+                          <span className="flex items-center gap-1 font-medium">
+                            <Clock className="w-3 h-3 text-[#94A3B8]" /> Last Sync:
+                          </span>
+                          <span className="font-semibold text-[#20242C]">
+                            {app.last_synced_at ? new Date(app.last_synced_at).toLocaleDateString() : 'Never'}
+                          </span>
+                        </div>
+                        {app.last_error && (
+                          <p className="text-[10px] text-[#DC2626] font-medium truncate" title={app.last_error}>
+                            Error: {app.last_error}
+                          </p>
+                        )}
+                      </div>
 
-      {filtered.length === 0 && (
-        <div className="p-16 text-center rounded-2xl bg-white border border-[#E9EAEE] shadow-xs">
-          <div className="w-12 h-12 mx-auto rounded-full bg-[#FFF1F2] text-[#D62839] border border-[#FECDD3] flex items-center justify-center mb-3">
-            <Globe className="w-6 h-6" />
+                      {/* Connect / Reconnect / Manage Buttons */}
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleOpenConnectModal(app)}
+                          className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold transition-all shadow-xs cursor-pointer ${
+                            app.connection_status === 'connected' && !app.last_error
+                              ? 'bg-[#ECFDF5] hover:bg-[#059669] text-[#059669] hover:text-white border border-[#A7F3D0]'
+                              : app.connection_status === 'expired' || app.connection_status === 'captcha_required' || app.connection_status === 'auth_required' || app.connection_status === 'error' || app.last_error
+                              ? 'bg-[#FEF2F2] hover:bg-[#DC2626] text-[#DC2626] hover:text-white border border-[#FECDD3]'
+                              : 'bg-[#FFF1F2] hover:bg-[#D62839] text-[#D62839] hover:text-white border border-[#FECDD3]'
+                          }`}
+                        >
+                          <Link2 className="w-3.5 h-3.5" />
+                          <span>
+                            {app.connection_status === 'connected' && !app.last_error
+                              ? 'Manage Connection'
+                              : app.connection_status === 'expired' || app.connection_status === 'captcha_required' || app.connection_status === 'auth_required' || app.connection_status === 'error' || app.last_error
+                              ? 'Reconnect Portal'
+                              : 'Connect Portal'}
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => handleLaunch(app.app_url)}
+                          className="p-2 rounded-xl bg-[#F8F9FB] hover:bg-[#FFF1F2] text-[#667085] hover:text-[#D62839] border border-[#E9EAEE] transition-all cursor-pointer"
+                          title={`Visit ${app.name} Portal in new tab`}
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-5 pt-3 border-t border-[#E9EAEE] flex items-center gap-2">
+                      <button
+                        onClick={() => handleLaunch(app.app_url)}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-[#FFF1F2] hover:bg-[#D62839] text-[#D62839] hover:text-white text-xs font-semibold transition-all shadow-xs cursor-pointer"
+                      >
+                        <span>Launch Portal</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
-          <h4 className="text-base font-semibold text-[#20242C]">No applications found</h4>
-          <p className="text-sm text-[#667085] mt-1 max-w-sm mx-auto">
-            Add shortcuts to external SaaS services, partner networks, or internal enterprise URLs.
-          </p>
-        </div>
+
+          {filtered.length === 0 && (
+            <div className="p-16 text-center rounded-2xl bg-white border border-[#E9EAEE] shadow-xs">
+              <div className="w-12 h-12 mx-auto rounded-full bg-[#FFF1F2] text-[#D62839] border border-[#FECDD3] flex items-center justify-center mb-3">
+                <Globe className="w-6 h-6" />
+              </div>
+              <h4 className="text-base font-semibold text-[#20242C]">No applications found</h4>
+              <p className="text-sm text-[#667085] mt-1 max-w-sm mx-auto">
+                No applications match this filter or search query. Switch categories or add a new application shortcut.
+              </p>
+            </div>
+          )}
+        </>
       )}
 
       {/* Security notice regarding external logins */}

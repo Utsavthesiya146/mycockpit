@@ -85,12 +85,22 @@ class Encryption {
 
             // Legacy AES-256-CBC format (Backward Compatibility)
             $decoded = base64_decode($cipherText, true);
-            if ($decoded && str_contains($decoded, '::')) {
-                [$iv, $encrypted] = explode('::', $decoded, 2);
+            if ($decoded && strlen($decoded) > 18 && substr($decoded, 16, 2) === '::') {
+                $iv = substr($decoded, 0, 16);
+                $encrypted = substr($decoded, 18);
                 $legacyKey = self::getLegacyKey();
                 $decrypted = openssl_decrypt($encrypted, 'aes-256-cbc', $legacyKey, OPENSSL_RAW_DATA, $iv);
                 if ($decrypted !== false) {
                     return $decrypted;
+                }
+            } elseif ($decoded && str_contains($decoded, '::')) {
+                [$iv, $encrypted] = explode('::', $decoded, 2);
+                if (strlen($iv) === 16) {
+                    $legacyKey = self::getLegacyKey();
+                    $decrypted = openssl_decrypt($encrypted, 'aes-256-cbc', $legacyKey, OPENSSL_RAW_DATA, $iv);
+                    if ($decrypted !== false) {
+                        return $decrypted;
+                    }
                 }
             }
 

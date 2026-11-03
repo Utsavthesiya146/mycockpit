@@ -47,45 +47,96 @@ class AppHubController {
         $tenantId = TenantMiddleware::resolveTenantId($currentUser);
         $db = Database::getConnection();
 
-        // 1. Ensure all 3 Master CRM Portals exist for this tenant
-        $masterPortals = [
+        // 1. Ensure all standard applications and Master CRM Portals exist for this tenant
+        $standardApps = [
             [
                 'name' => 'EAF Connect',
                 'url' => 'https://eafconnect.com',
                 'category' => 'business',
                 'icon' => 'Users',
-                'check' => '%eafconnect%'
+                'check' => '%eafconnect%',
+                'status' => 'disconnected',
+                'pinned' => 1
             ],
             [
                 'name' => 'BNI Connect',
                 'url' => 'https://www.bniconnectglobal.com',
                 'category' => 'business',
                 'icon' => 'Briefcase',
-                'check' => '%bniconnect%'
+                'check' => '%bniconnect%',
+                'status' => 'disconnected',
+                'pinned' => 1
             ],
             [
                 'name' => 'KVV Portal',
                 'url' => 'https://app.kannadigaravyaapaaravedike.com',
                 'category' => 'business',
                 'icon' => 'Briefcase',
-                'check' => '%kannadigara%'
-            ]
+                'check' => '%kannadigara%',
+                'status' => 'disconnected',
+                'pinned' => 1
+            ],
+            [
+                'name' => 'Google Calendar',
+                'url' => 'https://calendar.google.com',
+                'category' => 'productivity',
+                'icon' => 'Calendar',
+                'check' => '%calendar.google.com%',
+                'status' => 'launcher_only',
+                'pinned' => 1
+            ],
+            [
+                'name' => 'Google Drive',
+                'url' => 'https://drive.google.com',
+                'category' => 'cloud',
+                'icon' => 'HardDrive',
+                'check' => '%drive.google.com%',
+                'status' => 'launcher_only',
+                'pinned' => 1
+            ],
+            [
+                'name' => 'Gmail',
+                'url' => 'https://mail.google.com',
+                'category' => 'communication',
+                'icon' => 'Mail',
+                'check' => '%mail.google.com%',
+                'status' => 'launcher_only',
+                'pinned' => 1
+            ],
+            [
+                'name' => 'Right Form',
+                'url' => 'https://rightform.com',
+                'category' => 'productivity',
+                'icon' => 'FileText',
+                'check' => '%rightform.com%',
+                'status' => 'launcher_only',
+                'pinned' => 0
+            ],
+            [
+                'name' => 'My iNotes',
+                'url' => 'https://myinotes.com',
+                'category' => 'productivity',
+                'icon' => 'BookOpen',
+                'check' => '%myinotes.com%',
+                'status' => 'launcher_only',
+                'pinned' => 0
+            ],
         ];
 
-        foreach ($masterPortals as $p) {
+        foreach ($standardApps as $p) {
             $check = $db->prepare("SELECT id FROM connected_apps WHERE tenant_id = ? AND (app_url LIKE ? OR name LIKE ?) LIMIT 1");
             $check->execute([$tenantId, $p['check'], '%' . $p['name'] . '%']);
             if (!$check->fetchColumn()) {
                 $ins = $db->prepare("INSERT INTO connected_apps 
                     (tenant_id, name, category, icon_name, app_url, connection_status, auth_type, is_pinned)
-                    VALUES (?, ?, ?, ?, ?, 'disconnected', 'direct_link', 1)");
-                $ins->execute([$tenantId, $p['name'], $p['category'], $p['icon'], $p['url']]);
+                    VALUES (?, ?, ?, ?, ?, ?, 'direct_link', ?)");
+                $ins->execute([$tenantId, $p['name'], $p['category'], $p['icon'], $p['url'], $p['status'], $p['pinned']]);
             }
         }
 
-        // 2. Ensure KVV Portal URL is updated to the active portal domain
-        $fixKvv = $db->prepare("UPDATE connected_apps SET app_url = 'https://app.kannadigaravyaapaaravedike.com' WHERE tenant_id = ? AND app_url LIKE '%kvv.gov.in%'");
-        $fixKvv->execute([$tenantId]);
+        // 2. Ensure names and URLs are normalized for consistency
+        $db->prepare("UPDATE connected_apps SET name = 'Gmail' WHERE tenant_id = ? AND name LIKE '%Gmail Workspace%'")->execute([$tenantId]);
+        $db->prepare("UPDATE connected_apps SET app_url = 'https://app.kannadigaravyaapaaravedike.com' WHERE tenant_id = ? AND app_url LIKE '%kvv.gov.in%'")->execute([$tenantId]);
 
         // 3. Fetch apps
         $stmt = $db->prepare("
