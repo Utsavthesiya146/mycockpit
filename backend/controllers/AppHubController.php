@@ -7,9 +7,32 @@ use Cockpit\Config\Database;
 use Cockpit\Middleware\TenantMiddleware;
 use Cockpit\Utils\Response;
 use Cockpit\Utils\Encryption;
+use Cockpit\Services\Automation\PlatformAutomationDriverInterface;
+use Cockpit\Services\Automation\EAFWebAutomationDriver;
+use Cockpit\Services\Automation\BNIWebAutomationDriver;
+use Cockpit\Services\Automation\KVVWebAutomationDriver;
 use PDO;
 
 class AppHubController {
+
+    /**
+     * Resolve EAF Automation Driver with deterministic loading and graceful error handling
+     */
+    private static function getEAFDriver(): EAFWebAutomationDriver {
+        if (!class_exists(EAFWebAutomationDriver::class)) {
+            $driverFile = __DIR__ . '/../services/automation/EAFWebAutomationDriver.php';
+            if (file_exists($driverFile)) {
+                require_once __DIR__ . '/../services/automation/PlatformAutomationDriverInterface.php';
+                require_once $driverFile;
+            }
+        }
+
+        if (!class_exists(EAFWebAutomationDriver::class)) {
+            Response::error('EAF Web Automation Driver is unavailable on this server.', 500);
+        }
+
+        return new EAFWebAutomationDriver('https://eafconnect.com');
+    }
 
     private static function resolveSourceKey(string $name, string $url): ?string {
         $n = strtolower($name);
@@ -157,7 +180,7 @@ class AppHubController {
         }
 
         if ($sourceKey === 'eaf') {
-            $driver = new \Cockpit\Services\Automation\EAFWebAutomationDriver('https://eafconnect.com');
+            $driver = self::getEAFDriver();
             $authResult = $driver->authenticateSession($username, $password);
 
             if (($authResult['status'] ?? '') === 'captcha_required') {
@@ -316,7 +339,7 @@ class AppHubController {
         }
 
         if ($sourceKey === 'eaf') {
-            $driver = new \Cockpit\Services\Automation\EAFWebAutomationDriver('https://eafconnect.com');
+            $driver = self::getEAFDriver();
             $validation = $driver->validateSession($tenantId, $dec);
 
             if (($validation['status'] ?? '') === 'active') {
@@ -470,7 +493,7 @@ class AppHubController {
             Response::error('Unable to decrypt session data. Please re-authenticate.', 400);
         }
 
-        $driver = new \Cockpit\Services\Automation\EAFWebAutomationDriver('https://eafconnect.com');
+        $driver = self::getEAFDriver();
         $result = $driver->fetchReceivedReferrals($tenantId, $dec);
 
         if (!$result['success']) {

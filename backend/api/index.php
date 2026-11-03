@@ -21,6 +21,12 @@ require_once __DIR__ . '/../services/connectors/EAFConnector.php';
 require_once __DIR__ . '/../services/connectors/BNIConnector.php';
 require_once __DIR__ . '/../services/connectors/KVVConnector.php';
 require_once __DIR__ . '/../services/connectors/SEOConnector.php';
+require_once __DIR__ . '/../services/automation/PlatformAutomationDriverInterface.php';
+require_once __DIR__ . '/../services/automation/HostingEvaluator.php';
+require_once __DIR__ . '/../services/automation/EAFWebAutomationDriver.php';
+require_once __DIR__ . '/../services/automation/BNIWebAutomationDriver.php';
+require_once __DIR__ . '/../services/automation/KVVWebAutomationDriver.php';
+require_once __DIR__ . '/../services/automation/BidirectionalSyncManager.php';
 require_once __DIR__ . '/../services/SyncEngine.php';
 require_once __DIR__ . '/../controllers/AuthController.php';
 require_once __DIR__ . '/../controllers/TenantController.php';
@@ -35,6 +41,26 @@ require_once __DIR__ . '/../controllers/FollowupController.php';
 require_once __DIR__ . '/../controllers/InvoiceController.php';
 require_once __DIR__ . '/../controllers/AppHubController.php';
 require_once __DIR__ . '/../controllers/AIController.php';
+
+// PSR-4 Autoloader fallback for Cockpit namespace (case-safe across Windows, Linux, and Docker)
+spl_autoload_register(function (string $class): void {
+    $prefix = 'Cockpit\\';
+    if (!str_starts_with($class, $prefix)) {
+        return;
+    }
+
+    $relative = substr($class, strlen($prefix));
+    $parts = explode('\\', $relative);
+    $className = array_pop($parts);
+
+    // Map directory parts to lowercase to prevent Linux case-sensitivity issues
+    $dir = __DIR__ . '/../' . implode('/', array_map('strtolower', $parts));
+    $file = $dir . '/' . $className . '.php';
+
+    if (file_exists($file)) {
+        require_once $file;
+    }
+});
 
 use Cockpit\Utils\Response;
 use Cockpit\Middleware\AuthMiddleware;
