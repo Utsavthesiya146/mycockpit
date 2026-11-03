@@ -109,6 +109,10 @@ $method = $_SERVER['REQUEST_METHOD'];
 try {
     // Health / Test
     if ($path === '' || $path === '/' || $path === '/health') {
+        try {
+            AppHubController::ensureSchemaCompatibility();
+        } catch (\Throwable $e) {}
+
         Response::success([
             'system' => 'MY COCKPIT AI API Engine',
             'version' => '1.0.0',

@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS `lead_platform_sessions` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `tenant_id` INT NOT NULL,
     `source_key` VARCHAR(50) NOT NULL,
-    `session_status` ENUM('active', 'expired', 'captcha_required', 'mfa_required', 'disconnected') DEFAULT 'disconnected',
+    `session_status` VARCHAR(50) DEFAULT 'disconnected',
     `encrypted_session_data` TEXT NULL,
     `last_validated_at` DATETIME NULL,
     `session_expires_at` DATETIME NULL,

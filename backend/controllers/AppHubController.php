@@ -15,6 +15,66 @@ use PDO;
 
 class AppHubController {
 
+    private static bool $schemaMigrated = false;
+
+    /**
+     * Ensure database schema compatibility for Render / MySQL 8 strict mode.
+     * Safely widens rigid ENUM status columns to VARCHAR(50) without data loss.
+     */
+    public static function ensureSchemaCompatibility(?PDO $db = null): void {
+        if (self::$schemaMigrated) {
+            return;
+        }
+
+        try {
+            $db = $db ?? Database::getConnection();
+
+            // 1. Check and convert connected_apps columns if they are ENUM
+            $connColStmt = $db->query("SHOW COLUMNS FROM `connected_apps` LIKE 'connection_status'");
+            if ($col = $connColStmt->fetch(PDO::FETCH_ASSOC)) {
+                $type = strtolower((string)($col['Type'] ?? ''));
+                if (str_starts_with($type, 'enum')) {
+                    $db->exec("ALTER TABLE `connected_apps` 
+                        MODIFY COLUMN `connection_status` VARCHAR(50) DEFAULT 'launcher_only',
+                        MODIFY COLUMN `auth_type` VARCHAR(50) DEFAULT 'direct_link',
+                        MODIFY COLUMN `category` VARCHAR(50) DEFAULT 'business'");
+                }
+            }
+
+            // 2. Check and convert lead_platform_sessions.session_status
+            try {
+                $sessColStmt = $db->query("SHOW COLUMNS FROM `lead_platform_sessions` LIKE 'session_status'");
+                if ($sessCol = $sessColStmt->fetch(PDO::FETCH_ASSOC)) {
+                    $sessType = strtolower((string)($sessCol['Type'] ?? ''));
+                    if (str_starts_with($sessType, 'enum')) {
+                        $db->exec("ALTER TABLE `lead_platform_sessions` 
+                            MODIFY COLUMN `session_status` VARCHAR(50) DEFAULT 'disconnected'");
+                    }
+                }
+            } catch (\Throwable $e) {
+                // Table may not exist yet or already altered
+            }
+
+            // 3. Check and convert lead_sources_config.status
+            try {
+                $srcColStmt = $db->query("SHOW COLUMNS FROM `lead_sources_config` LIKE 'status'");
+                if ($srcCol = $srcColStmt->fetch(PDO::FETCH_ASSOC)) {
+                    $srcType = strtolower((string)($srcCol['Type'] ?? ''));
+                    if (str_starts_with($srcType, 'enum')) {
+                        $db->exec("ALTER TABLE `lead_sources_config` 
+                            MODIFY COLUMN `status` VARCHAR(50) DEFAULT 'manual_csv_import'");
+                    }
+                }
+            } catch (\Throwable $e) {
+                // Table may not exist yet or already altered
+            }
+        } catch (\Throwable $e) {
+            error_log('Schema compatibility check notice: ' . $e->getMessage());
+        }
+
+        self::$schemaMigrated = true;
+    }
+
     /**
      * Resolve EAF Automation Driver with deterministic loading and graceful error handling
      */
@@ -47,6 +107,9 @@ class AppHubController {
         $tenantId = TenantMiddleware::resolveTenantId($currentUser);
         $db = Database::getConnection();
 
+        // Ensure database schema compatibility for Render / MySQL 8
+        self::ensureSchemaCompatibility($db);
+
         // 1. Ensure all standard applications and Master CRM Portals exist for this tenant
         $standardApps = [
             [
@@ -55,7 +118,7 @@ class AppHubController {
                 'category' => 'business',
                 'icon' => 'Users',
                 'check' => '%eafconnect%',
-                'status' => 'disconnected',
+                'status' => 'launcher_only',
                 'pinned' => 1
             ],
             [
@@ -64,7 +127,7 @@ class AppHubController {
                 'category' => 'business',
                 'icon' => 'Briefcase',
                 'check' => '%bniconnect%',
-                'status' => 'disconnected',
+                'status' => 'launcher_only',
                 'pinned' => 1
             ],
             [
@@ -73,7 +136,7 @@ class AppHubController {
                 'category' => 'business',
                 'icon' => 'Briefcase',
                 'check' => '%kannadigara%',
-                'status' => 'disconnected',
+                'status' => 'launcher_only',
                 'pinned' => 1
             ],
             [
@@ -215,6 +278,7 @@ class AppHubController {
         TenantMiddleware::requireRole($currentUser, ['super_admin', 'tenant_owner', 'tenant_admin']);
         $tenantId = TenantMiddleware::resolveTenantId($currentUser);
         $db = Database::getConnection();
+        self::ensureSchemaCompatibility($db);
 
         $stmt = $db->prepare("SELECT * FROM connected_apps WHERE id = ? AND tenant_id = ? LIMIT 1");
         $stmt->execute([$id, $tenantId]);
@@ -361,6 +425,7 @@ class AppHubController {
         TenantMiddleware::requireRole($currentUser, ['super_admin', 'tenant_owner', 'tenant_admin']);
         $tenantId = TenantMiddleware::resolveTenantId($currentUser);
         $db = Database::getConnection();
+        self::ensureSchemaCompatibility($db);
 
         $stmt = $db->prepare("SELECT * FROM connected_apps WHERE id = ? AND tenant_id = ? LIMIT 1");
         $stmt->execute([$id, $tenantId]);
@@ -472,6 +537,7 @@ class AppHubController {
         TenantMiddleware::requireRole($currentUser, ['super_admin', 'tenant_owner', 'tenant_admin']);
         $tenantId = TenantMiddleware::resolveTenantId($currentUser);
         $db = Database::getConnection();
+        self::ensureSchemaCompatibility($db);
 
         $stmt = $db->prepare("SELECT * FROM connected_apps WHERE id = ? AND tenant_id = ? LIMIT 1");
         $stmt->execute([$id, $tenantId]);
@@ -510,6 +576,7 @@ class AppHubController {
         TenantMiddleware::requireRole($currentUser, ['super_admin', 'tenant_owner', 'tenant_admin']);
         $tenantId = TenantMiddleware::resolveTenantId($currentUser);
         $db = Database::getConnection();
+        self::ensureSchemaCompatibility($db);
 
         $stmt = $db->prepare("SELECT * FROM connected_apps WHERE id = ? AND tenant_id = ? LIMIT 1");
         $stmt->execute([$id, $tenantId]);
@@ -536,6 +603,7 @@ class AppHubController {
         TenantMiddleware::requireRole($currentUser, ['super_admin', 'tenant_owner', 'tenant_admin']);
         $tenantId = TenantMiddleware::resolveTenantId($currentUser);
         $db = Database::getConnection();
+        self::ensureSchemaCompatibility($db);
 
         $stmt = $db->prepare("SELECT * FROM connected_apps WHERE id = ? AND tenant_id = ? LIMIT 1");
         $stmt->execute([$id, $tenantId]);
@@ -597,12 +665,15 @@ class AppHubController {
             Response::error('Invalid URL format. Include http:// or https://', 422);
         }
 
-        $validStatuses = ['connected', 'launcher_only', 'config_required', 'unsupported'];
+        self::ensureSchemaCompatibility();
+
+        $validStatuses = ['connected', 'launcher_only', 'config_required', 'unsupported', 'disconnected', 'expired', 'captcha_required', 'auth_required', 'mfa_required', 'error'];
         $status = in_array($input['connection_status'] ?? '', $validStatuses, true) 
             ? $input['connection_status'] 
             : 'launcher_only';
 
         $db = Database::getConnection();
+        self::ensureSchemaCompatibility($db);
         $stmt = $db->prepare("
             INSERT INTO connected_apps (tenant_id, name, category, icon_name, app_url, connection_status, auth_type, is_pinned, settings_json)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -635,6 +706,7 @@ class AppHubController {
         }
 
         $db = Database::getConnection();
+        self::ensureSchemaCompatibility($db);
         $stmt = $db->prepare("
             UPDATE connected_apps 
             SET name = ?, category = ?, icon_name = ?, app_url = ?, connection_status = ?, is_pinned = ?, updated_at = NOW()
@@ -659,6 +731,7 @@ class AppHubController {
         $tenantId = TenantMiddleware::resolveTenantId($currentUser);
 
         $db = Database::getConnection();
+        self::ensureSchemaCompatibility($db);
         $stmt = $db->prepare("DELETE FROM connected_apps WHERE id = ? AND tenant_id = ?");
         $stmt->execute([$id, $tenantId]);
 
@@ -668,6 +741,7 @@ class AppHubController {
     public static function togglePin(array $currentUser, int $id): void {
         $tenantId = TenantMiddleware::resolveTenantId($currentUser);
         $db = Database::getConnection();
+        self::ensureSchemaCompatibility($db);
 
         $stmt = $db->prepare("UPDATE connected_apps SET is_pinned = 1 - is_pinned WHERE id = ? AND tenant_id = ?");
         $stmt->execute([$id, $tenantId]);
