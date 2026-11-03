@@ -11,3 +11,4 @@ ALTER TABLE `lead_platform_sessions`
 
 ALTER TABLE `lead_sources_config` 
     MODIFY COLUMN `status` VARCHAR(50) DEFAULT 'manual_csv_import';
+

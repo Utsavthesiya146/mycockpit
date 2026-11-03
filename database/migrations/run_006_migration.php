@@ -44,3 +44,4 @@ try {
     echo "Migration error: " . $e->getMessage() . "\n";
     exit(1);
 }
+

@@ -737,6 +737,37 @@ class LeadController {
         $tenantId = TenantMiddleware::resolveTenantId($currentUser);
         $db = Database::getConnection();
 
+        // Auto-seed standard lead sources if missing for this tenant
+        try {
+            $stdSources = [
+                ['key' => 'bni', 'name' => 'BNI Connect', 'category' => 'referral', 'status' => 'api_access_required', 'sync_mode' => 'api_pull'],
+                ['key' => 'kvv', 'name' => 'KVV Leads', 'category' => 'business_forum', 'status' => 'manual_import_only', 'sync_mode' => 'webhook_push'],
+                ['key' => 'eaf', 'name' => 'EAF Connect', 'category' => 'association', 'status' => 'auth_required', 'sync_mode' => 'api_pull'],
+                ['key' => 'website_seo', 'name' => 'SEO & Website Forms', 'category' => 'inbound', 'status' => 'webhook_configured', 'sync_mode' => 'webhook_push'],
+                ['key' => 'manual', 'name' => 'Manually Added', 'category' => 'direct', 'status' => 'connected', 'sync_mode' => 'manual_import'],
+                ['key' => 'custom', 'name' => 'Custom Lead Source', 'category' => 'custom', 'status' => 'manual_import_only', 'sync_mode' => 'manual_import']
+            ];
+
+            $existingKeysStmt = $db->prepare("SELECT source_key FROM lead_sources_config WHERE tenant_id = ?");
+            $existingKeysStmt->execute([$tenantId]);
+            $existingKeys = $existingKeysStmt->fetchAll(PDO::FETCH_COLUMN);
+
+            $insertStmt = $db->prepare("
+                INSERT INTO lead_sources_config (tenant_id, source_key, name, category, status, sync_mode, webhook_secret, is_enabled)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+            ");
+
+            foreach ($stdSources as $src) {
+                $hasKey = in_array($src['key'], $existingKeys, true) || in_array($src['key'] . '_connect', $existingKeys, true);
+                if (!$hasKey) {
+                    $sec = bin2hex(random_bytes(16));
+                    $insertStmt->execute([$tenantId, $src['key'], $src['name'], $src['category'], $src['status'], $src['sync_mode'], $sec]);
+                }
+            }
+        } catch (\Throwable $e) {
+            error_log('Lead sources seeding notice: ' . $e->getMessage());
+        }
+
         $stmt = $db->prepare("
             SELECT s.*,
                    u.name AS auto_assign_user_name,
