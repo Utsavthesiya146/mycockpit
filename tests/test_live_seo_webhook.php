@@ -156,4 +156,9 @@ foreach ($activities as $act) {
     echo "  - [{$act['activity_type']}] {$act['title']}: {$act['description']}\n";
 }
 
+// Clean up synthetic test lead and its activities to prevent test pollution
+$db->prepare("DELETE FROM lead_activities WHERE lead_id = ?")->execute([$createdLeadId]);
+$db->prepare("DELETE FROM follow_ups WHERE lead_id = ?")->execute([$createdLeadId]);
+$db->prepare("DELETE FROM crm_leads WHERE id = ?")->execute([$createdLeadId]);
+
 echo "\n>>> SEO WEBHOOK RETEST COMPLETE & VERIFIED <<<\n";

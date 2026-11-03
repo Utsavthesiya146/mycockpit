@@ -36,21 +36,27 @@ class CockpitTestSuite {
         echo "   MY COCKPIT AI - VERIFICATION & ISOLATION SUITE      \n";
         echo "=======================================================\n\n";
 
-        $this->testDatabaseConnection();
-        $this->testJWTSecurity();
-        $this->testTenantIsolationCRM();
-        $this->testTenantIsolationInvoices();
-        $this->testFinancialCalculations();
-        $this->testPartialPaymentTransaction();
-        $this->testCrossTenantAccessRejection();
+        $this->setupFixtures();
 
-        // HK Sir Centralized Lead Management & Follow-up Verification
-        $this->testLeadSourcesConfig();
-        $this->testLeadListingAndViews();
-        $this->testLeadFollowupManagement();
-        $this->testAIAgentLeadIntelligence();
-        $this->testTenantLeadBoundaries();
-        $this->testDuplicateLeadDetection();
+        try {
+            $this->testDatabaseConnection();
+            $this->testJWTSecurity();
+            $this->testTenantIsolationCRM();
+            $this->testTenantIsolationInvoices();
+            $this->testFinancialCalculations();
+            $this->testPartialPaymentTransaction();
+            $this->testCrossTenantAccessRejection();
+
+            // HK Sir Centralized Lead Management & Follow-up Verification
+            $this->testLeadSourcesConfig();
+            $this->testLeadListingAndViews();
+            $this->testLeadFollowupManagement();
+            $this->testAIAgentLeadIntelligence();
+            $this->testTenantLeadBoundaries();
+            $this->testDuplicateLeadDetection();
+        } finally {
+            $this->teardownFixtures();
+        }
 
         echo "\n=======================================================\n";
         echo "TEST SUMMARY: {$this->passed} Passed, {$this->failed} Failed\n";
@@ -59,6 +65,41 @@ class CockpitTestSuite {
         if ($this->failed > 0) {
             exit(1);
         }
+    }
+
+    private function setupFixtures(): void {
+        $db = Database::getConnection();
+        // Insert isolated test customers (never permanent demo data)
+        $db->exec("INSERT INTO crm_customers (id, tenant_id, name, company, email, phone, status) VALUES 
+            (901, 1, 'Test Corp A', 'Test Corp', 'a@test.com', '9123456780', 'active'),
+            (902, 1, 'Test Corp B', 'Test Media', 'b@test.com', '9234567891', 'active'),
+            (903, 2, 'Test Corp C', 'Test Freight', 'c@test.com', '9345678902', 'active')
+            ON DUPLICATE KEY UPDATE name = VALUES(name)");
+
+        // Insert isolated test invoices matching math specifications
+        $db->exec("INSERT INTO invoices (id, tenant_id, customer_id, invoice_number, invoice_date, due_date, subtotal, discount_amount, tax_rate, tax_amount, total_amount, paid_amount, outstanding_amount, status) VALUES
+            (901, 1, 901, 'INV-UTS-001', '2026-10-01', '2026-10-31', 500000.00, 0.00, 18.00, 90000.00, 590000.00, 300000.00, 290000.00, 'partially_paid'),
+            (902, 1, 902, 'INV-UTS-002', '2026-10-11', '2026-10-19', 350000.00, 0.00, 18.00, 63000.00, 413000.00, 350000.00, 63000.00, 'overdue'),
+            (903, 2, 903, 'INV-NX-101', '2026-10-06', '2026-11-05', 200000.00, 0.00, 18.00, 36000.00, 236000.00, 100000.00, 136000.00, 'partially_paid')
+            ON DUPLICATE KEY UPDATE invoice_number = VALUES(invoice_number)");
+
+        // Insert completed follow-up for engine test
+        $db->exec("INSERT INTO follow_ups (id, tenant_id, title, scheduled_at, status, contact_method) VALUES
+            (901, 1, 'Test Completed Followup', NOW(), 'completed', 'call')
+            ON DUPLICATE KEY UPDATE status = 'completed'");
+
+        // Insert test lead for duplicate detection
+        $db->exec("INSERT INTO crm_leads (id, tenant_id, name, email, phone, source) VALUES
+            (901, 1, 'Rajesh Mehta Test', 'rajesh@mehtatextiles.demo', '9825012345', 'BNI Connect')
+            ON DUPLICATE KEY UPDATE name = VALUES(name)");
+    }
+
+    private function teardownFixtures(): void {
+        $db = Database::getConnection();
+        $db->exec("DELETE FROM follow_ups WHERE id = 901");
+        $db->exec("DELETE FROM crm_leads WHERE id = 901");
+        $db->exec("DELETE FROM invoices WHERE id IN (901, 902, 903)");
+        $db->exec("DELETE FROM crm_customers WHERE id IN (901, 902, 903)");
     }
 
     private function assert(string $testName, bool $condition, string $detail = ''): void {
@@ -158,8 +199,8 @@ class CockpitTestSuite {
     private function testPartialPaymentTransaction(): void {
         $db = Database::getConnection();
 
-        // Find invoice 1
-        $stmt = $db->query("SELECT * FROM invoices WHERE id = 1");
+        // Find invoice 901
+        $stmt = $db->query("SELECT * FROM invoices WHERE id = 901");
         $inv = $stmt->fetch();
 
         $calculatedOutstanding = round((float)$inv['total_amount'] - (float)$inv['paid_amount'], 2);
@@ -174,7 +215,7 @@ class CockpitTestSuite {
         $db = Database::getConnection();
 
         // Verify that a query attempting to retrieve customer of Tenant 1 with Tenant 2 id returns empty
-        $stmt = $db->prepare("SELECT id FROM crm_customers WHERE id = 1 AND tenant_id = 2");
+        $stmt = $db->prepare("SELECT id FROM crm_customers WHERE id = 901 AND tenant_id = 2");
         $stmt->execute();
         $res = $stmt->fetch();
 

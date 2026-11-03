@@ -73,6 +73,11 @@ class UniversalSyncTestSuite {
         // 10. Multi-Tenant Isolation (Client A vs Client B)
         $this->testMultiTenantIsolation($db, $userTenant1, $userTenant2);
 
+        // Cleanup test leads created during test run to prevent demo/test pollution
+        $db->prepare("DELETE FROM lead_activities WHERE lead_id NOT IN (41, 42, 43, 44, 45)")->execute();
+        $db->prepare("DELETE FROM follow_ups WHERE lead_id NOT IN (41, 42, 43, 44, 45) OR lead_id IS NULL")->execute();
+        $db->prepare("DELETE FROM crm_leads WHERE id NOT IN (41, 42, 43, 44, 45)")->execute();
+
         echo "\n=======================================================\n";
         echo "TEST SUMMARY: {$this->passed} Passed, {$this->failed} Failed\n";
         echo "=======================================================\n\n";

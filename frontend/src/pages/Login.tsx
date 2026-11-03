@@ -8,7 +8,7 @@ interface LoginProps {
 
 export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
   const { login } = useAuth();
-  const [email, setEmail] = useState('utsav@acme.com');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -69,7 +69,7 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="utsav@acme.com"
+                  placeholder="name@company.com"
                   className="cockpit-input has-icon"
                   style={{ paddingLeft: '2.75rem' }}
                 />

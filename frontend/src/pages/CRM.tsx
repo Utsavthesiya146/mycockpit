@@ -1068,7 +1068,7 @@ export const CRM: React.FC = () => {
                 type="email"
                 value={leadEmail}
                 onChange={(e) => setLeadEmail(e.target.value)}
-                placeholder="rajesh@mehtaexports.demo"
+                placeholder="name@company.com"
                 className="cockpit-input w-full text-xs"
               />
             </div>
@@ -1278,8 +1278,8 @@ export const CRM: React.FC = () => {
                 onClick={() => {
                   setImportCsvText(
                     `name,company,email,phone,value,service_requirement,priority,notes\n` +
-                    `Dr. Ananya Roy,HealthFirst Diagnostics,ananya@healthfirst.demo,+91 9724034567,420000,Patient Portal,high,Met at regional forum\n` +
-                    `Kunal Shah,Shah Tech Ventures,kunal@shahtech.demo,+91 9825123456,350000,AI Agent Integration,urgent,Wants demo this week`
+                    `Ananya Roy,HealthFirst Diagnostics,ananya@healthfirst.com,+91 9724034567,420000,Patient Portal,high,Discussion at regional forum\n` +
+                    `Kunal Shah,Shah Tech Ventures,kunal@shahtech.com,+91 9825123456,350000,AI Agent Integration,urgent,Initial discussion scheduled`
                   );
                 }}
                 className="text-[11px] text-[#D62839] font-bold hover:underline cursor-pointer"

@@ -31,26 +31,32 @@ class LeadManagementTestSuite {
         $userTenant1 = ['id' => 2, 'tenant_id' => 1, 'role' => 'tenant_owner', 'name' => 'Utsav Patel', 'email' => 'utsav@acme.com'];
         $userTenant2 = ['id' => 4, 'tenant_id' => 2, 'role' => 'tenant_owner', 'name' => 'Rahul Verma', 'email' => 'rahul@nexus.com'];
 
-        // 1. Test Lead Sources Config
-        $this->testLeadSourcesConfig($db, $userTenant1);
+        $this->setupFixtures($db);
 
-        // 2. Test Centralized Dashboard Stats
-        $this->testDashboardStats($userTenant1);
+        try {
+            // 1. Test Lead Sources Config
+            $this->testLeadSourcesConfig($db, $userTenant1);
 
-        // 3. Test Lead Listing & Views
-        $this->testLeadListingAndViews($db, $userTenant1);
+            // 2. Test Centralized Dashboard Stats
+            $this->testDashboardStats($userTenant1);
 
-        // 4. Test Follow-up Management
-        $this->testFollowupManagement($db, $userTenant1);
+            // 3. Test Lead Listing & Views
+            $this->testLeadListingAndViews($db, $userTenant1);
 
-        // 5. Test AI Personal Agent Lead Queries
-        $this->testAIAgentLeadQueries($userTenant1);
+            // 4. Test Follow-up Management
+            $this->testFollowupManagement($db, $userTenant1);
 
-        // 6. Test Multi-Tenant Boundary (Client A vs Client B)
-        $this->testTenantBoundary($db, $userTenant1, $userTenant2);
+            // 5. Test AI Personal Agent Lead Queries
+            $this->testAIAgentLeadQueries($userTenant1);
 
-        // 7. Test Duplicate Lead Detection & Import
-        $this->testDuplicateDetectionAndImport($db, $userTenant1);
+            // 6. Test Multi-Tenant Boundary (Client A vs Client B)
+            $this->testTenantBoundary($db, $userTenant1, $userTenant2);
+
+            // 7. Test Duplicate Lead Detection & Import
+            $this->testDuplicateDetectionAndImport($db, $userTenant1);
+        } finally {
+            $this->teardownFixtures($db);
+        }
 
         echo "\n=======================================================\n";
         echo "TEST SUMMARY: {$this->passed} Passed, {$this->failed} Failed\n";
@@ -59,6 +65,30 @@ class LeadManagementTestSuite {
         if ($this->failed > 0) {
             exit(1);
         }
+    }
+
+    private function setupFixtures(PDO $db): void {
+        // Isolated test fixtures (cleanly created and purged per test run)
+        $db->exec("INSERT INTO crm_leads (id, tenant_id, name, company, email, phone, value, status, priority, source, service_requirement, assigned_to, source_lead_id, next_followup_date) VALUES
+            (801, 1, 'Rajesh Mehta', 'Mehta Textiles', 'rajesh@mehtatextiles.demo', '+91 9825012345', 350000.00, 'new', 'high', 'BNI Connect', 'ERP Suite', 3, 'BNI-AHM-2026-089', DATE_SUB(NOW(), INTERVAL 1 DAY)),
+            (802, 1, 'Pooja Chawla', 'Chawla Fashions', 'pooja@chawlafashions.demo', '+91 9824056789', 250000.00, 'won', 'medium', 'BNI Connect', 'B2B Portal', 3, 'BNI-AHM-2026-071', NULL),
+            (803, 1, 'Vikram Singhania', 'Singhania Logistics', 'vikram@singhanialogistics.demo', '+91 9879023456', 520000.00, 'contacted', 'urgent', 'KVV Leads', 'Fleet Tracking', 3, 'KVV-2026-4412', DATE_ADD(CURRENT_DATE, INTERVAL 15 HOUR)),
+            (804, 1, 'Dr. Ananya Roy', 'HealthFirst Diagnostics', 'ananya@healthfirst.demo', '+91 9724034567', 420000.00, 'qualified', 'medium', 'EAF Connect', 'Patient Portal', 2, 'EAF-REF-8821', DATE_ADD(NOW(), INTERVAL 2 DAY)),
+            (805, 1, 'Siddharth Dave', 'Dave Infra', 'siddharth@daveinfra.demo', '+91 9909045678', 780000.00, 'proposal', 'high', 'SEO / Website', 'Multi-tenant SaaS', 3, 'WEB-INBOUND-9901', DATE_ADD(NOW(), INTERVAL 3 DAY)),
+            (806, 1, 'Gaurav Kothari', 'Kothari Agro', 'gaurav@kothariagro.demo', '+91 9825078901', 150000.00, 'new', 'low', 'SEO / Website', 'Website Revamp', 3, 'WEB-INBOUND-9922', NULL),
+            (807, 2, 'Deepak Shah', 'Shah Chemical', 'deepak@shahchem.demo', '+91 9876541122', 600000.00, 'contacted', 'medium', 'BNI Connect', 'Safety ERP', 5, 'BNI-MUM-2026-101', DATE_ADD(NOW(), INTERVAL 1 DAY))
+            ON DUPLICATE KEY UPDATE name = VALUES(name)");
+
+        $db->exec("INSERT INTO follow_ups (id, tenant_id, lead_id, title, scheduled_at, status, contact_method) VALUES
+            (801, 1, 801, 'BNI Referral Demo', DATE_SUB(NOW(), INTERVAL 1 DAY), 'pending', 'call'),
+            (802, 1, 803, 'KVV Quote Presentation', DATE_ADD(CURRENT_DATE, INTERVAL 15 HOUR), 'pending', 'meeting'),
+            (803, 1, 804, 'EAF Tech Walkthrough', DATE_ADD(NOW(), INTERVAL 2 DAY), 'pending', 'meeting')
+            ON DUPLICATE KEY UPDATE title = VALUES(title)");
+    }
+
+    private function teardownFixtures(PDO $db): void {
+        $db->exec("DELETE FROM follow_ups WHERE id IN (801, 802, 803)");
+        $db->exec("DELETE FROM crm_leads WHERE id IN (801, 802, 803, 804, 805, 806, 807)");
     }
 
     private function assert(string $testName, bool $condition, string $detail = ''): void {
