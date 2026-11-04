@@ -125,8 +125,17 @@ class CrmController {
         $params = [$tenantId];
 
         if (!empty($source) && $source !== 'all') {
-            $sql .= " AND l.source = ?";
+            $sql .= " AND (l.source = ? OR l.source_platform = ? OR l.source LIKE ?)";
             $params[] = $source;
+            $params[] = strtolower($source);
+            $params[] = "%{$source}%";
+        }
+
+        $platform = trim($_GET['source_platform'] ?? ($_GET['platform'] ?? ''));
+        if (!empty($platform) && $platform !== 'all') {
+            $sql .= " AND (l.source_platform = ? OR l.source LIKE ?)";
+            $params[] = strtolower($platform);
+            $params[] = "%{$platform}%";
         }
 
         if (!empty($status) && $status !== 'all') {
