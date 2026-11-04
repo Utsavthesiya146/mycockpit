@@ -89,7 +89,9 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
     }
   };
 
-  const canonicalCallbackUri = 'http://localhost/mycockpit/backend/api/gmail/oauth/callback';
+  const canonicalCallbackUri = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
+    ? `${window.location.origin}/api/gmail/oauth/callback`
+    : 'http://localhost/mycockpit/backend/api/gmail/oauth/callback';
 
   const copyCallbackUri = () => {
     navigator.clipboard.writeText(canonicalCallbackUri);
