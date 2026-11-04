@@ -326,6 +326,7 @@ export interface ConnectedApp {
   next_action?: string;
   next_action_key?: string;
   connected_email?: string;
+  redirect_uri?: string;
   latest_sync_log?: {
     leads_fetched: number;
     leads_created: number;

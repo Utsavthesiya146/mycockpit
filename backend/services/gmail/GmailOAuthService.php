@@ -40,7 +40,28 @@ class GmailOAuthService {
      * Get the single canonical backend OAuth callback URI
      */
     public static function getCanonicalRedirectUri(): string {
-        return (string)Config::get('google_redirect_uri', 'http://localhost/mycockpit/backend/api/gmail/oauth/callback');
+        $envUri = getenv('GOOGLE_REDIRECT_URI');
+        if (!empty($envUri)) {
+            return trim($envUri);
+        }
+
+        $configUri = (string)Config::get('google_redirect_uri', '');
+        if (!empty($configUri)) {
+            return trim($configUri);
+        }
+
+        $renderUrl = getenv('RENDER_EXTERNAL_URL');
+        if (!empty($renderUrl)) {
+            return rtrim($renderUrl, '/') . '/api/gmail/oauth/callback';
+        }
+
+        if (isset($_SERVER['HTTP_HOST']) && !str_contains($_SERVER['HTTP_HOST'], 'localhost')) {
+            $proto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || 
+                     (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ? 'https' : 'http';
+            return "{$proto}://{$_SERVER['HTTP_HOST']}/api/gmail/oauth/callback";
+        }
+
+        return 'http://localhost/mycockpit/backend/api/gmail/oauth/callback';
     }
 
     /**

@@ -71,7 +71,12 @@ assertTest(in_array('email', $approvedScopes), "Approved scopes include email");
 assertTest(!in_array('https://mail.google.com/', $approvedScopes), "Broad scope https://mail.google.com/ is strictly omitted");
 
 $canonicalUri = GmailOAuthService::getCanonicalRedirectUri();
-assertTest($canonicalUri === 'http://localhost/mycockpit/backend/api/gmail/oauth/callback', "Canonical backend OAuth callback URI is exact: {$canonicalUri}");
+assertTest($canonicalUri === 'http://localhost/mycockpit/backend/api/gmail/oauth/callback', "Canonical backend OAuth callback URI is exact on local: {$canonicalUri}");
+
+putenv('GOOGLE_REDIRECT_URI=https://mycockpit-0e86.onrender.com/api/gmail/oauth/callback');
+$prodUri = GmailOAuthService::getCanonicalRedirectUri();
+assertTest($prodUri === 'https://mycockpit-0e86.onrender.com/api/gmail/oauth/callback', "Environment-aware override: GOOGLE_REDIRECT_URI correctly returns production callback: {$prodUri}");
+putenv('GOOGLE_REDIRECT_URI'); // reset
 
 $pkce = GmailOAuthService::generatePkce();
 assertTest(strlen($pkce['verifier']) === 64, "PKCE code_verifier is 64 characters random string");

@@ -89,12 +89,14 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
     }
   };
 
-  const canonicalCallbackUri = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
-    ? `${window.location.origin}/api/gmail/oauth/callback`
-    : 'http://localhost/mycockpit/backend/api/gmail/oauth/callback';
+  const displayedCallbackUri = selectedPortalApp?.redirect_uri || (
+    typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
+      ? `${window.location.origin}/api/gmail/oauth/callback`
+      : 'http://localhost/mycockpit/backend/api/gmail/oauth/callback'
+  );
 
   const copyCallbackUri = () => {
-    navigator.clipboard.writeText(canonicalCallbackUri);
+    navigator.clipboard.writeText(displayedCallbackUri);
     setCopiedCallback(true);
     setTimeout(() => setCopiedCallback(false), 2000);
   };
@@ -777,7 +779,7 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
                   <span className="text-[#667085] font-medium block">Canonical Backend OAuth Callback URI:</span>
                   <div className="flex items-center gap-2">
                     <code className="flex-1 bg-white border border-[#E9EAEE] px-2.5 py-1.5 rounded-lg font-mono text-[11px] text-[#20242C] select-all truncate">
-                      {canonicalCallbackUri}
+                      {displayedCallbackUri}
                     </code>
                     <button
                       type="button"

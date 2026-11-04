@@ -620,7 +620,9 @@ class AppHubController {
                 } elseif ($sourceKey === 'kvv') {
                     $app['integration_capability'] = 'Direct Member API & Referral Sync';
                 } elseif ($sourceKey === 'gmail') {
+                    require_once __DIR__ . '/../services/gmail/GmailOAuthService.php';
                     $app['integration_capability'] = 'Official Google OAuth 2.0 & Full Email Management';
+                    $app['redirect_uri'] = \Cockpit\Services\Gmail\GmailOAuthService::getCanonicalRedirectUri();
                     $gmailAccount = $db->query("SELECT email_address, last_sync_at, sync_status FROM gmail_accounts WHERE tenant_id = {$tenantId} LIMIT 1")->fetch(PDO::FETCH_ASSOC);
                     if ($gmailAccount) {
                         $app['connected_email'] = $gmailAccount['email_address'];
