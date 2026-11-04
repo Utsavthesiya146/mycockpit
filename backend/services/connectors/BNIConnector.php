@@ -126,15 +126,115 @@ class BNIConnector implements LeadConnectorInterface {
             require_once __DIR__ . '/../automation/BNIWebAutomationDriver.php';
             $driver = new \Cockpit\Services\Automation\BNIWebAutomationDriver();
             $fetchRes = $driver->fetchReceivedReferrals($tenantId, $creds);
-            
+
+            if (!$fetchRes['success']) {
+                return [
+                    'success' => false,
+                    'leads_fetched' => 0,
+                    'leads_created' => 0,
+                    'leads_updated' => 0,
+                    'leads_skipped' => 0,
+                    'new_checkpoint' => $checkpoint,
+                    'error' => $fetchRes['error'] ?? 'Failed to retrieve referrals from BNI Connect'
+                ];
+            }
+
+            $referrals = $fetchRes['data'] ?? [];
+            $db = Database::getConnection();
+            $leadsCreated = 0;
+            $leadsUpdated = 0;
+            $leadsSkipped = 0;
+            $latestCheckpoint = $checkpoint;
+
+            // Batch pre-fetch existing leads for O(1) duplicate detection
+            $existingBniMap = [];
+            $mapStmt = $db->prepare("SELECT id, source_lead_id FROM crm_leads WHERE tenant_id = ? AND source = 'BNI Connect' AND source_lead_id IS NOT NULL");
+            $mapStmt->execute([$tenantId]);
+            while ($row = $mapStmt->fetch(PDO::FETCH_ASSOC)) {
+                $existingBniMap[$row['source_lead_id']] = (int)$row['id'];
+            }
+
+            $existingContacts = [];
+            $contactStmt = $db->prepare("SELECT phone, email FROM crm_leads WHERE tenant_id = ?");
+            $contactStmt->execute([$tenantId]);
+            while ($row = $contactStmt->fetch(PDO::FETCH_ASSOC)) {
+                if (!empty($row['phone'])) $existingContacts['p:' . trim($row['phone'])] = true;
+                if (!empty($row['email'])) $existingContacts['e:' . strtolower(trim($row['email']))] = true;
+            }
+
+            $updateStmt = $db->prepare("UPDATE crm_leads SET status = ?, notes = ?, service_requirement = ?, sync_status = 'synced', updated_at = NOW() WHERE id = ? AND tenant_id = ?");
+            $insertStmt = $db->prepare("
+                INSERT INTO crm_leads (
+                    tenant_id, name, company, email, phone, value, status, priority,
+                    source, source_platform, service_requirement, source_lead_id,
+                    sync_status, next_followup_date, notes
+                ) VALUES (
+                    ?, ?, ?, ?, ?, 0.00, ?, 'high',
+                    'BNI Connect', 'bni', ?, ?,
+                    'synced', ?, ?
+                )
+            ");
+
+            $db->beginTransaction();
+            try {
+                foreach ($referrals as $ref) {
+                    $refId = trim((string)($ref['source_lead_id'] ?? ''));
+                    $name = trim((string)($ref['name'] ?? 'BNI Referral'));
+                    $company = trim((string)($ref['company'] ?? 'BNI Connect'));
+                    $phone = trim((string)($ref['phone'] ?? ''));
+                    $email = trim((string)($ref['email'] ?? ''));
+                    $service = trim((string)($ref['service_requirement'] ?? 'BNI Referral'));
+                    $status = $ref['status'] ?? 'new';
+                    $notes = $ref['notes'] ?? '';
+                    $date = $ref['date'] ?? date('Y-m-d');
+
+                    if (!$latestCheckpoint || strcmp($date, $latestCheckpoint) > 0) {
+                        $latestCheckpoint = $date;
+                    }
+
+                    // Check duplicate by source_lead_id
+                    if (!empty($refId) && isset($existingBniMap[$refId])) {
+                        $existingId = $existingBniMap[$refId];
+                        $updateStmt->execute([$status, $notes, $service, $existingId, $tenantId]);
+                        $leadsUpdated++;
+                        continue;
+                    }
+
+                    // Cross-source duplicate check by phone / email
+                    $isPhoneDup = !empty($phone) && isset($existingContacts['p:' . $phone]);
+                    $isEmailDup = !empty($email) && isset($existingContacts['e:' . strtolower($email)]);
+                    if ($isPhoneDup || $isEmailDup) {
+                        $leadsSkipped++;
+                        continue;
+                    }
+
+                    $nextFollowup = date('Y-m-d H:i:s', strtotime('+4 hours'));
+                    $insertStmt->execute([
+                        $tenantId, $name, $company, $email, $phone,
+                        $status, $service, $refId, $nextFollowup, $notes
+                    ]);
+                    $newLeadId = (int)$db->lastInsertId();
+                    if (!empty($refId)) $existingBniMap[$refId] = $newLeadId;
+                    if (!empty($phone)) $existingContacts['p:' . $phone] = true;
+                    if (!empty($email)) $existingContacts['e:' . strtolower($email)] = true;
+                    $leadsCreated++;
+                }
+                $db->commit();
+            } catch (\Throwable $ex) {
+                if ($db->inTransaction()) {
+                    $db->rollBack();
+                }
+                throw $ex;
+            }
+
             return [
                 'success' => true,
-                'leads_fetched' => $fetchRes['count'] ?? 0,
-                'leads_created' => 0,
-                'leads_updated' => 0,
-                'leads_skipped' => 0,
-                'new_checkpoint' => $checkpoint,
-                'message' => $fetchRes['capability_note'] ?? 'BNI Connect member session active.'
+                'leads_fetched' => count($referrals),
+                'leads_created' => $leadsCreated,
+                'leads_updated' => $leadsUpdated,
+                'leads_skipped' => $leadsSkipped,
+                'new_checkpoint' => $latestCheckpoint,
+                'message' => "Successfully synchronized " . count($referrals) . " referrals from BNI Connect."
             ];
         }
 

@@ -150,59 +150,86 @@ class KVVConnector implements LeadConnectorInterface {
             $leadsSkipped = 0;
             $latestCheckpoint = $checkpoint;
 
-            foreach ($referrals as $ref) {
-                $refId = trim((string)($ref['source_lead_id'] ?? ''));
-                $name = trim((string)($ref['name'] ?? 'KVV Member'));
-                $company = trim((string)($ref['company'] ?? 'KVV Forum'));
-                $phone = trim((string)($ref['phone'] ?? ''));
-                $email = trim((string)($ref['email'] ?? ''));
-                $service = trim((string)($ref['requirement'] ?? 'Trade Requirement'));
-                $status = $ref['status'] ?? 'new';
-                $notes = $ref['notes'] ?? '';
-                $createdAt = $ref['created_at'] ?? date('Y-m-d H:i:s');
+            // Performance Optimization: Pre-fetch existing lead IDs and contact points in batch
+            // Eliminates hundreds of sequential network round-trips over SSL to cloud database
+            $existingKvvMap = [];
+            $mapStmt = $db->prepare("SELECT id, source_lead_id FROM crm_leads WHERE tenant_id = ? AND source = 'KVV' AND source_lead_id IS NOT NULL");
+            $mapStmt->execute([$tenantId]);
+            while ($row = $mapStmt->fetch(PDO::FETCH_ASSOC)) {
+                $existingKvvMap[$row['source_lead_id']] = (int)$row['id'];
+            }
 
-                if (!$latestCheckpoint || strcmp($createdAt, $latestCheckpoint) > 0) {
-                    $latestCheckpoint = $createdAt;
-                }
+            $existingContacts = [];
+            $contactStmt = $db->prepare("SELECT phone, email FROM crm_leads WHERE tenant_id = ?");
+            $contactStmt->execute([$tenantId]);
+            while ($row = $contactStmt->fetch(PDO::FETCH_ASSOC)) {
+                if (!empty($row['phone'])) $existingContacts['p:' . trim($row['phone'])] = true;
+                if (!empty($row['email'])) $existingContacts['e:' . strtolower(trim($row['email']))] = true;
+            }
 
-                // Check duplicate by source_lead_id
-                $checkStmt = $db->prepare("SELECT id FROM crm_leads WHERE tenant_id = ? AND source = 'KVV' AND source_lead_id = ? LIMIT 1");
-                $checkStmt->execute([$tenantId, $refId]);
-                $existingId = $checkStmt->fetchColumn();
+            $updateStmt = $db->prepare("UPDATE crm_leads SET status = ?, notes = ?, sync_status = 'synced', updated_at = NOW() WHERE id = ? AND tenant_id = ?");
+            $insertStmt = $db->prepare("
+                INSERT INTO crm_leads (
+                    tenant_id, name, company, email, phone, value, status, priority,
+                    source, source_platform, service_requirement, source_lead_id,
+                    sync_status, next_followup_date, notes
+                ) VALUES (
+                    ?, ?, ?, ?, ?, 0.00, ?, 'high',
+                    'KVV', 'kvv', ?, ?,
+                    'synced', ?, ?
+                )
+            ");
 
-                if ($existingId) {
-                    $db->prepare("UPDATE crm_leads SET status = ?, notes = ?, sync_status = 'synced', updated_at = NOW() WHERE id = ? AND tenant_id = ?")
-                       ->execute([$status, $notes, $existingId, $tenantId]);
-                    $leadsUpdated++;
-                    continue;
-                }
+            $db->beginTransaction();
+            try {
+                foreach ($referrals as $ref) {
+                    $refId = trim((string)($ref['source_lead_id'] ?? ''));
+                    $name = trim((string)($ref['name'] ?? 'KVV Member'));
+                    $company = trim((string)($ref['company'] ?? 'KVV Forum'));
+                    $phone = trim((string)($ref['phone'] ?? ''));
+                    $email = trim((string)($ref['email'] ?? ''));
+                    $service = trim((string)($ref['requirement'] ?? 'Trade Requirement'));
+                    $status = $ref['status'] ?? 'new';
+                    $notes = $ref['notes'] ?? '';
+                    $createdAt = $ref['created_at'] ?? date('Y-m-d H:i:s');
 
-                // Cross-source duplicate check by phone / email
-                if (!empty($phone) || !empty($email)) {
-                    $dupStmt = $db->prepare("SELECT id FROM crm_leads WHERE tenant_id = ? AND ((phone = ? AND phone != '') OR (email = ? AND email != '')) LIMIT 1");
-                    $dupStmt->execute([$tenantId, $phone, $email]);
-                    if ($dupStmt->fetchColumn()) {
+                    if (!$latestCheckpoint || strcmp($createdAt, $latestCheckpoint) > 0) {
+                        $latestCheckpoint = $createdAt;
+                    }
+
+                    // Check duplicate by source_lead_id via in-memory map
+                    if (!empty($refId) && isset($existingKvvMap[$refId])) {
+                        $existingId = $existingKvvMap[$refId];
+                        $updateStmt->execute([$status, $notes, $existingId, $tenantId]);
+                        $leadsUpdated++;
+                        continue;
+                    }
+
+                    // Cross-source duplicate check by phone / email via in-memory map
+                    $isPhoneDup = !empty($phone) && isset($existingContacts['p:' . $phone]);
+                    $isEmailDup = !empty($email) && isset($existingContacts['e:' . strtolower($email)]);
+                    if ($isPhoneDup || $isEmailDup) {
                         $leadsSkipped++;
                         continue;
                     }
-                }
 
-                $nextFollowup = date('Y-m-d H:i:s', strtotime('+4 hours'));
-                $db->prepare("
-                    INSERT INTO crm_leads (
-                        tenant_id, name, company, email, phone, value, status, priority,
-                        source, source_platform, service_requirement, source_lead_id,
-                        sync_status, next_followup_date, notes
-                    ) VALUES (
-                        ?, ?, ?, ?, ?, 0.00, ?, 'high',
-                        'KVV', 'kvv', ?, ?,
-                        'synced', ?, ?
-                    )
-                ")->execute([
-                    $tenantId, $name, $company, $email, $phone,
-                    $status, $service, $refId, $nextFollowup, "Synchronized from KVV Portal: " . $notes
-                ]);
-                $leadsCreated++;
+                    $nextFollowup = date('Y-m-d H:i:s', strtotime('+4 hours'));
+                    $insertStmt->execute([
+                        $tenantId, $name, $company, $email, $phone,
+                        $status, $service, $refId, $nextFollowup, "Synchronized from KVV Portal: " . $notes
+                    ]);
+                    $newLeadId = (int)$db->lastInsertId();
+                    if (!empty($refId)) $existingKvvMap[$refId] = $newLeadId;
+                    if (!empty($phone)) $existingContacts['p:' . $phone] = true;
+                    if (!empty($email)) $existingContacts['e:' . strtolower($email)] = true;
+                    $leadsCreated++;
+                }
+                $db->commit();
+            } catch (\Throwable $ex) {
+                if ($db->inTransaction()) {
+                    $db->rollBack();
+                }
+                throw $ex;
             }
 
             return [

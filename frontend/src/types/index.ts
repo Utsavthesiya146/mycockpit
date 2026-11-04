@@ -326,6 +326,14 @@ export interface ConnectedApp {
   next_action?: string;
   next_action_key?: string;
   connected_email?: string;
+  latest_sync_log?: {
+    leads_fetched: number;
+    leads_created: number;
+    leads_updated: number;
+    leads_skipped: number;
+    status: string;
+    created_at: string;
+  } | null;
 }
 
 export interface AIMessage {

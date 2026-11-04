@@ -26,8 +26,15 @@ export const Badge: React.FC<BadgeProps> = ({ status, variant, dot, className, c
         return 'Sync Never Run';
       case 'sync successful':
         return 'Sync Successful';
+      case 'sync successful no new leads':
+      case 'sync successful - no new leads':
+      case 'sync_successful_no_leads':
+        return 'Sync Successful (0 New)';
       case 'sync failed':
         return 'Sync Failed';
+      case 'referral access restricted':
+      case 'referral_access_restricted':
+        return 'Referral Access Restricted';
       case 'connected':
         return 'Connected';
       case 'launcher only':
@@ -71,6 +78,11 @@ export const Badge: React.FC<BadgeProps> = ({ status, variant, dot, className, c
       case 'webhook configured':
       case 'sync successful':
         return 'bg-[#ECFDF5] text-[#059669] border-[#A7F3D0]';
+
+      case 'sync successful no new leads':
+      case 'sync successful - no new leads':
+      case 'sync_successful_no_leads':
+        return 'bg-[#EFF8FF] text-[#175CD3] border-[#B2DDFF]';
       
       case 'partially paid':
       case 'in progress':
@@ -104,7 +116,9 @@ export const Badge: React.FC<BadgeProps> = ({ status, variant, dot, className, c
       case 'captcha required':
       case 'mfa required':
       case 'on leave':
-        return 'bg-[#FEF3C7] text-[#D97706] border-[#FDE68A]';
+      case 'referral access restricted':
+      case 'referral_access_restricted':
+        return 'bg-[#FEF3C7] text-[#D97706] border-[#FDE68A] font-bold';
 
       case 'api access required':
         return 'bg-[#EFF8FF] text-[#175CD3] border-[#B2DDFF] font-bold';

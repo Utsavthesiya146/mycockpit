@@ -558,14 +558,38 @@ class AppHubController {
 
                 // Reconcile Sync Status (distinct from authentication status!)
                 // A lead sync failure sets sync_status to sync_failed, but does NOT mark user unauthenticated.
+                $lStmt = $db->prepare("SELECT status, leads_fetched, leads_created, leads_updated, leads_skipped, error_details, created_at 
+                    FROM lead_sync_logs 
+                    WHERE tenant_id = ? AND source_key = ? 
+                    ORDER BY id DESC LIMIT 1");
+                $lStmt->execute([$tenantId, $sourceKey]);
+                $latestLog = $lStmt->fetch(PDO::FETCH_ASSOC);
+
                 $syncStatus = 'sync_never_run';
-                if (!empty($cfg['last_sync_at'])) {
+                if ($latestLog) {
+                    if ($latestLog['status'] === 'failed') {
+                        $errDetails = strtolower($latestLog['error_details'] ?? '');
+                        if (str_contains($errDetails, 'partner license') || str_contains($errDetails, 'access restricted') || str_contains($errDetails, 'restricted')) {
+                            $syncStatus = 'referral_access_restricted';
+                        } else {
+                            $syncStatus = 'sync_failed';
+                        }
+                    } elseif ($latestLog['status'] === 'success' || $latestLog['status'] === 'partial') {
+                        if ((int)($latestLog['leads_fetched'] ?? 0) > 0 || (int)($latestLog['leads_created'] ?? 0) > 0) {
+                            $syncStatus = 'sync_successful';
+                        } else {
+                            $syncStatus = 'sync_successful_no_leads';
+                        }
+                    } else {
+                        $syncStatus = 'sync_successful';
+                    }
+                } elseif (!empty($cfg['last_sync_at'])) {
                     $syncStatus = (!empty($lastError) && $authStatus !== 'connected') ? 'sync_failed' : 'sync_successful';
                 } elseif (!empty($lastError)) {
                     $syncStatus = 'sync_failed';
                 }
 
-                if ($authStatus === 'connected' && !empty($lastError)) {
+                if ($authStatus === 'connected' && !empty($lastError) && (!$latestLog || $latestLog['status'] === 'failed')) {
                     $syncStatus = 'sync_failed';
                 }
 
@@ -574,10 +598,18 @@ class AppHubController {
                 $app['session_status'] = $sessionStatus;
                 $app['has_stored_credentials'] = $hasStoredCreds;
                 $app['sync_status'] = $syncStatus;
-                $app['last_synced_at'] = $cfg['last_sync_at'] ?? null;
-                $app['last_sync_display'] = !empty($cfg['last_sync_at']) ? $cfg['last_sync_at'] : 'Never';
+                $app['last_synced_at'] = $cfg['last_sync_at'] ?? ($latestLog['created_at'] ?? null);
+                $app['last_sync_display'] = !empty($app['last_synced_at']) ? $app['last_synced_at'] : 'Never';
                 $app['last_error'] = $lastError;
                 $app['sync_count'] = (int)($cfg['sync_count'] ?? 0);
+                $app['latest_sync_log'] = $latestLog ? [
+                    'leads_fetched' => (int)$latestLog['leads_fetched'],
+                    'leads_created' => (int)$latestLog['leads_created'],
+                    'leads_updated' => (int)$latestLog['leads_updated'],
+                    'leads_skipped' => (int)$latestLog['leads_skipped'],
+                    'status' => $latestLog['status'],
+                    'created_at' => $latestLog['created_at']
+                ] : null;
                 $app['next_action'] = $nextAction;
                 $app['next_action_key'] = $nextActionKey;
 
@@ -1280,6 +1312,8 @@ class AppHubController {
                 $db->prepare("UPDATE connected_apps SET connection_status = 'connected', updated_at = NOW() WHERE id = ?")
                     ->execute([$id]);
 
+                $syncStatus = ((int)($res['leads_fetched'] ?? 0) > 0 || (int)($res['leads_created'] ?? 0) > 0) ? 'sync_successful' : 'sync_successful_no_leads';
+
                 Response::success([
                     'app_id' => $id,
                     'source_key' => 'bni',
@@ -1288,7 +1322,7 @@ class AppHubController {
                     'leads_updated' => $res['leads_updated'] ?? 0,
                     'leads_skipped' => $res['leads_skipped'] ?? 0,
                     'last_synced_at' => date('Y-m-d H:i:s'),
-                    'sync_status' => 'sync_successful',
+                    'sync_status' => $syncStatus,
                     'message' => $res['message'] ?? 'BNI Connect sync completed.'
                 ], 'BNI Connect sync completed successfully');
             } else {
@@ -1313,6 +1347,8 @@ class AppHubController {
                 $db->prepare("UPDATE connected_apps SET connection_status = 'connected', updated_at = NOW() WHERE id = ?")
                     ->execute([$id]);
 
+                $syncStatus = ((int)($res['leads_fetched'] ?? 0) > 0 || (int)($res['leads_created'] ?? 0) > 0) ? 'sync_successful' : 'sync_successful_no_leads';
+
                 Response::success([
                     'app_id' => $id,
                     'source_key' => 'kvv',
@@ -1321,7 +1357,7 @@ class AppHubController {
                     'leads_updated' => $res['leads_updated'] ?? 0,
                     'leads_skipped' => $res['leads_skipped'] ?? 0,
                     'last_synced_at' => date('Y-m-d H:i:s'),
-                    'sync_status' => 'sync_successful',
+                    'sync_status' => $syncStatus,
                     'message' => $res['message'] ?? 'KVV Portal sync completed.'
                 ], 'KVV Portal sync completed successfully');
             } else {
@@ -1347,6 +1383,8 @@ class AppHubController {
                 $db->prepare("UPDATE connected_apps SET connection_status = 'connected', updated_at = NOW() WHERE id = ?")
                     ->execute([$id]);
 
+                $syncStatus = ((int)($res['leads_fetched'] ?? 0) > 0 || (int)($res['leads_created'] ?? 0) > 0) ? 'sync_successful' : 'sync_successful_no_leads';
+
                 Response::success([
                     'app_id' => $id,
                     'source_key' => 'eaf',
@@ -1355,7 +1393,7 @@ class AppHubController {
                     'leads_updated' => $res['leads_updated'] ?? 0,
                     'leads_skipped' => $res['leads_skipped'] ?? 0,
                     'last_synced_at' => date('Y-m-d H:i:s'),
-                    'sync_status' => 'sync_successful',
+                    'sync_status' => $syncStatus,
                     'execution_time_ms' => $res['execution_time_ms'] ?? 0
                 ], "EAF Connect synchronized successfully! ({$res['leads_fetched']} referrals processed)");
             } else {

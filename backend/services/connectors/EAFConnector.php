@@ -308,127 +308,141 @@ class EAFConnector implements LeadConnectorInterface {
 
         $latestCheckpoint = $checkpoint;
 
-        foreach ($referrals as $ref) {
-            $refCode = trim($ref['referral_code'] ?? '');
-            $fromName = trim($ref['from_name'] ?? $ref['from_user'] ?? $ref['name'] ?? 'EAF Member');
-            $fromEmail = trim($ref['from_email'] ?? $ref['email'] ?? '');
-            $fromPhone = trim($ref['contact_number'] ?? $ref['from_phone'] ?? $ref['phone'] ?? '');
-            $businessType = trim($ref['business'] ?? $ref['business_type'] ?? 'Business Referral');
-            $description = trim($ref['description'] ?? '');
-            $amount = (float)($ref['amount'] ?? 0);
-            $temperature = strtolower(trim($ref['temperature'] ?? ''));
-            $priority = ($temperature === 'hot') ? 'urgent' : (($temperature === 'warm') ? 'high' : 'medium');
-            $createdAt = $ref['created_at'] ?? date('Y-m-d H:i:s');
-            $chapterName = trim($ref['chapter_name'] ?? '');
+        $checkStmt = $db->prepare("
+            SELECT id, status, value, notes FROM crm_leads 
+            WHERE tenant_id = ? AND source = 'EAF Connect' AND source_lead_id = ? 
+            LIMIT 1
+        ");
+        $updateStmt = $db->prepare("
+            UPDATE crm_leads 
+            SET value = ?, service_requirement = ?, sync_status = 'synced', updated_at = NOW() 
+            WHERE id = ? AND tenant_id = ?
+        ");
+        $dupStmt = $db->prepare("
+            SELECT id, name, source FROM crm_leads 
+            WHERE tenant_id = ? AND ((phone = ? AND phone != '') OR (email = ? AND email != '')) 
+            LIMIT 1
+        ");
+        $actStmt = $db->prepare("
+            INSERT INTO lead_activities (tenant_id, lead_id, activity_type, title, description, metadata)
+            VALUES (?, ?, 'system', 'Cross-Platform Referral from EAF Connect', ?, ?)
+        ");
+        $insertStmt = $db->prepare("
+            INSERT INTO crm_leads (
+                tenant_id, name, company, email, phone, value, status, priority,
+                source, source_platform, service_requirement, assigned_to, source_lead_id,
+                sync_status, next_followup_date, notes
+            ) VALUES (
+                ?, ?, ?, ?, ?, ?, 'new', ?,
+                'EAF Connect', 'eaf', ?, ?, ?,
+                'synced', ?, ?
+            )
+        ");
+        $fuStmt = $db->prepare("
+            INSERT INTO follow_ups (tenant_id, lead_id, assigned_to, title, notes, scheduled_at, contact_method, status)
+            VALUES (?, ?, ?, ?, ?, ?, 'call', 'pending')
+        ");
+        $importActStmt = $db->prepare("
+            INSERT INTO lead_activities (tenant_id, lead_id, activity_type, title, description)
+            VALUES (?, ?, 'import', 'EAF Referral Synchronized', ?)
+        ");
 
-            // Track latest checkpoint timestamp
-            if (!$latestCheckpoint || strcmp($createdAt, $latestCheckpoint) > 0) {
-                $latestCheckpoint = $createdAt;
-            }
+        $db->beginTransaction();
+        try {
+            foreach ($referrals as $ref) {
+                $refCode = trim($ref['referral_code'] ?? '');
+                $fromName = trim($ref['from_name'] ?? $ref['from_user'] ?? $ref['name'] ?? 'EAF Member');
+                $fromEmail = trim($ref['from_email'] ?? $ref['email'] ?? '');
+                $fromPhone = trim($ref['contact_number'] ?? $ref['from_phone'] ?? $ref['phone'] ?? '');
+                $businessType = trim($ref['business'] ?? $ref['business_type'] ?? 'Business Referral');
+                $description = trim($ref['description'] ?? '');
+                $amount = (float)($ref['amount'] ?? 0);
+                $temperature = strtolower(trim($ref['temperature'] ?? ''));
+                $priority = ($temperature === 'hot') ? 'urgent' : (($temperature === 'warm') ? 'high' : 'medium');
+                $createdAt = $ref['created_at'] ?? date('Y-m-d H:i:s');
+                $chapterName = trim($ref['chapter_name'] ?? '');
 
-            // 1. Check if referral already exists by source_lead_id + tenant_id + source
-            $checkStmt = $db->prepare("
-                SELECT id, status, value, notes FROM crm_leads 
-                WHERE tenant_id = ? AND source = 'EAF Connect' AND source_lead_id = ? 
-                LIMIT 1
-            ");
-            $checkStmt->execute([$tenantId, $refCode]);
-            $existing = $checkStmt->fetch(PDO::FETCH_ASSOC);
+                // Track latest checkpoint timestamp
+                if (!$latestCheckpoint || strcmp($createdAt, $latestCheckpoint) > 0) {
+                    $latestCheckpoint = $createdAt;
+                }
 
-            if ($existing) {
-                // Update amount or notes if changed
-                $db->prepare("
-                    UPDATE crm_leads 
-                    SET value = ?, service_requirement = ?, sync_status = 'synced', updated_at = NOW() 
-                    WHERE id = ? AND tenant_id = ?
-                ")->execute([$amount, $businessType, $existing['id'], $tenantId]);
-                $leadsUpdated++;
-                continue;
-            }
+                // 1. Check if referral already exists by source_lead_id + tenant_id + source
+                $checkStmt->execute([$tenantId, $refCode]);
+                $existing = $checkStmt->fetch(PDO::FETCH_ASSOC);
 
-            // 2. Cross-Source Duplicate Check by Phone or Email
-            if (!empty($fromPhone) || !empty($fromEmail)) {
-                $dupStmt = $db->prepare("
-                    SELECT id, name, source FROM crm_leads 
-                    WHERE tenant_id = ? AND ((phone = ? AND phone != '') OR (email = ? AND email != '')) 
-                    LIMIT 1
-                ");
-                $dupStmt->execute([$tenantId, $fromPhone, $fromEmail]);
-                $crossLead = $dupStmt->fetch(PDO::FETCH_ASSOC);
-
-                if ($crossLead) {
-                    // Record cross-channel activity touchpoint without overwriting
-                    $db->prepare("
-                        INSERT INTO lead_activities (tenant_id, lead_id, activity_type, title, description, metadata)
-                        VALUES (?, ?, 'system', 'Cross-Platform Referral from EAF Connect', ?, ?)
-                    ")->execute([
-                        $tenantId,
-                        $crossLead['id'],
-                        "Referral Code {$refCode} received via EAF Connect ({$businessType}). Value: ₹{$amount}. Chapter: {$chapterName}. Details: {$description}",
-                        json_encode(['referral_code' => $refCode, 'amount' => $amount, 'chapter' => $chapterName])
-                    ]);
-
-                    $leadsSkipped++;
+                if ($existing) {
+                    // Update amount or notes if changed
+                    $updateStmt->execute([$amount, $businessType, $existing['id'], $tenantId]);
+                    $leadsUpdated++;
                     continue;
                 }
+
+                // 2. Cross-Source Duplicate Check by Phone or Email
+                if (!empty($fromPhone) || !empty($fromEmail)) {
+                    $dupStmt->execute([$tenantId, $fromPhone, $fromEmail]);
+                    $crossLead = $dupStmt->fetch(PDO::FETCH_ASSOC);
+
+                    if ($crossLead) {
+                        // Record cross-channel activity touchpoint without overwriting
+                        $actStmt->execute([
+                            $tenantId,
+                            $crossLead['id'],
+                            "Referral Code {$refCode} received via EAF Connect ({$businessType}). Value: ₹{$amount}. Chapter: {$chapterName}. Details: {$description}",
+                            json_encode(['referral_code' => $refCode, 'amount' => $amount, 'chapter' => $chapterName])
+                        ]);
+
+                        $leadsSkipped++;
+                        continue;
+                    }
+                }
+
+                // 3. Insert Brand New Lead
+                $nextFollowup = date('Y-m-d H:i:s', strtotime('+6 hours'));
+                $companyName = !empty($ref['company']) ? $ref['company'] : ($chapterName ? "EAF ({$chapterName})" : 'EAF Network');
+
+                $notes = "Referral from EAF Connect\nChapter: {$chapterName}\nDetails: {$description}";
+                $insertStmt->execute([
+                    $tenantId,
+                    $fromName,
+                    $companyName,
+                    $fromEmail,
+                    $fromPhone,
+                    $amount,
+                    $priority,
+                    $businessType,
+                    $autoAssignUser,
+                    $refCode,
+                    $nextFollowup,
+                    $notes
+                ]);
+
+                $newLeadId = (int)$db->lastInsertId();
+                $leadsCreated++;
+
+                // Create initial follow-up reminder
+                $fuStmt->execute([
+                    $tenantId,
+                    $newLeadId,
+                    $autoAssignUser,
+                    "Follow up with {$fromName} ({$businessType})",
+                    "Initial outreach for EAF Connect referral from {$chapterName}. Value: ₹{$amount}",
+                    $nextFollowup
+                ]);
+
+                // Record initial activity
+                $importActStmt->execute([
+                    $tenantId,
+                    $newLeadId,
+                    "Automatically synchronized from EAF Connect (Ref: {$refCode}). Requirement: {$businessType}"
+                ]);
             }
-
-            // 3. Insert Brand New Lead
-            $nextFollowup = date('Y-m-d H:i:s', strtotime('+6 hours'));
-            $companyName = !empty($ref['company']) ? $ref['company'] : ($chapterName ? "EAF ({$chapterName})" : 'EAF Network');
-
-            $insertStmt = $db->prepare("
-                INSERT INTO crm_leads (
-                    tenant_id, name, company, email, phone, value, status, priority,
-                    source, source_platform, service_requirement, assigned_to, source_lead_id,
-                    sync_status, next_followup_date, notes
-                ) VALUES (
-                    ?, ?, ?, ?, ?, ?, 'new', ?,
-                    'EAF Connect', 'eaf', ?, ?, ?,
-                    'synced', ?, ?
-                )
-            ");
-            $notes = "Referral from EAF Connect\nChapter: {$chapterName}\nDetails: {$description}";
-            $insertStmt->execute([
-                $tenantId,
-                $fromName,
-                $companyName,
-                $fromEmail,
-                $fromPhone,
-                $amount,
-                $priority,
-                $businessType,
-                $autoAssignUser,
-                $refCode,
-                $nextFollowup,
-                $notes
-            ]);
-
-            $newLeadId = (int)$db->lastInsertId();
-            $leadsCreated++;
-
-            // Create initial follow-up reminder
-            $db->prepare("
-                INSERT INTO follow_ups (tenant_id, lead_id, assigned_to, title, notes, scheduled_at, contact_method, status)
-                VALUES (?, ?, ?, ?, ?, ?, 'call', 'pending')
-            ")->execute([
-                $tenantId,
-                $newLeadId,
-                $autoAssignUser,
-                "New EAF Referral: {$fromName}",
-                "Referral Code {$refCode} for {$businessType}. Contact immediately.",
-                $nextFollowup
-            ]);
-
-            // Record initial activity
-            $db->prepare("
-                INSERT INTO lead_activities (tenant_id, lead_id, activity_type, title, description)
-                VALUES (?, ?, 'import', 'EAF Referral Synchronized', ?)
-            ")->execute([
-                $tenantId,
-                $newLeadId,
-                "Automatically synchronized from EAF Connect (Ref: {$refCode}). Requirement: {$businessType}"
-            ]);
+            $db->commit();
+        } catch (\Throwable $ex) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            throw $ex;
         }
 
         return [

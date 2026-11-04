@@ -593,6 +593,16 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
                           </span>
                         </div>
 
+                        {/* 4b. Latest Sync Metrics */}
+                        {app.latest_sync_log && (
+                          <div className="flex items-center justify-between gap-1 text-[11px] pt-1 border-t border-[#E9EAEE]/60">
+                            <span className="text-[#667085]">Metrics:</span>
+                            <span className="font-semibold text-[#20242C]">
+                              Fetched: <span className="text-[#D62839] font-bold">{app.latest_sync_log.leads_fetched}</span> | New: <span className="text-[#059669] font-bold">{app.latest_sync_log.leads_created}</span> | Upd: {app.latest_sync_log.leads_updated}
+                            </span>
+                          </div>
+                        )}
+
                         {/* 5. Last Error (if present) */}
                         {app.last_error && (
                           <div className="p-2 rounded-lg bg-[#FEF2F2] border border-[#FECDD3] text-[10px] text-[#DC2626] leading-tight" title={app.last_error}>
