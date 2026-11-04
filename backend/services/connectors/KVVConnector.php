@@ -28,15 +28,53 @@ class KVVConnector implements LeadConnectorInterface {
         if (!empty($config['credentials']) && is_array($config['credentials'])) {
             $creds = array_merge($creds, $config['credentials']);
         }
-        return [
-            'api_endpoint' => trim($creds['api_endpoint'] ?? ''),
-            'api_token' => trim($creds['api_token'] ?? ''),
-            'webhook_secret' => trim($config['webhook_secret'] ?? ($creds['webhook_secret'] ?? ''))
-        ];
+
+        $tenantId = !empty($config['tenant_id']) ? (int)$config['tenant_id'] : 1;
+        if (empty($creds['token']) && empty($creds['mobile_number']) && empty($creds['email']) && empty($creds['username'])) {
+            try {
+                $db = Database::getConnection();
+                $sStmt = $db->prepare("SELECT encrypted_session_data FROM lead_platform_sessions WHERE tenant_id = ? AND source_key = 'kvv' LIMIT 1");
+                $sStmt->execute([$tenantId]);
+                $sessRow = $sStmt->fetch(PDO::FETCH_ASSOC);
+                if (!empty($sessRow['encrypted_session_data'])) {
+                    $sessDec = Encryption::decrypt($sessRow['encrypted_session_data']);
+                    if ($sessDec) {
+                        $creds = array_merge(json_decode($sessDec, true) ?: [], $creds);
+                    }
+                }
+            } catch (\Throwable $e) {}
+        }
+
+        return $creds;
     }
 
     public function testConnection(int $tenantId, array $config): array {
+        $config['tenant_id'] = $tenantId;
         $creds = $this->resolveCredentials($config);
+
+        // 1. If member session credentials exist, validate via KVVWebAutomationDriver
+        if (!empty($creds['token']) || (!empty($creds['mobile_number']) && !empty($creds['password'])) || (!empty($creds['email']) && !empty($creds['password'])) || (!empty($creds['username']) && !empty($creds['password']))) {
+            require_once __DIR__ . '/../automation/PlatformAutomationDriverInterface.php';
+            require_once __DIR__ . '/../automation/KVVWebAutomationDriver.php';
+            $driver = new \Cockpit\Services\Automation\KVVWebAutomationDriver();
+            $val = $driver->validateSession($tenantId, $creds);
+            if (($val['status'] ?? '') === 'active') {
+                return [
+                    'success' => true,
+                    'message' => 'Successfully connected to KVV Portal! Active member session verified.',
+                    'details' => [
+                        'status' => 'connected',
+                        'session_status' => 'active',
+                        'mobile_number' => $creds['mobile_number'] ?? ($creds['username'] ?? null)
+                    ]
+                ];
+            }
+            return [
+                'success' => false,
+                'message' => 'KVV connection test failed: ' . ($val['message'] ?? 'Invalid session'),
+                'details' => ['status' => $val['status'] ?? 'auth_required']
+            ];
+        }
 
         if (!empty($creds['api_endpoint']) && !empty($creds['api_token'])) {
             // Test custom KVV chapter endpoint
@@ -74,16 +112,109 @@ class KVVConnector implements LeadConnectorInterface {
 
         return [
             'success' => false,
-            'message' => 'KVV platform does not provide a public developer API. Configure a Webhook Secret for real-time lead capture or use CSV synchronization.',
+            'message' => 'KVV Portal credentials required. KVV platform does not provide a public developer API without member login credentials. Please enter your 10-digit registered mobile number and password, configure a Webhook Secret, or use CSV synchronization.',
             'details' => [
-                'status' => 'manual_import_only',
+                'status' => 'auth_required',
                 'alternative' => 'Webhook Intake / CSV Batch Import'
             ]
         ];
     }
 
     public function sync(int $tenantId, array $config, ?string $checkpoint = null): array {
+        $config['tenant_id'] = $tenantId;
         $creds = $this->resolveCredentials($config);
+
+        // 1. If member session credentials exist, use KVVWebAutomationDriver
+        if (!empty($creds['token']) || (!empty($creds['mobile_number']) && !empty($creds['password'])) || (!empty($creds['username']) && !empty($creds['password']))) {
+            require_once __DIR__ . '/../automation/PlatformAutomationDriverInterface.php';
+            require_once __DIR__ . '/../automation/KVVWebAutomationDriver.php';
+            $driver = new \Cockpit\Services\Automation\KVVWebAutomationDriver();
+            $fetchRes = $driver->fetchReceivedReferrals($tenantId, $creds);
+
+            if (!$fetchRes['success']) {
+                return [
+                    'success' => false,
+                    'leads_fetched' => 0,
+                    'leads_created' => 0,
+                    'leads_updated' => 0,
+                    'leads_skipped' => 0,
+                    'new_checkpoint' => $checkpoint,
+                    'error' => $fetchRes['error'] ?? 'Failed to retrieve received referrals from KVV'
+                ];
+            }
+
+            $referrals = $fetchRes['data'] ?? [];
+            $db = Database::getConnection();
+            $leadsCreated = 0;
+            $leadsUpdated = 0;
+            $leadsSkipped = 0;
+            $latestCheckpoint = $checkpoint;
+
+            foreach ($referrals as $ref) {
+                $refId = trim((string)($ref['source_lead_id'] ?? ''));
+                $name = trim((string)($ref['name'] ?? 'KVV Member'));
+                $company = trim((string)($ref['company'] ?? 'KVV Forum'));
+                $phone = trim((string)($ref['phone'] ?? ''));
+                $email = trim((string)($ref['email'] ?? ''));
+                $service = trim((string)($ref['requirement'] ?? 'Trade Requirement'));
+                $status = $ref['status'] ?? 'new';
+                $notes = $ref['notes'] ?? '';
+                $createdAt = $ref['created_at'] ?? date('Y-m-d H:i:s');
+
+                if (!$latestCheckpoint || strcmp($createdAt, $latestCheckpoint) > 0) {
+                    $latestCheckpoint = $createdAt;
+                }
+
+                // Check duplicate by source_lead_id
+                $checkStmt = $db->prepare("SELECT id FROM crm_leads WHERE tenant_id = ? AND source = 'KVV' AND source_lead_id = ? LIMIT 1");
+                $checkStmt->execute([$tenantId, $refId]);
+                $existingId = $checkStmt->fetchColumn();
+
+                if ($existingId) {
+                    $db->prepare("UPDATE crm_leads SET status = ?, notes = ?, sync_status = 'synced', updated_at = NOW() WHERE id = ? AND tenant_id = ?")
+                       ->execute([$status, $notes, $existingId, $tenantId]);
+                    $leadsUpdated++;
+                    continue;
+                }
+
+                // Cross-source duplicate check by phone / email
+                if (!empty($phone) || !empty($email)) {
+                    $dupStmt = $db->prepare("SELECT id FROM crm_leads WHERE tenant_id = ? AND ((phone = ? AND phone != '') OR (email = ? AND email != '')) LIMIT 1");
+                    $dupStmt->execute([$tenantId, $phone, $email]);
+                    if ($dupStmt->fetchColumn()) {
+                        $leadsSkipped++;
+                        continue;
+                    }
+                }
+
+                $nextFollowup = date('Y-m-d H:i:s', strtotime('+4 hours'));
+                $db->prepare("
+                    INSERT INTO crm_leads (
+                        tenant_id, name, company, email, phone, value, status, priority,
+                        source, source_platform, service_requirement, source_lead_id,
+                        sync_status, next_followup_date, notes
+                    ) VALUES (
+                        ?, ?, ?, ?, ?, 0.00, ?, 'high',
+                        'KVV', 'kvv', ?, ?,
+                        'synced', ?, ?
+                    )
+                ")->execute([
+                    $tenantId, $name, $company, $email, $phone,
+                    $status, $service, $refId, $nextFollowup, "Synchronized from KVV Portal: " . $notes
+                ]);
+                $leadsCreated++;
+            }
+
+            return [
+                'success' => true,
+                'leads_fetched' => count($referrals),
+                'leads_created' => $leadsCreated,
+                'leads_updated' => $leadsUpdated,
+                'leads_skipped' => $leadsSkipped,
+                'new_checkpoint' => $latestCheckpoint,
+                'error' => null
+            ];
+        }
 
         if (empty($creds['api_endpoint'])) {
             return [
@@ -93,7 +224,7 @@ class KVVConnector implements LeadConnectorInterface {
                 'leads_updated' => 0,
                 'leads_skipped' => 0,
                 'new_checkpoint' => $checkpoint,
-                'error' => 'Automatic polling not available for KVV (No public REST API). Use Real-time Webhook intake or CSV synchronization.'
+                'error' => 'KVV Portal credentials required. Please connect your member session or configure Webhook intake.'
             ];
         }
 

@@ -553,6 +553,77 @@ class EAFWebAutomationDriver implements PlatformAutomationDriverInterface {
     public function parseReceivedReferrals(string $html): array {
         $referrals = [];
 
+        // Primary Strategy: Parse EAF member portal's '#received' container with high fidelity
+        $recPos = strpos($html, 'id="received"');
+        if ($recPos !== false) {
+            $givPos = strpos($html, 'id="given"', $recPos);
+            $recHtml = $givPos !== false ? substr($html, $recPos, $givPos - $recPos) : substr($html, $recPos);
+            $items = preg_split('/<div\s+class="referral-item"/i', $recHtml);
+            array_shift($items); // Remove prefix before first item
+
+            foreach ($items as $itemHtml) {
+                $code = '';
+                if (preg_match('/edit_refferral(?:_status)?\([\'"]?([^\'")]+)[\'"]?\)/i', $itemHtml, $m)) {
+                    $code = trim($m[1]);
+                }
+                if (empty($code)) continue;
+
+                $status = 'Pending';
+                if (preg_match('/data-status=["\']([^"\']*)["\']/i', '<div class="referral-item" ' . substr($itemHtml, 0, 100), $m)) {
+                    $status = ucwords(trim($m[1]));
+                }
+
+                $fromName = 'EAF Member';
+                $fromEmail = '';
+                if (preg_match('/<!--\s*1\.\s*FROM SENDER.*?title=["\']([^"\']+)["\'].*?title=["\']([^"\']+)["\']/is', $itemHtml, $m)) {
+                    $fromName = trim($m[1]);
+                    $fromEmail = trim($m[2]);
+                } elseif (preg_match('/<!--\s*1\.\s*FROM SENDER.*?alt=["\']([^"\']+)["\']/is', $itemHtml, $m)) {
+                    $fromName = trim($m[1]);
+                }
+
+                $business = '';
+                if (preg_match('/<!--\s*4\.\s*BUSINESS.*?title=["\']([^"\']+)["\']/is', $itemHtml, $m)) {
+                    $business = trim($m[1]);
+                }
+
+                $dateTime = date('Y-m-d H:i:s');
+                if (preg_match('/<!--\s*6\.\s*DATE & TIME.*?title=["\']Created on ([^"\']+)["\']/is', $itemHtml, $m)) {
+                    $parsed = strtotime(trim($m[1]));
+                    if ($parsed !== false) {
+                        $dateTime = date('Y-m-d H:i:s', $parsed);
+                    }
+                }
+
+                $phone = '';
+                if (preg_match('/href=["\']tel:([^"\']+)["\']/i', $itemHtml, $m)) {
+                    $phone = trim($m[1]);
+                }
+
+                $temp = 'Warm';
+                if (stripos($itemHtml, 'Hot') !== false) $temp = 'Hot';
+                elseif (stripos($itemHtml, 'Cold') !== false) $temp = 'Cold';
+
+                $referrals[] = [
+                    'referral_code' => $code,
+                    'from_user' => $fromName,
+                    'from_name' => $fromName,
+                    'from_email' => $fromEmail,
+                    'contact_number' => $phone,
+                    'business' => $business,
+                    'temperature' => $temp,
+                    'status' => $status,
+                    'description' => $business,
+                    'created_at' => $dateTime,
+                    'chapter_name' => 'Chapter 2'
+                ];
+            }
+
+            if (!empty($referrals)) {
+                return $referrals;
+            }
+        }
+
         // Strategy 1: Check for embedded JSON / JavaScript data
         if (preg_match('/(?:var|let|const)\s+(?:received_referrals|referrals|connect_data)\s*=\s*(\[.*?\]);/is', $html, $m)) {
             $json = json_decode($m[1], true);

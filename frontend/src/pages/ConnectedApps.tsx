@@ -25,14 +25,21 @@ import {
   Unlink,
   AlertCircle,
   CheckCircle2,
-  AlertTriangle
+  AlertTriangle,
+  Copy,
+  Check,
+  Settings2
 } from 'lucide-react';
 import { api } from '../services/api';
 import { Badge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
 import type { ConnectedApp } from '../types';
 
-export const ConnectedApps: React.FC = () => {
+interface ConnectedAppsProps {
+  onNavigateToGmail?: () => void;
+}
+
+export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail }) => {
   const [apps, setApps] = useState<ConnectedApp[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +67,14 @@ export const ConnectedApps: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [modalFeedback, setModalFeedback] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
 
+  // Gmail OAuth State
+  const [googleClientId, setGoogleClientId] = useState('');
+  const [googleClientSecret, setGoogleClientSecret] = useState('');
+  const [showGoogleCredsConfig, setShowGoogleCredsConfig] = useState(false);
+  const [isSavingGoogleCreds, setIsSavingGoogleCreds] = useState(false);
+  const [isGettingGoogleAuth, setIsGettingGoogleAuth] = useState(false);
+  const [copiedCallback, setCopiedCallback] = useState(false);
+
   const fetchApps = async () => {
     setLoading(true);
     setError(null);
@@ -74,8 +89,22 @@ export const ConnectedApps: React.FC = () => {
     }
   };
 
+  const canonicalCallbackUri = 'http://localhost/mycockpit/backend/api/gmail/oauth/callback';
+
+  const copyCallbackUri = () => {
+    navigator.clipboard.writeText(canonicalCallbackUri);
+    setCopiedCallback(true);
+    setTimeout(() => setCopiedCallback(false), 2000);
+  };
+
   useEffect(() => {
     fetchApps();
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const oauthError = urlParams.get('oauth_error');
+    if (oauthError) {
+      setError(`Google OAuth Authorization: ${decodeURIComponent(oauthError)}`);
+    }
   }, []);
 
   const handleCreateApp = async (e: React.FormEvent) => {
@@ -129,7 +158,66 @@ export const ConnectedApps: React.FC = () => {
     setPortalPassword('');
     setShowPassword(false);
     setModalFeedback(null);
+    setShowGoogleCredsConfig(false);
     setIsConnectModalOpen(true);
+  };
+
+  const handleConnectGoogle = async () => {
+    setIsGettingGoogleAuth(true);
+    setModalFeedback(null);
+    try {
+      const res: any = await api.get('/gmail/auth-url');
+      if (res?.auth_url) {
+        window.location.href = res.auth_url;
+      } else {
+        setModalFeedback({
+          type: 'error',
+          message: 'Could not obtain Google authorization URL.'
+        });
+      }
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to initiate Google OAuth flow.';
+      setModalFeedback({
+        type: 'error',
+        message: msg
+      });
+      if (msg.toLowerCase().includes('not configured') || msg.toLowerCase().includes('client id')) {
+        setShowGoogleCredsConfig(true);
+      }
+    } finally {
+      setIsGettingGoogleAuth(false);
+    }
+  };
+
+  const handleSaveGoogleCredentials = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!googleClientId.trim() || !googleClientSecret.trim()) {
+      setModalFeedback({
+        type: 'error',
+        message: 'Google Client ID and Client Secret are both required.'
+      });
+      return;
+    }
+    setIsSavingGoogleCreds(true);
+    setModalFeedback(null);
+    try {
+      await api.post('/gmail/configure', {
+        client_id: googleClientId.trim(),
+        client_secret: googleClientSecret.trim()
+      });
+      setModalFeedback({
+        type: 'success',
+        message: 'Google OAuth Client Credentials saved and encrypted securely. You can now click "Authorize with Google".'
+      });
+      setShowGoogleCredsConfig(false);
+    } catch (err: any) {
+      setModalFeedback({
+        type: 'error',
+        message: err?.message || 'Failed to save Google credentials.'
+      });
+    } finally {
+      setIsSavingGoogleCreds(false);
+    }
   };
 
   const handleConnectPortal = async (e: React.FormEvent) => {
@@ -215,18 +303,36 @@ export const ConnectedApps: React.FC = () => {
     }
   };
 
+  const [syncingAppId, setSyncingAppId] = useState<number | null>(null);
+
+  const handleCardSyncNow = async (app: ConnectedApp) => {
+    setSyncingAppId(app.id);
+    try {
+      await api.post(`/apps/${app.id}/sync-now`);
+      fetchApps();
+    } catch (err: any) {
+      alert(err?.message || 'Synchronization failed.');
+    } finally {
+      setSyncingAppId(null);
+    }
+  };
+
   const handleSyncPortalNow = async () => {
     if (!selectedPortalApp) return;
     setIsSyncing(true);
     setModalFeedback(null);
 
     try {
-      await api.post(`/apps/${selectedPortalApp.id}/sync-now`);
+      const res: any = await api.post(`/apps/${selectedPortalApp.id}/sync-now`);
+      setModalFeedback({
+        type: 'success',
+        message: res?.message || 'Portal synchronized successfully!'
+      });
       fetchApps();
     } catch (err: any) {
       setModalFeedback({
-        type: 'info',
-        message: err.message || 'Automated sync is scheduled for Phase 4.'
+        type: 'error',
+        message: err?.message || 'Synchronization failed.'
       });
     } finally {
       setIsSyncing(false);
@@ -454,49 +560,109 @@ export const ConnectedApps: React.FC = () => {
 
                   {/* Card Footer Actions */}
                   {isPortal ? (
-                    <div className="mt-5 pt-3 border-t border-[#E9EAEE] space-y-3">
-                      {/* Real Sync Metadata */}
-                      <div className="bg-[#F8F9FB] p-2.5 rounded-xl border border-[#E9EAEE] text-[11px] space-y-1">
-                        <div className="flex items-center justify-between text-[#667085]">
-                          <span className="flex items-center gap-1 font-medium">
+                    <div className="mt-4 pt-3 border-t border-[#E9EAEE] space-y-2.5">
+                      {/* Structured Portal Lifecycle Fields */}
+                      <div className="bg-[#F8F9FB] p-3 rounded-xl border border-[#E9EAEE] space-y-2 text-xs">
+                        {/* 1. Authentication Status */}
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[#667085] font-medium">Auth Status:</span>
+                          <Badge status={app.auth_status || app.connection_status} />
+                        </div>
+
+                        {/* 2. Integration Capability */}
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[#667085] font-medium">Capability:</span>
+                          <span className="font-semibold text-[#20242C] text-right truncate max-w-[160px]" title={app.integration_capability}>
+                            {app.integration_capability || 'Manual CSV Import Only'}
+                          </span>
+                        </div>
+
+                        {/* 3. Synchronization Status */}
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[#667085] font-medium">Sync Status:</span>
+                          <Badge status={app.sync_status || 'sync_never_run'} />
+                        </div>
+
+                        {/* 4. Last Successful Sync */}
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[#667085] font-medium flex items-center gap-1">
                             <Clock className="w-3 h-3 text-[#94A3B8]" /> Last Sync:
                           </span>
                           <span className="font-semibold text-[#20242C]">
-                            {app.last_synced_at ? new Date(app.last_synced_at).toLocaleDateString() : 'Never'}
+                            {app.last_sync_display || (app.last_synced_at ? new Date(app.last_synced_at).toLocaleString() : 'Never')}
                           </span>
                         </div>
+
+                        {/* 5. Last Error (if present) */}
                         {app.last_error && (
-                          <p className="text-[10px] text-[#DC2626] font-medium truncate" title={app.last_error}>
-                            Error: {app.last_error}
-                          </p>
+                          <div className="p-2 rounded-lg bg-[#FEF2F2] border border-[#FECDD3] text-[10px] text-[#DC2626] leading-tight" title={app.last_error}>
+                            <span className="font-bold">Notice: </span>
+                            {app.last_error}
+                          </div>
                         )}
                       </div>
 
-                      {/* Connect / Reconnect / Manage Buttons */}
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleOpenConnectModal(app)}
-                          className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold transition-all shadow-xs cursor-pointer ${
-                            app.connection_status === 'connected' && !app.last_error
-                              ? 'bg-[#ECFDF5] hover:bg-[#059669] text-[#059669] hover:text-white border border-[#A7F3D0]'
-                              : app.connection_status === 'expired' || app.connection_status === 'captcha_required' || app.connection_status === 'auth_required' || app.connection_status === 'error' || app.last_error
-                              ? 'bg-[#FEF2F2] hover:bg-[#DC2626] text-[#DC2626] hover:text-white border border-[#FECDD3]'
-                              : 'bg-[#FFF1F2] hover:bg-[#D62839] text-[#D62839] hover:text-white border border-[#FECDD3]'
-                          }`}
-                        >
-                          <Link2 className="w-3.5 h-3.5" />
-                          <span>
-                            {app.connection_status === 'connected' && !app.last_error
-                              ? 'Manage Connection'
-                              : app.connection_status === 'expired' || app.connection_status === 'captcha_required' || app.connection_status === 'auth_required' || app.connection_status === 'error' || app.last_error
-                              ? 'Reconnect Portal'
-                              : 'Connect Portal'}
-                          </span>
-                        </button>
+                      {/* 6. Next Required Action Buttons */}
+                      <div className="flex items-center gap-2 pt-1">
+                        {app.source_key === 'gmail' && app.connection_status === 'connected' ? (
+                          <>
+                            <button
+                              onClick={() => onNavigateToGmail ? onNavigateToGmail() : (window.location.href = '/?tab=gmail')}
+                              className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-[#FFF1F2] hover:bg-[#D62839] text-[#D62839] hover:text-white border border-[#FECDD3] text-xs font-semibold transition-all shadow-xs cursor-pointer"
+                              title="Open Gmail Workspace"
+                            >
+                              <Mail className="w-3.5 h-3.5" />
+                              <span>Open Workspace</span>
+                            </button>
+                            <button
+                              onClick={() => handleCardSyncNow(app)}
+                              disabled={syncingAppId === app.id}
+                              className="p-2 rounded-xl bg-[#ECFDF5] hover:bg-[#059669] text-[#059669] hover:text-white border border-[#A7F3D0] transition-all cursor-pointer"
+                              title="Sync Emails Now"
+                            >
+                              <RefreshCw className={`w-3.5 h-3.5 ${syncingAppId === app.id ? 'animate-spin' : ''}`} />
+                            </button>
+                            <button
+                              onClick={() => handleOpenConnectModal(app)}
+                              className="p-2 rounded-xl bg-[#F8F9FB] hover:bg-[#E9EAEE] text-[#667085] border border-[#E9EAEE] transition-all cursor-pointer"
+                              title="Manage Google OAuth Connection"
+                            >
+                              <Link2 className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        ) : app.next_action_key === 'sync_now' ? (
+                          <>
+                            <button
+                              onClick={() => handleCardSyncNow(app)}
+                              disabled={syncingAppId === app.id}
+                              className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-[#ECFDF5] hover:bg-[#059669] text-[#059669] hover:text-white border border-[#A7F3D0] text-xs font-semibold transition-all shadow-xs cursor-pointer"
+                              title="Run live referral sync from portal"
+                            >
+                              <RefreshCw className={`w-3.5 h-3.5 ${syncingAppId === app.id ? 'animate-spin' : ''}`} />
+                              <span>{syncingAppId === app.id ? 'Syncing...' : 'Sync Leads Now'}</span>
+                            </button>
+                            <button
+                              onClick={() => handleOpenConnectModal(app)}
+                              className="p-2 rounded-xl bg-[#F8F9FB] hover:bg-[#E9EAEE] text-[#667085] border border-[#E9EAEE] transition-all cursor-pointer"
+                              title="Manage Connection Credentials"
+                            >
+                              <Link2 className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => handleOpenConnectModal(app)}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-[#F8F9FB] hover:bg-[#D62839] text-[#667085] hover:text-white border border-[#E9EAEE] text-xs font-semibold transition-all shadow-xs cursor-pointer"
+                          >
+                            <Link2 className="w-3.5 h-3.5" />
+                            <span>{app.source_key === 'gmail' ? 'Connect Google OAuth' : (app.next_action || 'Connect Portal')}</span>
+                          </button>
+                        )}
+
                         <button
                           onClick={() => handleLaunch(app.app_url)}
                           className="p-2 rounded-xl bg-[#F8F9FB] hover:bg-[#FFF1F2] text-[#667085] hover:text-[#D62839] border border-[#E9EAEE] transition-all cursor-pointer"
-                          title={`Visit ${app.name} Portal in new tab`}
+                          title={`Visit ${app.name} in new browser tab`}
                         >
                           <ExternalLink className="w-3.5 h-3.5" />
                         </button>
@@ -565,155 +731,406 @@ export const ConnectedApps: React.FC = () => {
               </div>
             </div>
 
-            {/* Security Callout */}
-            <div className="p-3 bg-[#FFF1F2] border border-[#FECDD3] rounded-xl flex items-start gap-2.5 text-xs text-[#D62839]">
-              <Lock className="w-4 h-4 shrink-0 mt-0.5" />
-              <div>
-                <span className="font-bold">Encrypted Credentials: </span>
-                Your credentials are encrypted using server-side AES-256-GCM. They are never logged, exposed to third parties, or stored in plaintext.
-              </div>
-            </div>
-
-            {/* Feedback Alert */}
-            {modalFeedback && (
-              <div className={`p-3 rounded-xl border flex items-start gap-2.5 text-xs ${
-                modalFeedback.type === 'success'
-                  ? 'bg-[#ECFDF5] border-[#A7F3D0] text-[#059669]'
-                  : modalFeedback.type === 'error'
-                  ? 'bg-[#FEF2F2] border-[#FECDD3] text-[#DC2626]'
-                  : 'bg-[#EFF8FF] border-[#B2DDFF] text-[#175CD3]'
-              }`}>
-                {modalFeedback.type === 'success' ? (
-                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
-                ) : modalFeedback.type === 'error' ? (
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                ) : (
-                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                )}
-                <div className="font-medium leading-relaxed">{modalFeedback.message}</div>
-              </div>
-            )}
-
-            {/* Connection Form */}
-            <form onSubmit={handleConnectPortal} className="space-y-3.5">
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-[#667085] mb-1.5">
-                  Member User ID / Email
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={portalUserId}
-                  onChange={(e) => setPortalUserId(e.target.value)}
-                  placeholder={`Authorized ${selectedPortalApp.name} username or email`}
-                  className="cockpit-input"
-                  autoComplete="username"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-[#667085] mb-1.5">
-                  Portal Password
-                </label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    value={portalPassword}
-                    onChange={(e) => setPortalPassword(e.target.value)}
-                    placeholder="••••••••••••"
-                    className="cockpit-input pr-10"
-                    autoComplete="current-password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#94A3B8] hover:text-[#20242C] transition-colors cursor-pointer"
-                    title={showPassword ? 'Hide password' : 'Show password'}
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
+            {/* Conditional Portal View: Google OAuth vs Member Credentials */}
+            {selectedPortalApp.source_key === 'gmail' ? (
+              <div className="space-y-4">
+                {/* Platform Guidance Callout */}
+                <div className="p-3.5 bg-[#FFF1F2] border border-[#FECDD3] rounded-xl flex items-start gap-2.5 text-xs text-[#20242C]">
+                  <Mail className="w-4 h-4 text-[#D62839] shrink-0 mt-0.5" />
+                  <div className="space-y-1.5 leading-relaxed">
+                    <p className="font-bold text-[#D62839]">
+                      Official Google Workspace & Gmail Integration (OAuth 2.0 + PKCE)
+                    </p>
+                    <p className="text-[#667085]">
+                      Connects directly using Google's official authorization code flow with PKCE. Access and refresh tokens are encrypted using AEAD AES-256-GCM. <strong>Passwords are never requested or stored.</strong>
+                    </p>
+                    <div className="pt-1">
+                      <span className="font-semibold text-[#20242C]">Approved Minimal Scopes:</span>
+                      <ul className="list-disc list-inside mt-0.5 text-[11px] text-[#667085] space-y-0.5">
+                        <li><code className="text-[#D62839] font-mono">gmail.readonly</code> – Read emails, threads & search inbox</li>
+                        <li><code className="text-[#D62839] font-mono">gmail.send</code> – Send emails & replies directly from Cockpit</li>
+                        <li><code className="text-[#D62839] font-mono">gmail.compose</code> – Compose and update draft emails</li>
+                        <li><code className="text-[#D62839] font-mono">gmail.modify</code> – Star, label, archive & trash emails</li>
+                        <li><code className="text-[#D62839] font-mono">openid, email</code> – Authenticated user profile identity</li>
+                      </ul>
+                    </div>
+                    <div className="p-2 rounded bg-white border border-[#FECDD3] text-[10.5px] text-[#B91C1C]">
+                      <strong>Google Cloud Testing Mode Note:</strong> In Google Cloud "Testing" mode, OAuth refresh tokens expire after 7 days, and only designated Test Users can authorize.
+                    </div>
+                  </div>
                 </div>
-                <p className="text-[11px] text-[#94A3B8] mt-1">
-                  Credentials are used solely to establish an authorized member session.
-                </p>
-              </div>
 
-              {/* Action Buttons */}
-              <div className="pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-[#E9EAEE]">
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleTestConnection}
-                    disabled={isTesting}
-                    className="cockpit-btn-secondary text-xs py-2 px-3 flex items-center gap-1.5"
-                    title="Validate stored encrypted credentials"
-                  >
-                    {isTesting ? (
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <ShieldCheck className="w-3.5 h-3.5 text-[#059669]" />
-                    )}
-                    <span>Test Connection</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleSyncPortalNow}
-                    disabled={isSyncing}
-                    className="cockpit-btn-secondary text-xs py-2 px-3 flex items-center gap-1.5"
-                    title="Trigger immediate sync"
-                  >
-                    {isSyncing ? (
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <RefreshCw className="w-3.5 h-3.5 text-[#D62839]" />
-                    )}
-                    <span>Sync Now</span>
-                  </button>
-
-                  {selectedPortalApp.has_stored_credentials && (
+                {/* Canonical Redirect URI Callout */}
+                <div className="p-3 bg-[#F8F9FB] border border-[#E9EAEE] rounded-xl text-xs space-y-1">
+                  <span className="text-[#667085] font-medium block">Canonical Backend OAuth Callback URI:</span>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 bg-white border border-[#E9EAEE] px-2.5 py-1.5 rounded-lg font-mono text-[11px] text-[#20242C] select-all truncate">
+                      {canonicalCallbackUri}
+                    </code>
                     <button
                       type="button"
-                      onClick={handleDisconnectPortal}
-                      disabled={isDisconnecting}
-                      className="text-xs py-2 px-3 text-[#DC2626] hover:bg-[#FEF2F2] rounded-xl font-semibold transition-colors flex items-center gap-1 cursor-pointer"
-                      title="Disconnect and purge saved credentials"
+                      onClick={copyCallbackUri}
+                      className="px-2.5 py-1.5 rounded-lg border border-[#E9EAEE] bg-white hover:bg-[#F8F9FB] text-xs font-semibold text-[#20242C] flex items-center gap-1 cursor-pointer shrink-0"
                     >
-                      <Unlink className="w-3.5 h-3.5" />
-                      <span>Disconnect</span>
+                      {copiedCallback ? <Check className="w-3.5 h-3.5 text-[#059669]" /> : <Copy className="w-3.5 h-3.5 text-[#667085]" />}
+                      <span>{copiedCallback ? 'Copied' : 'Copy'}</span>
                     </button>
-                  )}
+                  </div>
+                  <p className="text-[10px] text-[#94A3B8]">
+                    This exact URI must be registered in your Google Cloud Console under "Authorized redirect URIs".
+                  </p>
                 </div>
 
-                <div className="flex items-center gap-2 ml-auto">
-                  <button
-                    type="button"
-                    onClick={() => setIsConnectModalOpen(false)}
-                    className="cockpit-btn-secondary text-xs py-2 px-3"
-                  >
-                    Close
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isConnecting}
-                    className="cockpit-btn-primary text-xs py-2 px-4 flex items-center gap-1.5"
-                  >
-                    {isConnecting ? (
-                      <>
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        <span>Encrypting & Saving...</span>
-                      </>
+                {/* Feedback Alert */}
+                {modalFeedback && (
+                  <div className={`p-3 rounded-xl border flex items-start gap-2.5 text-xs ${
+                    modalFeedback.type === 'success'
+                      ? 'bg-[#ECFDF5] border-[#A7F3D0] text-[#059669]'
+                      : modalFeedback.type === 'error'
+                      ? 'bg-[#FEF2F2] border-[#FECDD3] text-[#DC2626]'
+                      : 'bg-[#EFF8FF] border-[#B2DDFF] text-[#175CD3]'
+                  }`}>
+                    {modalFeedback.type === 'success' ? (
+                      <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+                    ) : modalFeedback.type === 'error' ? (
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                     ) : (
-                      <>
-                        <Lock className="w-3.5 h-3.5" />
-                        <span>Save & Connect</span>
-                      </>
+                      <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                     )}
-                  </button>
-                </div>
+                    <div className="font-medium leading-relaxed">{modalFeedback.message}</div>
+                  </div>
+                )}
+
+                {/* OAuth Actions based on connection status */}
+                {selectedPortalApp.connection_status === 'connected' ? (
+                  <div className="space-y-3 pt-1">
+                    <div className="p-3 bg-[#ECFDF5] border border-[#A7F3D0] rounded-xl flex items-center justify-between text-xs text-[#059669]">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span className="font-bold">Connected Account:</span>
+                        <span className="font-mono">{selectedPortalApp.connected_email || 'Active Google Session'}</span>
+                      </div>
+                      <Badge status="connected" />
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[#E9EAEE]">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleTestConnection}
+                          disabled={isTesting}
+                          className="cockpit-btn-secondary text-xs py-2 px-3 flex items-center gap-1.5"
+                          title="Validate OAuth Access Token"
+                        >
+                          {isTesting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5 text-[#059669]" />}
+                          <span>Test Session</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSyncPortalNow}
+                          disabled={isSyncing}
+                          className="cockpit-btn-secondary text-xs py-2 px-3 flex items-center gap-1.5"
+                          title="Run Live Sync"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 text-[#D62839] ${isSyncing ? 'animate-spin' : ''}`} />
+                          <span>Sync Now</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleDisconnectPortal}
+                          disabled={isDisconnecting}
+                          className="text-xs py-2 px-3 text-[#DC2626] hover:bg-[#FEF2F2] rounded-xl font-semibold transition-colors flex items-center gap-1 cursor-pointer"
+                        >
+                          <Unlink className="w-3.5 h-3.5" />
+                          <span>Disconnect</span>
+                        </button>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsConnectModalOpen(false);
+                          if (onNavigateToGmail) {
+                            onNavigateToGmail();
+                          } else {
+                            window.location.href = '/?tab=gmail';
+                          }
+                        }}
+                        className="cockpit-btn-primary text-xs py-2 px-4 flex items-center gap-1.5 ml-auto"
+                      >
+                        <Mail className="w-3.5 h-3.5" />
+                        <span>Open Gmail Workspace</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4 pt-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={handleConnectGoogle}
+                        disabled={isGettingGoogleAuth}
+                        className="flex-1 cockpit-btn-primary text-sm py-2.5 px-4 flex items-center justify-center gap-2"
+                      >
+                        {isGettingGoogleAuth ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            <span>Requesting Google Consent...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Globe className="w-4 h-4" />
+                            <span>Authorize with Google OAuth</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowGoogleCredsConfig(!showGoogleCredsConfig)}
+                        className="cockpit-btn-secondary text-xs py-2.5 px-3 flex items-center gap-1.5"
+                        title="Configure Client ID and Secret"
+                      >
+                        <Settings2 className="w-3.5 h-3.5" />
+                        <span>OAuth Credentials</span>
+                      </button>
+                    </div>
+
+                    {/* Collapsible Client ID / Secret Configuration */}
+                    {showGoogleCredsConfig && (
+                      <form onSubmit={handleSaveGoogleCredentials} className="p-3.5 bg-[#F8F9FB] border border-[#E9EAEE] rounded-xl space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-[#20242C] flex items-center gap-1.5">
+                            <Lock className="w-3.5 h-3.5 text-[#D62839]" />
+                            Google Cloud OAuth 2.0 Credentials
+                          </span>
+                          <span className="text-[10px] text-[#667085]">AES-256-GCM Encrypted</span>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#667085] mb-1">
+                            Google Client ID
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={googleClientId}
+                            onChange={(e) => setGoogleClientId(e.target.value)}
+                            placeholder="e.g. 123456789-xxxxxx.apps.googleusercontent.com"
+                            className="cockpit-input text-xs font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#667085] mb-1">
+                            Google Client Secret
+                          </label>
+                          <input
+                            type="password"
+                            required
+                            value={googleClientSecret}
+                            onChange={(e) => setGoogleClientSecret(e.target.value)}
+                            placeholder="GOCSPX-••••••••••••••••••••"
+                            className="cockpit-input text-xs font-mono"
+                          />
+                        </div>
+                        <div className="flex items-center justify-end gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setShowGoogleCredsConfig(false)}
+                            className="cockpit-btn-secondary text-xs py-1.5 px-3"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={isSavingGoogleCreds}
+                            className="cockpit-btn-primary text-xs py-1.5 px-3 flex items-center gap-1"
+                          >
+                            {isSavingGoogleCreds ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Lock className="w-3 h-3" />}
+                            <span>Save Credentials</span>
+                          </button>
+                        </div>
+                      </form>
+                    )}
+                  </div>
+                )}
               </div>
-            </form>
+            ) : (
+              <>
+                {/* Platform Guidance Callout */}
+                {selectedPortalApp.source_key === 'bni' ? (
+                  <div className="p-3 bg-[#EFF8FF] border border-[#B2DDFF] rounded-xl flex items-start gap-2.5 text-xs text-[#175CD3]">
+                    <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold">BNI Connect Authentication & AES-256-GCM: </span>
+                      Enter your BNI Connect Username or Email and Password to authenticate directly with BNI Connect Global. If Cloudflare bot protection or CAPTCHA challenges appear, complete them in browser. Raw passwords are never stored in browser memory.
+                    </div>
+                  </div>
+                ) : selectedPortalApp.source_key === 'kvv' ? (
+                  <div className="p-3 bg-[#FFF8F1] border border-[#FDE68A] rounded-xl flex items-start gap-2.5 text-xs text-[#D97706]">
+                    <Lock className="w-4 h-4 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold">KVV Member Authentication & Direct Sync: </span>
+                      Enter your 10-digit registered mobile number and password to connect directly to the Kannada Vyapaara Vedike platform. Authenticated referrals will be retrieved and synchronized directly with CRM.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3 bg-[#FFF1F2] border border-[#FECDD3] rounded-xl flex items-start gap-2.5 text-xs text-[#D62839]">
+                    <Lock className="w-4 h-4 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold">Two-Way Web Automation & AES-256-GCM: </span>
+                      EAF Connect member sessions are verified against your live member dashboard. Credentials are encrypted on the server with AES-256-GCM and never exposed to the client.
+                    </div>
+                  </div>
+                )}
+
+                {/* Feedback Alert */}
+                {modalFeedback && (
+                  <div className={`p-3 rounded-xl border flex items-start gap-2.5 text-xs ${
+                    modalFeedback.type === 'success'
+                      ? 'bg-[#ECFDF5] border-[#A7F3D0] text-[#059669]'
+                      : modalFeedback.type === 'error'
+                      ? 'bg-[#FEF2F2] border-[#FECDD3] text-[#DC2626]'
+                      : 'bg-[#EFF8FF] border-[#B2DDFF] text-[#175CD3]'
+                  }`}>
+                    {modalFeedback.type === 'success' ? (
+                      <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+                    ) : modalFeedback.type === 'error' ? (
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                    )}
+                    <div className="font-medium leading-relaxed">{modalFeedback.message}</div>
+                  </div>
+                )}
+
+                {/* Connection Form */}
+                <form onSubmit={handleConnectPortal} className="space-y-3.5">
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-[#667085] mb-1.5">
+                      {selectedPortalApp.source_key === 'kvv' ? 'Registered Mobile Number (10 Digits)' : 'Member User ID / Email'}
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={portalUserId}
+                      onChange={(e) => setPortalUserId(e.target.value)}
+                      placeholder={
+                        selectedPortalApp.source_key === 'kvv'
+                          ? 'e.g. 9876543210'
+                          : selectedPortalApp.source_key === 'bni'
+                          ? 'BNI Username or Email'
+                          : `Authorized ${selectedPortalApp.name} username or email`
+                      }
+                      className="cockpit-input"
+                      autoComplete="username"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-[#667085] mb-1.5">
+                      Portal Password
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        required
+                        value={portalPassword}
+                        onChange={(e) => setPortalPassword(e.target.value)}
+                        placeholder="••••••••••••"
+                        className="cockpit-input pr-10"
+                        autoComplete="current-password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[#94A3B8] hover:text-[#20242C] transition-colors cursor-pointer"
+                        title={showPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-[#94A3B8] mt-1">
+                      Credentials are used solely to establish an authorized member session.
+                    </p>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-[#E9EAEE]">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleTestConnection}
+                        disabled={isTesting}
+                        className="cockpit-btn-secondary text-xs py-2 px-3 flex items-center gap-1.5"
+                        title="Validate stored encrypted credentials"
+                      >
+                        {isTesting ? (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <ShieldCheck className="w-3.5 h-3.5 text-[#059669]" />
+                        )}
+                        <span>Test Connection</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleSyncPortalNow}
+                        disabled={isSyncing}
+                        className="cockpit-btn-secondary text-xs py-2 px-3 flex items-center gap-1.5"
+                        title="Trigger immediate sync"
+                      >
+                        {isSyncing ? (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <RefreshCw className="w-3.5 h-3.5 text-[#D62839]" />
+                        )}
+                        <span>Sync Now</span>
+                      </button>
+
+                      {selectedPortalApp.has_stored_credentials && (
+                        <button
+                          type="button"
+                          onClick={handleDisconnectPortal}
+                          disabled={isDisconnecting}
+                          className="text-xs py-2 px-3 text-[#DC2626] hover:bg-[#FEF2F2] rounded-xl font-semibold transition-colors flex items-center gap-1 cursor-pointer"
+                          title="Disconnect and purge saved credentials"
+                        >
+                          <Unlink className="w-3.5 h-3.5" />
+                          <span>Disconnect</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2 ml-auto">
+                      <button
+                        type="button"
+                        onClick={() => setIsConnectModalOpen(false)}
+                        className="cockpit-btn-secondary text-xs py-2 px-3"
+                      >
+                        Close
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isConnecting}
+                        className="cockpit-btn-primary text-xs py-2 px-4 flex items-center gap-1.5"
+                      >
+                        {isConnecting ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>Encrypting & Saving...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Lock className="w-3.5 h-3.5" />
+                            <span>Save & Connect</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </>
+            )}
           </div>
         )}
       </Modal>

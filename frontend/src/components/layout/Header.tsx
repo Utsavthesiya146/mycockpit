@@ -30,6 +30,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, setIsSi
       case 'tasks': return 'Task Operations & Action Items';
       case 'followups': return 'Client Follow-ups & Reminders';
       case 'apps': return 'Connected Applications Hub';
+      case 'gmail': return 'Gmail Workspace & Communications';
       case 'ai': return 'Personal AI Assistant';
       case 'superadmin': return 'Super Admin Fleet Governance';
       case 'settings': return 'Workspace & Organization Settings';

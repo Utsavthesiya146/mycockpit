@@ -226,6 +226,75 @@ class AppHubController {
                 }
             } catch (\Throwable $e) {}
 
+            // 9. Ensure Gmail Integration tables exist for Render deployment compatibility
+            $db->exec("CREATE TABLE IF NOT EXISTS `gmail_accounts` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `tenant_id` INT NOT NULL,
+                `email_address` VARCHAR(255) NOT NULL,
+                `account_name` VARCHAR(255) NULL,
+                `connection_status` ENUM('connected', 'disconnected', 'expired', 'auth_required') DEFAULT 'auth_required',
+                `encrypted_tokens` LONGTEXT NULL,
+                `history_id` VARCHAR(64) NULL,
+                `messages_total` INT DEFAULT 0,
+                `threads_total` INT DEFAULT 0,
+                `last_sync_at` DATETIME NULL,
+                `sync_status` ENUM('sync_successful', 'sync_failed', 'syncing', 'not_synced') DEFAULT 'not_synced',
+                `last_error` TEXT NULL,
+                `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY `uk_tenant_email` (`tenant_id`, `email_address`),
+                INDEX `idx_tenant_status` (`tenant_id`, `connection_status`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+            $db->exec("CREATE TABLE IF NOT EXISTS `gmail_oauth_states` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `tenant_id` INT NOT NULL,
+                `user_id` INT NOT NULL,
+                `state_token` VARCHAR(128) NOT NULL UNIQUE,
+                `code_verifier` VARCHAR(128) NULL,
+                `redirect_url` VARCHAR(500) NULL,
+                `expires_at` DATETIME NOT NULL,
+                `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                INDEX `idx_state_token` (`state_token`),
+                INDEX `idx_tenant_expires` (`tenant_id`, `expires_at`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+            $db->exec("CREATE TABLE IF NOT EXISTS `gmail_messages` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `tenant_id` INT NOT NULL,
+                `gmail_account_id` INT NOT NULL,
+                `message_id` VARCHAR(64) NOT NULL,
+                `thread_id` VARCHAR(64) NOT NULL,
+                `from_name` VARCHAR(255) NULL,
+                `from_email` VARCHAR(255) NULL,
+                `to_recipients` TEXT NULL,
+                `cc_recipients` TEXT NULL,
+                `bcc_recipients` TEXT NULL,
+                `reply_to` VARCHAR(255) NULL,
+                `subject` VARCHAR(500) NULL,
+                `snippet` VARCHAR(1000) NULL,
+                `body_plain` MEDIUMTEXT NULL,
+                `body_html` MEDIUMTEXT NULL,
+                `body_fetched` TINYINT(1) DEFAULT 0,
+                `internal_date` BIGINT NULL,
+                `date_sent` DATETIME NULL,
+                `is_read` TINYINT(1) DEFAULT 0,
+                `is_starred` TINYINT(1) DEFAULT 0,
+                `is_draft` TINYINT(1) DEFAULT 0,
+                `is_sent` TINYINT(1) DEFAULT 0,
+                `is_trash` TINYINT(1) DEFAULT 0,
+                `is_spam` TINYINT(1) DEFAULT 0,
+                `is_important` TINYINT(1) DEFAULT 0,
+                `labels_json` TEXT NULL,
+                `has_attachments` TINYINT(1) DEFAULT 0,
+                `attachments_json` TEXT NULL,
+                `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY `uk_tenant_message` (`tenant_id`, `message_id`),
+                INDEX `idx_tenant_thread` (`tenant_id`, `thread_id`),
+                INDEX `idx_tenant_folder` (`tenant_id`, `is_trash`, `is_spam`, `is_read`, `date_sent`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
         } catch (\Throwable $e) {
             error_log('Schema compatibility check notice: ' . $e->getMessage());
         }
@@ -252,12 +321,51 @@ class AppHubController {
         return new EAFWebAutomationDriver('https://eafconnect.com');
     }
 
+    /**
+     * Resolve BNI Automation Driver with deterministic loading and graceful error handling
+     */
+    private static function getBNIDriver(): BNIWebAutomationDriver {
+        if (!class_exists(BNIWebAutomationDriver::class)) {
+            $driverFile = __DIR__ . '/../services/automation/BNIWebAutomationDriver.php';
+            if (file_exists($driverFile)) {
+                require_once __DIR__ . '/../services/automation/PlatformAutomationDriverInterface.php';
+                require_once $driverFile;
+            }
+        }
+
+        if (!class_exists(BNIWebAutomationDriver::class)) {
+            Response::error('BNI Web Automation Driver is unavailable on this server.', 500);
+        }
+
+        return new BNIWebAutomationDriver();
+    }
+
+    /**
+     * Resolve KVV Automation Driver with deterministic loading and graceful error handling
+     */
+    private static function getKVVDriver(): KVVWebAutomationDriver {
+        if (!class_exists(KVVWebAutomationDriver::class)) {
+            $driverFile = __DIR__ . '/../services/automation/KVVWebAutomationDriver.php';
+            if (file_exists($driverFile)) {
+                require_once __DIR__ . '/../services/automation/PlatformAutomationDriverInterface.php';
+                require_once $driverFile;
+            }
+        }
+
+        if (!class_exists(KVVWebAutomationDriver::class)) {
+            Response::error('KVV Web Automation Driver is unavailable on this server.', 500);
+        }
+
+        return new KVVWebAutomationDriver();
+    }
+
     private static function resolveSourceKey(string $name, string $url): ?string {
         $n = strtolower($name);
         $u = strtolower($url);
         if (str_contains($n, 'eaf') || str_contains($u, 'eafconnect')) return 'eaf';
         if (str_contains($n, 'bni') || str_contains($u, 'bniconnect')) return 'bni';
-        if (str_contains($n, 'kvv') || str_contains($u, 'kannadigara')) return 'kvv';
+        if (str_contains($n, 'kvv') || str_contains($u, 'kannadigara') || str_contains($u, 'kannadavyapaaravedike') || str_contains($n, 'kannada')) return 'kvv';
+        if (str_contains($n, 'gmail') || str_contains($u, 'mail.google.com')) return 'gmail';
         return null;
     }
 
@@ -386,44 +494,121 @@ class AppHubController {
                 $sess = $sStmt->fetch(PDO::FETCH_ASSOC);
 
                 // Query lead_sources_config
-                $cStmt = $db->prepare("SELECT status, last_sync_at, last_error_message, sync_count 
+                $cStmt = $db->prepare("SELECT status, last_sync_at, last_error_message, sync_count,
+                    (encrypted_credentials IS NOT NULL AND LENGTH(encrypted_credentials) > 0) AS has_cfg_creds
                     FROM lead_sources_config 
                     WHERE tenant_id = ? AND source_key = ? LIMIT 1");
                 $cStmt->execute([$tenantId, $sourceKey]);
                 $cfg = $cStmt->fetch(PDO::FETCH_ASSOC);
 
                 $sessionStatus = $sess['session_status'] ?? 'disconnected';
-                $hasStoredCreds = !empty($sess['has_creds']);
+                $hasStoredCreds = !empty($sess['has_creds']) || !empty($cfg['has_cfg_creds']);
                 $cfgStatus = $cfg['status'] ?? null;
                 $lastError = $cfg['last_error_message'] ?? null;
 
-                // Determine honest UI connection_status according to the Authentication Truth Rule:
-                // An app is ONLY connected if session is active, no active error exists, and config is connected
-                if ($sessionStatus === 'active' && empty($lastError) && $cfgStatus === 'connected') {
-                    $app['connection_status'] = 'connected';
-                } elseif ($sessionStatus === 'captcha_required') {
-                    $app['connection_status'] = 'captcha_required';
-                } elseif ($sessionStatus === 'mfa_required') {
-                    $app['connection_status'] = 'mfa_required';
-                } elseif ($sessionStatus === 'expired') {
-                    $app['connection_status'] = 'expired';
-                } elseif ($sessionStatus === 'auth_required' || $cfgStatus === 'auth_required' || !empty($lastError)) {
-                    $app['connection_status'] = 'auth_required';
-                } elseif ($hasStoredCreds) {
-                    $app['connection_status'] = 'auth_required';
-                } else {
-                    $app['connection_status'] = 'disconnected';
+                // If lead_sources_config has valid encrypted credentials, ensure sessionStatus reflects active
+                if ($cfgStatus === 'connected' && !empty($cfg['has_cfg_creds']) && $sessionStatus === 'disconnected') {
+                    $sessionStatus = 'active';
                 }
 
+                // If no credentials or tokens are stored, session CANNOT be active
+                if (!$hasStoredCreds && $sessionStatus === 'active') {
+                    $sessionStatus = 'auth_required';
+                }
+
+                // Reconcile Authentication Status (strictly based on session and encrypted credential presence)
+                if ($hasStoredCreds && $sessionStatus === 'active') {
+                    $authStatus = 'connected';
+                    $connectionStatus = 'connected';
+                    $nextAction = 'Sync Leads Now';
+                    $nextActionKey = 'sync_now';
+                } elseif ($sessionStatus === 'captcha_required') {
+                    $authStatus = 'captcha_required';
+                    $connectionStatus = 'captcha_required';
+                    $nextAction = 'Solve Security Challenge';
+                    $nextActionKey = 'connect';
+                } elseif ($sessionStatus === 'mfa_required') {
+                    $authStatus = 'mfa_required';
+                    $connectionStatus = 'mfa_required';
+                    $nextAction = 'Complete MFA Verification';
+                    $nextActionKey = 'connect';
+                } elseif ($sessionStatus === 'expired') {
+                    $authStatus = 'expired';
+                    $connectionStatus = 'expired';
+                    $nextAction = 'Reconnect Portal';
+                    $nextActionKey = 'connect';
+                } elseif ($hasStoredCreds) {
+                    $authStatus = 'auth_required';
+                    $connectionStatus = 'auth_required';
+                    $nextAction = 'Reconnect Portal';
+                    $nextActionKey = 'connect';
+                } else {
+                    $authStatus = ($cfgStatus === 'manual_csv_import' || ($app['connection_status'] ?? '') === 'disconnected') ? 'disconnected' : 'auth_required';
+                    $connectionStatus = 'auth_required';
+                    $nextAction = ($sourceKey === 'eaf') ? 'Connect Member Session' : 'Connect Portal';
+                    $nextActionKey = 'connect';
+                }
+
+                // Self-heal: ensure connected_apps table in database matches the reconciled connection_status
+                if (($app['connection_status'] ?? '') !== $connectionStatus) {
+                    $db->prepare("UPDATE connected_apps SET connection_status = ?, updated_at = NOW() WHERE id = ?")
+                        ->execute([$connectionStatus, $app['id']]);
+                    $app['connection_status'] = $connectionStatus;
+                }
+
+                // Reconcile Sync Status (distinct from authentication status!)
+                // A lead sync failure sets sync_status to sync_failed, but does NOT mark user unauthenticated.
+                $syncStatus = 'sync_never_run';
+                if (!empty($cfg['last_sync_at'])) {
+                    $syncStatus = (!empty($lastError) && $authStatus !== 'connected') ? 'sync_failed' : 'sync_successful';
+                } elseif (!empty($lastError)) {
+                    $syncStatus = 'sync_failed';
+                }
+
+                if ($authStatus === 'connected' && !empty($lastError)) {
+                    $syncStatus = 'sync_failed';
+                }
+
+                $app['auth_status'] = $authStatus;
+                $app['connection_status'] = $connectionStatus;
                 $app['session_status'] = $sessionStatus;
                 $app['has_stored_credentials'] = $hasStoredCreds;
+                $app['sync_status'] = $syncStatus;
                 $app['last_synced_at'] = $cfg['last_sync_at'] ?? null;
+                $app['last_sync_display'] = !empty($cfg['last_sync_at']) ? $cfg['last_sync_at'] : 'Never';
                 $app['last_error'] = $lastError;
                 $app['sync_count'] = (int)($cfg['sync_count'] ?? 0);
+                $app['next_action'] = $nextAction;
+                $app['next_action_key'] = $nextActionKey;
+
+                if ($sourceKey === 'eaf') {
+                    $app['integration_capability'] = 'Two-Way Web Automation';
+                } elseif ($sourceKey === 'bni') {
+                    $app['integration_capability'] = 'Two-Way Web Automation & REST API';
+                } elseif ($sourceKey === 'kvv') {
+                    $app['integration_capability'] = 'Direct Member API & Referral Sync';
+                } elseif ($sourceKey === 'gmail') {
+                    $app['integration_capability'] = 'Official Google OAuth 2.0 & Full Email Management';
+                    $gmailAccount = $db->query("SELECT email_address, last_sync_at, sync_status FROM gmail_accounts WHERE tenant_id = {$tenantId} LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+                    if ($gmailAccount) {
+                        $app['connected_email'] = $gmailAccount['email_address'];
+                        if (!empty($gmailAccount['last_sync_at'])) {
+                            $app['last_synced_at'] = $gmailAccount['last_sync_at'];
+                            $app['last_sync_display'] = $gmailAccount['last_sync_at'];
+                        }
+                    }
+                }
             } else {
                 $app['is_portal'] = false;
                 $app['source_key'] = null;
                 $app['has_stored_credentials'] = false;
+                $app['auth_status'] = 'launcher_only';
+                $app['integration_capability'] = 'Browser Shortcut';
+                $app['sync_status'] = 'not_applicable';
+                $app['last_sync_display'] = 'N/A';
+                $app['last_error'] = null;
+                $app['next_action'] = 'Launch Application';
+                $app['next_action_key'] = 'launch';
             }
 
             $enriched[] = $app;
@@ -449,6 +634,22 @@ class AppHubController {
         $sourceKey = self::resolveSourceKey($app['name'] ?? '', $app['app_url'] ?? '');
         if (!$sourceKey) {
             Response::error('This application is a generic web shortcut and does not support portal authentication.', 400);
+        }
+
+        if ($sourceKey === 'gmail') {
+            require_once __DIR__ . '/GmailController.php';
+            require_once __DIR__ . '/../services/gmail/GmailOAuthService.php';
+            $oauth = new \Cockpit\Services\Gmail\GmailOAuthService($db);
+            $userId = (int)($currentUser['id'] ?? 1);
+            $authRes = $oauth->generateAuthUrl($tenantId, $userId);
+            if (!$authRes['success']) {
+                Response::error($authRes['message'] ?? 'Google OAuth Client ID is not configured.', 400, [
+                    'source_key' => 'gmail',
+                    'redirect_uri' => \Cockpit\Services\Gmail\GmailOAuthService::getCanonicalRedirectUri(),
+                    'scopes' => \Cockpit\Services\Gmail\GmailOAuthService::APPROVED_SCOPES
+                ]);
+            }
+            Response::success($authRes, 'Google OAuth authorization initiated');
         }
 
         $input = json_decode(file_get_contents('php://input'), true) ?? [];
@@ -539,6 +740,170 @@ class AppHubController {
                 'has_stored_credentials' => true,
                 'message' => 'Successfully authenticated with EAF Connect (https://eafconnect.com). Active session verified and securely encrypted (AES-256-GCM).'
             ], 'EAF Connect authenticated successfully');
+        } elseif ($sourceKey === 'bni') {
+            $driver = self::getBNIDriver();
+            $authResult = $driver->authenticateSession($username, $password);
+
+            if (($authResult['status'] ?? '') === 'captcha_required') {
+                $db->prepare("INSERT INTO lead_platform_sessions (tenant_id, source_key, session_status, last_validated_at)
+                    VALUES (?, 'bni', 'captcha_required', NOW())
+                    ON DUPLICATE KEY UPDATE session_status = 'captcha_required', last_validated_at = NOW()")
+                    ->execute([$tenantId]);
+
+                $db->prepare("UPDATE connected_apps SET connection_status = 'captcha_required', updated_at = NOW() WHERE id = ?")
+                    ->execute([$id]);
+
+                Response::error('Security challenge or Cloudflare bot check detected on BNI Connect. Interactive challenge required in browser.', 403, [
+                    'session_status' => 'captcha_required',
+                    'connection_status' => 'captcha_required',
+                    'source_key' => 'bni'
+                ]);
+            }
+
+            if (($authResult['status'] ?? '') !== 'active') {
+                $errMsg = $authResult['message'] ?? 'Invalid BNI Connect username or password.';
+
+                $db->prepare("UPDATE lead_sources_config SET status = 'auth_required', last_error_message = ?, last_error_at = NOW(), updated_at = NOW() WHERE tenant_id = ? AND source_key = 'bni'")
+                    ->execute([$errMsg, $tenantId]);
+
+                $db->prepare("INSERT INTO lead_platform_sessions (tenant_id, source_key, session_status, encrypted_session_data, last_validated_at)
+                    VALUES (?, 'bni', 'expired', NULL, NOW())
+                    ON DUPLICATE KEY UPDATE session_status = 'expired', encrypted_session_data = NULL, last_validated_at = NOW()")
+                    ->execute([$tenantId]);
+
+                $db->prepare("UPDATE connected_apps SET connection_status = 'auth_required', updated_at = NOW() WHERE id = ?")
+                    ->execute([$id]);
+
+                Response::error('Authentication failed: ' . $errMsg, 401, [
+                    'session_status' => 'expired',
+                    'connection_status' => 'auth_required',
+                    'source_key' => 'bni',
+                    'reason' => $authResult['reason'] ?? 'auth_failed',
+                    'diagnostics' => $authResult['diagnostics'] ?? null
+                ]);
+            }
+
+            // Live Authentication Succeeded for BNI Connect
+            $sessionPayload = [
+                'username' => $username,
+                'email' => $username,
+                'password' => $password,
+                'access_token' => $authResult['access_token'] ?? null,
+                'refresh_token' => $authResult['refresh_token'] ?? null,
+                'expires_in' => $authResult['expires_in'] ?? null,
+                'cookies' => $authResult['cookies'] ?? [],
+                'cookie_jar' => $authResult['cookie_jar'] ?? '',
+                'is_live' => true,
+                'authenticated_at' => date('Y-m-d H:i:s')
+            ];
+            $encrypted = Encryption::encrypt(json_encode($sessionPayload));
+
+            $sStmt = $db->prepare("INSERT INTO lead_platform_sessions 
+                (tenant_id, source_key, session_status, encrypted_session_data, last_validated_at)
+                VALUES (?, 'bni', 'active', ?, NOW())
+                ON DUPLICATE KEY UPDATE 
+                    session_status = 'active',
+                    encrypted_session_data = VALUES(encrypted_session_data),
+                    last_validated_at = NOW()");
+            $sStmt->execute([$tenantId, $encrypted]);
+
+            $cStmt = $db->prepare("UPDATE lead_sources_config 
+                SET encrypted_credentials = ?, status = 'connected', last_error_message = NULL, last_error_at = NULL, updated_at = NOW()
+                WHERE tenant_id = ? AND source_key = 'bni'");
+            $cStmt->execute([$encrypted, $tenantId]);
+
+            $db->prepare("UPDATE connected_apps SET connection_status = 'connected', updated_at = NOW() WHERE id = ?")
+                ->execute([$id]);
+
+            Response::success([
+                'id' => $id,
+                'source_key' => 'bni',
+                'session_status' => 'active',
+                'connection_status' => 'connected',
+                'has_stored_credentials' => true,
+                'message' => 'Successfully authenticated with BNI Connect (https://www.bniconnectglobal.com). Active session verified and securely encrypted (AES-256-GCM).'
+            ], 'BNI Connect authenticated successfully');
+        } elseif ($sourceKey === 'kvv') {
+            $driver = self::getKVVDriver();
+            $authResult = $driver->authenticateSession($username, $password);
+
+            if (($authResult['status'] ?? '') === 'captcha_required') {
+                $db->prepare("INSERT INTO lead_platform_sessions (tenant_id, source_key, session_status, last_validated_at)
+                    VALUES (?, 'kvv', 'captcha_required', NOW())
+                    ON DUPLICATE KEY UPDATE session_status = 'captcha_required', last_validated_at = NOW()")
+                    ->execute([$tenantId]);
+
+                $db->prepare("UPDATE connected_apps SET connection_status = 'captcha_required', updated_at = NOW() WHERE id = ?")
+                    ->execute([$id]);
+
+                Response::error('Security challenge detected on KVV Portal. Interactive verification required in browser.', 403, [
+                    'session_status' => 'captcha_required',
+                    'connection_status' => 'captcha_required',
+                    'source_key' => 'kvv'
+                ]);
+            }
+
+            if (($authResult['status'] ?? '') !== 'active') {
+                $errMsg = $authResult['message'] ?? 'Invalid KVV mobile number or password.';
+
+                $db->prepare("UPDATE lead_sources_config SET status = 'auth_required', last_error_message = ?, last_error_at = NOW(), updated_at = NOW() WHERE tenant_id = ? AND source_key = 'kvv'")
+                    ->execute([$errMsg, $tenantId]);
+
+                $db->prepare("INSERT INTO lead_platform_sessions (tenant_id, source_key, session_status, encrypted_session_data, last_validated_at)
+                    VALUES (?, 'kvv', 'expired', NULL, NOW())
+                    ON DUPLICATE KEY UPDATE session_status = 'expired', encrypted_session_data = NULL, last_validated_at = NOW()")
+                    ->execute([$tenantId]);
+
+                $db->prepare("UPDATE connected_apps SET connection_status = 'auth_required', updated_at = NOW() WHERE id = ?")
+                    ->execute([$id]);
+
+                Response::error('Authentication failed: ' . $errMsg, 401, [
+                    'session_status' => 'expired',
+                    'connection_status' => 'auth_required',
+                    'source_key' => 'kvv',
+                    'reason' => $authResult['reason'] ?? 'auth_failed',
+                    'diagnostics' => $authResult['diagnostics'] ?? null
+                ]);
+            }
+
+            // Live Authentication Succeeded for KVV Portal
+            $sessionPayload = [
+                'mobile_number' => $authResult['mobile_number'] ?? $username,
+                'username' => $username,
+                'password' => $password,
+                'token' => $authResult['token'] ?? null,
+                'user' => $authResult['user'] ?? [],
+                'user_id' => $authResult['user_id'] ?? null,
+                'is_live' => true,
+                'authenticated_at' => date('Y-m-d H:i:s')
+            ];
+            $encrypted = Encryption::encrypt(json_encode($sessionPayload));
+
+            $sStmt = $db->prepare("INSERT INTO lead_platform_sessions 
+                (tenant_id, source_key, session_status, encrypted_session_data, last_validated_at)
+                VALUES (?, 'kvv', 'active', ?, NOW())
+                ON DUPLICATE KEY UPDATE 
+                    session_status = 'active',
+                    encrypted_session_data = VALUES(encrypted_session_data),
+                    last_validated_at = NOW()");
+            $sStmt->execute([$tenantId, $encrypted]);
+
+            $cStmt = $db->prepare("UPDATE lead_sources_config 
+                SET encrypted_credentials = ?, status = 'connected', last_error_message = NULL, last_error_at = NULL, updated_at = NOW()
+                WHERE tenant_id = ? AND source_key = 'kvv'");
+            $cStmt->execute([$encrypted, $tenantId]);
+
+            $db->prepare("UPDATE connected_apps SET connection_status = 'connected', updated_at = NOW() WHERE id = ?")
+                ->execute([$id]);
+
+            Response::success([
+                'id' => $id,
+                'source_key' => 'kvv',
+                'session_status' => 'active',
+                'connection_status' => 'connected',
+                'has_stored_credentials' => true,
+                'message' => 'Successfully authenticated with KVV Portal (https://app.kannadigaravyaapaaravedike.com). Active member session verified and securely encrypted (AES-256-GCM).'
+            ], 'KVV Portal authenticated successfully');
         }
 
         // Encrypt credentials using AES-256-GCM for platforms awaiting their phase
@@ -613,7 +978,7 @@ class AppHubController {
         // Validate decryption without revealing secrets
         try {
             $dec = json_decode((string)Encryption::decrypt($sess['encrypted_session_data']), true);
-            if (!is_array($dec) || (empty($dec['email']) && empty($dec['cookie_jar']))) {
+            if (!is_array($dec) || (empty($dec['email']) && empty($dec['cookie_jar']) && empty($dec['username']) && empty($dec['mobile_number']) && empty($dec['token']) && empty($dec['access_token']))) {
                 Response::error('Stored credentials format invalid. Please reconnect.', 400);
             }
         } catch (\Throwable $e) {
@@ -681,6 +1046,153 @@ class AppHubController {
             ]);
         }
 
+        if ($sourceKey === 'bni') {
+            $driver = self::getBNIDriver();
+            $validation = $driver->validateSession($tenantId, $dec);
+
+            if (($validation['status'] ?? '') === 'active') {
+                if (!empty($validation['session_updates'])) {
+                    $dec = array_merge($dec, $validation['session_updates']);
+                    $newEncrypted = Encryption::encrypt(json_encode($dec));
+                    $db->prepare("UPDATE lead_platform_sessions SET encrypted_session_data = ?, session_status = 'active', last_validated_at = NOW() WHERE tenant_id = ? AND source_key = 'bni'")
+                        ->execute([$newEncrypted, $tenantId]);
+                } else {
+                    $db->prepare("UPDATE lead_platform_sessions SET last_validated_at = NOW() WHERE tenant_id = ? AND source_key = 'bni'")
+                        ->execute([$tenantId]);
+                }
+
+                $db->prepare("UPDATE lead_sources_config SET status = 'connected', last_error_message = NULL, last_error_at = NULL, updated_at = NOW() WHERE tenant_id = ? AND source_key = 'bni'")
+                    ->execute([$tenantId]);
+
+                $db->prepare("UPDATE connected_apps SET connection_status = 'connected', updated_at = NOW() WHERE id = ?")
+                    ->execute([$id]);
+
+                Response::success([
+                    'id' => $id,
+                    'source_key' => 'bni',
+                    'session_status' => 'active',
+                    'connection_status' => 'connected',
+                    'has_stored_credentials' => true,
+                    'message' => 'BNI Connect session is active and verified.'
+                ], 'BNI session active and verified');
+            }
+
+            if (($validation['status'] ?? '') === 'captcha_required') {
+                $db->prepare("UPDATE lead_platform_sessions SET session_status = 'captcha_required', last_validated_at = NOW() WHERE tenant_id = ? AND source_key = 'bni'")
+                    ->execute([$tenantId]);
+                $db->prepare("UPDATE lead_sources_config SET status = 'auth_required', last_error_message = 'Security challenge required', last_error_at = NOW(), updated_at = NOW() WHERE tenant_id = ? AND source_key = 'bni'")
+                    ->execute([$tenantId]);
+                $db->prepare("UPDATE connected_apps SET connection_status = 'captcha_required', updated_at = NOW() WHERE id = ?")
+                    ->execute([$id]);
+
+                Response::error('Security challenge or Cloudflare verification required on BNI Connect.', 403, [
+                    'session_status' => 'captcha_required',
+                    'connection_status' => 'captcha_required'
+                ]);
+            }
+
+            $errMsg = $validation['message'] ?? 'BNI Connect session has expired or is invalid. Re-authentication required.';
+            $db->prepare("UPDATE lead_platform_sessions SET session_status = 'expired', last_validated_at = NOW() WHERE tenant_id = ? AND source_key = 'bni'")
+                ->execute([$tenantId]);
+            $db->prepare("UPDATE lead_sources_config SET status = 'auth_required', last_error_message = ?, last_error_at = NOW(), updated_at = NOW() WHERE tenant_id = ? AND source_key = 'bni'")
+                ->execute([$errMsg, $tenantId]);
+            $db->prepare("UPDATE connected_apps SET connection_status = 'expired', updated_at = NOW() WHERE id = ?")
+                ->execute([$id]);
+
+            Response::error($errMsg, 401, [
+                'session_status' => 'expired',
+                'connection_status' => 'expired',
+                'message' => $errMsg
+            ]);
+        }
+
+        if ($sourceKey === 'kvv') {
+            $driver = self::getKVVDriver();
+            $validation = $driver->validateSession($tenantId, $dec);
+
+            if (($validation['status'] ?? '') === 'active') {
+                if (!empty($validation['session_updates'])) {
+                    $dec = array_merge($dec, $validation['session_updates']);
+                    $newEncrypted = Encryption::encrypt(json_encode($dec));
+                    $db->prepare("UPDATE lead_platform_sessions SET encrypted_session_data = ?, session_status = 'active', last_validated_at = NOW() WHERE tenant_id = ? AND source_key = 'kvv'")
+                        ->execute([$newEncrypted, $tenantId]);
+                } else {
+                    $db->prepare("UPDATE lead_platform_sessions SET last_validated_at = NOW() WHERE tenant_id = ? AND source_key = 'kvv'")
+                        ->execute([$tenantId]);
+                }
+
+                $db->prepare("UPDATE lead_sources_config SET status = 'connected', last_error_message = NULL, last_error_at = NULL, updated_at = NOW() WHERE tenant_id = ? AND source_key = 'kvv'")
+                    ->execute([$tenantId]);
+
+                $db->prepare("UPDATE connected_apps SET connection_status = 'connected', updated_at = NOW() WHERE id = ?")
+                    ->execute([$id]);
+
+                Response::success([
+                    'id' => $id,
+                    'source_key' => 'kvv',
+                    'session_status' => 'active',
+                    'connection_status' => 'connected',
+                    'has_stored_credentials' => true,
+                    'message' => $validation['message'] ?? 'KVV Portal session is active and verified.'
+                ], 'KVV session active and verified');
+            }
+
+            if (($validation['status'] ?? '') === 'captcha_required') {
+                $db->prepare("UPDATE lead_platform_sessions SET session_status = 'captcha_required', last_validated_at = NOW() WHERE tenant_id = ? AND source_key = 'kvv'")
+                    ->execute([$tenantId]);
+                $db->prepare("UPDATE lead_sources_config SET status = 'auth_required', last_error_message = 'Security challenge required', last_error_at = NOW(), updated_at = NOW() WHERE tenant_id = ? AND source_key = 'kvv'")
+                    ->execute([$tenantId]);
+                $db->prepare("UPDATE connected_apps SET connection_status = 'captcha_required', updated_at = NOW() WHERE id = ?")
+                    ->execute([$id]);
+
+                Response::error('Security challenge detected on KVV Portal. Please complete challenge in browser.', 403, [
+                    'session_status' => 'captcha_required',
+                    'connection_status' => 'captcha_required'
+                ]);
+            }
+
+            $errMsg = $validation['message'] ?? 'KVV Portal session has expired or is invalid. Re-authentication required.';
+            $db->prepare("UPDATE lead_platform_sessions SET session_status = 'expired', last_validated_at = NOW() WHERE tenant_id = ? AND source_key = 'kvv'")
+                ->execute([$tenantId]);
+            $db->prepare("UPDATE lead_sources_config SET status = 'auth_required', last_error_message = ?, last_error_at = NOW(), updated_at = NOW() WHERE tenant_id = ? AND source_key = 'kvv'")
+                ->execute([$errMsg, $tenantId]);
+            $db->prepare("UPDATE connected_apps SET connection_status = 'expired', updated_at = NOW() WHERE id = ?")
+                ->execute([$id]);
+
+            Response::error($errMsg, 401, [
+                'session_status' => 'expired',
+                'connection_status' => 'expired',
+                'message' => $errMsg
+            ]);
+        }
+
+        if ($sourceKey === 'gmail') {
+            require_once __DIR__ . '/../services/gmail/GmailOAuthService.php';
+            require_once __DIR__ . '/../services/gmail/GmailApiService.php';
+            $oauth = new \Cockpit\Services\Gmail\GmailOAuthService($db);
+            $token = $oauth->getValidAccessToken($tenantId);
+
+            if ($token) {
+                $api = new \Cockpit\Services\Gmail\GmailApiService();
+                $prof = $api->getProfile($token);
+                if ($prof['success']) {
+                    Response::success([
+                        'id' => $id,
+                        'source_key' => 'gmail',
+                        'session_status' => 'active',
+                        'connection_status' => 'connected',
+                        'email' => $prof['data']['emailAddress'] ?? '',
+                        'message' => 'Active Gmail session verified via Google OAuth 2.0.'
+                    ], 'Gmail session verified');
+                }
+            }
+
+            Response::error('No active Google OAuth session found for Gmail. Re-authentication required.', 401, [
+                'session_status' => 'auth_required',
+                'connection_status' => 'auth_required'
+            ]);
+        }
+
         // Honest reporting per Strict Rules for other platforms
         Response::success([
             'id' => $id,
@@ -720,6 +1232,11 @@ class AppHubController {
         $db->prepare("UPDATE connected_apps SET connection_status = 'disconnected', updated_at = NOW() WHERE id = ?")
             ->execute([$id]);
 
+        if ($sourceKey === 'gmail') {
+            $db->prepare("UPDATE gmail_accounts SET connection_status = 'disconnected', encrypted_tokens = NULL, updated_at = NOW() WHERE tenant_id = ?")
+                ->execute([$tenantId]);
+        }
+
         Response::success([
             'id' => $id,
             'source_key' => $sourceKey,
@@ -749,12 +1266,133 @@ class AppHubController {
             Response::error('This application does not support portal sync.', 400);
         }
 
-        // Honest phase reporting: Live automated lead sync is Phase 4
-        Response::error("Automated live synchronization for {$app['name']} is scheduled for Phase 4. Please complete portal connection and authentication in Phase 2 first.", 400, [
-            'id' => $id,
-            'source_key' => $sourceKey,
-            'phase' => 'Phase 4 requirement'
-        ]);
+        // BNI Connect: Run live sync via SyncEngine / BNIConnector
+        if ($sourceKey === 'bni') {
+            require_once __DIR__ . '/../services/connectors/LeadConnectorInterface.php';
+            require_once __DIR__ . '/../services/automation/PlatformAutomationDriverInterface.php';
+            require_once __DIR__ . '/../services/automation/BNIWebAutomationDriver.php';
+            require_once __DIR__ . '/../services/connectors/BNIConnector.php';
+            require_once __DIR__ . '/../services/SyncEngine.php';
+
+            $res = \Cockpit\Services\SyncEngine::syncSource($tenantId, 'bni', 'manual');
+
+            if (!empty($res['success'])) {
+                $db->prepare("UPDATE connected_apps SET connection_status = 'connected', updated_at = NOW() WHERE id = ?")
+                    ->execute([$id]);
+
+                Response::success([
+                    'app_id' => $id,
+                    'source_key' => 'bni',
+                    'leads_fetched' => $res['leads_fetched'] ?? 0,
+                    'leads_created' => $res['leads_created'] ?? 0,
+                    'leads_updated' => $res['leads_updated'] ?? 0,
+                    'leads_skipped' => $res['leads_skipped'] ?? 0,
+                    'last_synced_at' => date('Y-m-d H:i:s'),
+                    'sync_status' => 'sync_successful',
+                    'message' => $res['message'] ?? 'BNI Connect sync completed.'
+                ], 'BNI Connect sync completed successfully');
+            } else {
+                Response::error($res['error'] ?? ($res['message'] ?? 'BNI Connect sync failed.'), 400, [
+                    'source_key' => 'bni',
+                    'sync_status' => 'sync_failed'
+                ]);
+            }
+        }
+
+        // KVV Portal: Run live sync via SyncEngine / KVVConnector
+        if ($sourceKey === 'kvv') {
+            require_once __DIR__ . '/../services/connectors/LeadConnectorInterface.php';
+            require_once __DIR__ . '/../services/automation/PlatformAutomationDriverInterface.php';
+            require_once __DIR__ . '/../services/automation/KVVWebAutomationDriver.php';
+            require_once __DIR__ . '/../services/connectors/KVVConnector.php';
+            require_once __DIR__ . '/../services/SyncEngine.php';
+
+            $res = \Cockpit\Services\SyncEngine::syncSource($tenantId, 'kvv', 'manual');
+
+            if (!empty($res['success'])) {
+                $db->prepare("UPDATE connected_apps SET connection_status = 'connected', updated_at = NOW() WHERE id = ?")
+                    ->execute([$id]);
+
+                Response::success([
+                    'app_id' => $id,
+                    'source_key' => 'kvv',
+                    'leads_fetched' => $res['leads_fetched'] ?? 0,
+                    'leads_created' => $res['leads_created'] ?? 0,
+                    'leads_updated' => $res['leads_updated'] ?? 0,
+                    'leads_skipped' => $res['leads_skipped'] ?? 0,
+                    'last_synced_at' => date('Y-m-d H:i:s'),
+                    'sync_status' => 'sync_successful',
+                    'message' => $res['message'] ?? 'KVV Portal sync completed.'
+                ], 'KVV Portal sync completed successfully');
+            } else {
+                Response::error($res['error'] ?? ($res['message'] ?? 'KVV Portal sync failed.'), 400, [
+                    'source_key' => 'kvv',
+                    'sync_status' => 'sync_failed'
+                ]);
+            }
+        }
+
+        // EAF Connect: Run real live sync via SyncEngine / EAFConnector
+        if ($sourceKey === 'eaf') {
+            require_once __DIR__ . '/../services/connectors/LeadConnectorInterface.php';
+            require_once __DIR__ . '/../services/automation/PlatformAutomationDriverInterface.php';
+            require_once __DIR__ . '/../services/automation/EAFWebAutomationDriver.php';
+            require_once __DIR__ . '/../services/connectors/EAFConnector.php';
+            require_once __DIR__ . '/../services/SyncEngine.php';
+
+            $res = \Cockpit\Services\SyncEngine::syncSource($tenantId, 'eaf', 'manual');
+
+            if (!empty($res['success'])) {
+                // Update connected_apps status
+                $db->prepare("UPDATE connected_apps SET connection_status = 'connected', updated_at = NOW() WHERE id = ?")
+                    ->execute([$id]);
+
+                Response::success([
+                    'app_id' => $id,
+                    'source_key' => 'eaf',
+                    'leads_fetched' => $res['leads_fetched'] ?? 0,
+                    'leads_created' => $res['leads_created'] ?? 0,
+                    'leads_updated' => $res['leads_updated'] ?? 0,
+                    'leads_skipped' => $res['leads_skipped'] ?? 0,
+                    'last_synced_at' => date('Y-m-d H:i:s'),
+                    'sync_status' => 'sync_successful',
+                    'execution_time_ms' => $res['execution_time_ms'] ?? 0
+                ], "EAF Connect synchronized successfully! ({$res['leads_fetched']} referrals processed)");
+            } else {
+                Response::error($res['message'] ?? $res['error'] ?? 'EAF Connect synchronization failed', 400, [
+                    'source_key' => 'eaf',
+                    'sync_status' => 'sync_failed',
+                    'details' => $res
+                ]);
+            }
+        }
+
+        // Gmail: Run live metadata sync via GmailController
+        if ($sourceKey === 'gmail') {
+            require_once __DIR__ . '/GmailController.php';
+            $res = GmailController::syncInternal($tenantId);
+
+            if (!empty($res['success'])) {
+                $db->prepare("UPDATE connected_apps SET connection_status = 'connected', updated_at = NOW() WHERE id = ?")
+                    ->execute([$id]);
+
+                Response::success([
+                    'app_id' => $id,
+                    'source_key' => 'gmail',
+                    'messages_synced' => $res['messages_synced'] ?? 0,
+                    'last_synced_at' => $res['last_sync_at'] ?? date('Y-m-d H:i:s'),
+                    'sync_status' => 'sync_successful',
+                    'message' => "Gmail synchronized successfully ({$res['messages_synced']} messages processed)."
+                ], 'Gmail synchronized successfully');
+            } else {
+                Response::error($res['error'] ?? 'Gmail sync failed', 400, [
+                    'source_key' => 'gmail',
+                    'sync_status' => 'sync_failed'
+                ]);
+            }
+        }
+
+        Response::error("Portal synchronization not implemented for {$app['name']}.", 400);
     }
 
     public static function getPortalReferrals(array $currentUser, int $id): void {

@@ -16,7 +16,8 @@ import {
   ChevronRight,
   X,
   Zap,
-  RefreshCw
+  RefreshCw,
+  Mail
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -24,6 +25,7 @@ export type NavTab =
   | 'dashboard' 
   | 'leads'
   | 'integrations'
+  | 'gmail'
   | 'invoices' 
   | 'crm' 
   | 'hrm' 
@@ -59,6 +61,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpe
     { id: 'tasks' as NavTab, label: 'Tasks & Priority', icon: CheckSquare },
     { id: 'followups' as NavTab, label: 'Follow-up Reminders', icon: PhoneCall },
     { id: 'apps' as NavTab, label: 'Connected Apps Hub', icon: Grid },
+    { id: 'gmail' as NavTab, label: 'Gmail Workspace', icon: Mail },
     ...(isSuperAdmin ? [{ id: 'superadmin' as NavTab, label: 'Super Admin Fleet', icon: ShieldAlert, badge: 'Root', badgeAmber: true }] : []),
     { id: 'settings' as NavTab, label: 'Workspace Settings', icon: Settings },
   ];

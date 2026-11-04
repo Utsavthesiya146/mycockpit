@@ -3,6 +3,9 @@ declare(strict_types=1);
 
 namespace Cockpit\Services\Connectors;
 
+require_once __DIR__ . '/../automation/PlatformAutomationDriverInterface.php';
+require_once __DIR__ . '/../automation/EAFWebAutomationDriver.php';
+
 use Cockpit\Config\Database;
 use Cockpit\Utils\Encryption;
 use PDO;
@@ -32,18 +35,37 @@ class EAFConnector implements LeadConnectorInterface {
             $creds = array_merge($creds, $config['credentials']);
         }
 
+        // If credentials not found in config, check lead_platform_sessions ONLY if config has database ID
+        $tenantId = !empty($config['tenant_id']) ? (int)$config['tenant_id'] : 1;
+        if (!empty($config['id']) && empty($creds['email']) && empty($creds['cookie_jar'])) {
+            try {
+                $db = Database::getConnection();
+                $sStmt = $db->prepare("SELECT encrypted_session_data FROM lead_platform_sessions WHERE tenant_id = ? AND source_key = 'eaf' LIMIT 1");
+                $sStmt->execute([$tenantId]);
+                $sessRow = $sStmt->fetch(PDO::FETCH_ASSOC);
+                if (!empty($sessRow['encrypted_session_data'])) {
+                    $sessDec = Encryption::decrypt($sessRow['encrypted_session_data']);
+                    if ($sessDec) {
+                        $creds = array_merge(json_decode($sessDec, true) ?: [], $creds);
+                    }
+                }
+            } catch (\Throwable $e) {
+                // Ignore fallback lookup errors
+            }
+        }
+
         // Defaults for EAF
-        $baseUrl = rtrim($creds['base_url'] ?? 'http://localhost/eaf', '/');
+        $baseUrl = rtrim($creds['base_url'] ?? 'https://eafconnect.com', '/');
         $email = trim($creds['email'] ?? '');
         $password = (string)($creds['password'] ?? '');
         $apiToken = trim($creds['api_token'] ?? '');
 
-        return [
+        return array_merge($creds, [
             'base_url' => $baseUrl,
             'email' => $email,
             'password' => $password,
             'api_token' => $apiToken
-        ];
+        ]);
     }
 
     /**
@@ -142,7 +164,35 @@ class EAFConnector implements LeadConnectorInterface {
      * Test connection to EAF Connect
      */
     public function testConnection(int $tenantId, array $config): array {
+        $config['tenant_id'] = $tenantId;
         $creds = $this->resolveCredentials($config);
+
+        // 1. If web automation session or member credentials exist, validate via EAFWebAutomationDriver
+        if (!empty($creds['cookie_jar']) || !empty($creds['cookies']) || (!empty($creds['email']) && !empty($creds['password']))) {
+            $driver = new \Cockpit\Services\Automation\EAFWebAutomationDriver($creds['base_url'] ?? 'https://eafconnect.com');
+            $val = $driver->validateSession($tenantId, $creds);
+            if (($val['status'] ?? '') === 'active') {
+                $refs = $driver->fetchReceivedReferrals($tenantId, $creds);
+                $count = $refs['count'] ?? 0;
+                return [
+                    'success' => true,
+                    'message' => "Successfully connected to EAF Connect! Active member session verified ({$count} received referrals available).",
+                    'details' => [
+                        'status' => 'connected',
+                        'base_url' => $creds['base_url'],
+                        'received_referrals_found' => $count,
+                        'email' => $creds['email'] ?? null
+                    ]
+                ];
+            }
+            return [
+                'success' => false,
+                'message' => 'Connection test failed: ' . ($val['message'] ?? 'Unable to verify session'),
+                'details' => ['status' => $val['status'] ?? 'auth_required']
+            ];
+        }
+
+        // 2. Fallback to API Token / REST login
         $auth = $this->getValidToken($creds);
 
         if (!$auth['success']) {
@@ -187,30 +237,56 @@ class EAFConnector implements LeadConnectorInterface {
      * Automatic pull synchronization of received referrals into crm_leads
      */
     public function sync(int $tenantId, array $config, ?string $checkpoint = null): array {
+        $config['tenant_id'] = $tenantId;
         $creds = $this->resolveCredentials($config);
-        $auth = $this->getValidToken($creds);
 
-        if (!$auth['success']) {
-            return [
-                'success' => false,
-                'leads_fetched' => 0,
-                'leads_created' => 0,
-                'leads_updated' => 0,
-                'leads_skipped' => 0,
-                'new_checkpoint' => $checkpoint,
-                'error' => 'Authentication failed: ' . $auth['message']
-            ];
+        $referrals = null;
+        // 1. Try web automation driver if session or credentials exist
+        if (!empty($creds['cookie_jar']) || !empty($creds['cookies']) || (!empty($creds['email']) && !empty($creds['password']))) {
+            $driver = new \Cockpit\Services\Automation\EAFWebAutomationDriver($creds['base_url'] ?? 'https://eafconnect.com');
+            $fetchRes = $driver->fetchReceivedReferrals($tenantId, $creds);
+            if ($fetchRes['success']) {
+                $referrals = $fetchRes['referrals'];
+            }
         }
 
-        $token = $auth['token'];
-        $connectUrl = $creds['base_url'] . '/api/v1/connect';
-        $res = $this->httpRequest($connectUrl, 'GET', [
-            'Authorization' => "Bearer {$token}",
-            'Accept' => 'application/json'
-        ]);
+        // 2. Fallback to API endpoint if referrals not fetched yet
+        if ($referrals === null) {
+            $auth = $this->getValidToken($creds);
+            if (!$auth['success']) {
+                return [
+                    'success' => false,
+                    'leads_fetched' => 0,
+                    'leads_created' => 0,
+                    'leads_updated' => 0,
+                    'leads_skipped' => 0,
+                    'new_checkpoint' => $checkpoint,
+                    'error' => 'Authentication failed: ' . $auth['message']
+                ];
+            }
 
-        $referrals = $res['data']['data']['received'] ?? $res['data']['received'] ?? null;
-        if ($res['status'] !== 'success' || !is_array($referrals)) {
+            $token = $auth['token'];
+            $connectUrl = $creds['base_url'] . '/api/v1/connect';
+            $res = $this->httpRequest($connectUrl, 'GET', [
+                'Authorization' => "Bearer {$token}",
+                'Accept' => 'application/json'
+            ]);
+
+            $referrals = $res['data']['data']['received'] ?? $res['data']['received'] ?? null;
+            if ($res['status'] !== 'success' || !is_array($referrals)) {
+                return [
+                    'success' => false,
+                    'leads_fetched' => 0,
+                    'leads_created' => 0,
+                    'leads_updated' => 0,
+                    'leads_skipped' => 0,
+                    'new_checkpoint' => $checkpoint,
+                    'error' => 'Failed to retrieve received referrals: ' . ($res['error'] ?? 'Invalid response')
+                ];
+            }
+        }
+
+        if (!is_array($referrals)) {
             return [
                 'success' => false,
                 'leads_fetched' => 0,
@@ -218,7 +294,7 @@ class EAFConnector implements LeadConnectorInterface {
                 'leads_updated' => 0,
                 'leads_skipped' => 0,
                 'new_checkpoint' => $checkpoint,
-                'error' => 'Failed to retrieve received referrals: ' . ($res['error'] ?? 'Invalid response')
+                'error' => 'Failed to retrieve received referrals from EAF Connect'
             ];
         }
 
@@ -234,7 +310,7 @@ class EAFConnector implements LeadConnectorInterface {
 
         foreach ($referrals as $ref) {
             $refCode = trim($ref['referral_code'] ?? '');
-            $fromName = trim($ref['from_name'] ?? $ref['name'] ?? 'EAF Member');
+            $fromName = trim($ref['from_name'] ?? $ref['from_user'] ?? $ref['name'] ?? 'EAF Member');
             $fromEmail = trim($ref['from_email'] ?? $ref['email'] ?? '');
             $fromPhone = trim($ref['contact_number'] ?? $ref['from_phone'] ?? $ref['phone'] ?? '');
             $businessType = trim($ref['business'] ?? $ref['business_type'] ?? 'Business Referral');

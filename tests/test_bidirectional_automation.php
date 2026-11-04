@@ -40,8 +40,11 @@ echo "=======================================================\n";
 echo "   BIDIRECTIONAL AUTOMATION & WRITEBACK TEST SUITE     \n";
 echo "=======================================================\n\n";
 
-$tenantIdA = 1;
-$tenantIdB = 2;
+$tenantIdA = 991;
+$tenantIdB = 992;
+
+$db->query("INSERT INTO tenants (id, name, slug, status) VALUES (991, 'Test Tenant 991', 'test991', 'active') ON DUPLICATE KEY UPDATE status = 'active'");
+$db->query("INSERT INTO tenants (id, name, slug, status) VALUES (992, 'Test Tenant 992', 'test992', 'active') ON DUPLICATE KEY UPDATE status = 'active'");
 
 // [1/7] Hosting Environment Evaluation
 echo "[1/7] Testing Hosting Environment Evaluator & Shared Hosting Heuristics...\n";

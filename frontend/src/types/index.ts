@@ -308,7 +308,7 @@ export interface ConnectedApp {
   icon_name: string;
   custom_icon_url?: string;
   app_url: string;
-  connection_status: 'connected' | 'launcher_only' | 'config_required' | 'unsupported' | 'disconnected' | 'expired' | 'captcha_required' | 'auth_required' | 'mfa_required' | 'error';
+  connection_status: 'connected' | 'launcher_only' | 'config_required' | 'unsupported' | 'disconnected' | 'expired' | 'captcha_required' | 'auth_required' | 'mfa_required' | 'error' | 'api_access_required' | 'manual_import_only';
   auth_type: 'direct_link' | 'oauth' | 'api_key' | 'credentials' | 'session';
   is_pinned: number;
   settings_json?: Record<string, any>;
@@ -319,6 +319,13 @@ export interface ConnectedApp {
   last_synced_at?: string | null;
   last_error?: string | null;
   sync_count?: number;
+  auth_status?: 'connected' | 'auth_required' | 'api_access_required' | 'manual_import_only' | 'disconnected' | 'expired' | 'captcha_required' | 'launcher_only' | string;
+  integration_capability?: string;
+  sync_status?: 'sync_successful' | 'sync_failed' | 'sync_never_run' | 'api_access_required' | 'manual_import_only' | 'not_applicable' | string;
+  last_sync_display?: string;
+  next_action?: string;
+  next_action_key?: string;
+  connected_email?: string;
 }
 
 export interface AIMessage {
@@ -336,3 +343,52 @@ export interface AIConversation {
   created_at: string;
   updated_at: string;
 }
+
+export interface GmailAttachment {
+  filename: string;
+  mime_type: string;
+  size: number;
+  attachment_id: string;
+}
+
+export interface GmailMessage {
+  id: number;
+  message_id: string;
+  thread_id: string;
+  from_name?: string;
+  from_email?: string;
+  to_recipients?: string;
+  cc_recipients?: string;
+  bcc_recipients?: string;
+  subject: string;
+  snippet: string;
+  body_plain?: string;
+  body_html?: string;
+  date_sent: string;
+  is_read: boolean;
+  is_starred: boolean;
+  is_draft: boolean;
+  is_sent: boolean;
+  is_trash: boolean;
+  is_spam: boolean;
+  is_important: boolean;
+  has_attachments: boolean;
+  attachments?: GmailAttachment[];
+  labels?: string[];
+}
+
+export interface GmailStatus {
+  is_connected: boolean;
+  connection_status: 'connected' | 'disconnected' | 'expired' | 'auth_required';
+  is_configured: boolean;
+  email_address?: string | null;
+  account_name?: string | null;
+  last_sync_at?: string | null;
+  sync_status?: string;
+  unread_count: number;
+  messages_count: number;
+  last_error?: string | null;
+  redirect_uri?: string;
+}
+
+export type GmailFolderType = 'inbox' | 'starred' | 'sent' | 'drafts' | 'important' | 'spam' | 'trash' | 'all';

@@ -41,6 +41,7 @@ require_once __DIR__ . '/../controllers/FollowupController.php';
 require_once __DIR__ . '/../controllers/InvoiceController.php';
 require_once __DIR__ . '/../controllers/AppHubController.php';
 require_once __DIR__ . '/../controllers/AIController.php';
+require_once __DIR__ . '/../controllers/GmailController.php';
 
 // PSR-4 Autoloader fallback for Cockpit namespace (case-safe across Windows, Linux, and Docker)
 spl_autoload_register(function (string $class): void {
@@ -77,6 +78,7 @@ use Cockpit\Controllers\FollowupController;
 use Cockpit\Controllers\InvoiceController;
 use Cockpit\Controllers\AppHubController;
 use Cockpit\Controllers\AIController;
+use Cockpit\Controllers\GmailController;
 
 // Handle CORS Headers
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '*';
@@ -137,6 +139,11 @@ try {
     // Public Lead Webhook Intake for SEO & Website Form Integrations
     if ($path === '/leads/webhook' && $method === 'POST') {
         LeadController::webhookIntake();
+    }
+
+    // Public Canonical Google OAuth 2.0 Callback
+    if ($path === '/gmail/oauth/callback' && $method === 'GET') {
+        GmailController::oauthCallback();
     }
 
     // Authenticated Endpoints (Strict JWT & Status Verification)
@@ -327,6 +334,53 @@ try {
     }
     if (preg_match('#^/ai/conversations/([0-9]+)$#', $path, $matches) && $method === 'GET') {
         AIController::getConversation($currentUser, (int)$matches[1]);
+    }
+
+    // Full Gmail Management Integration
+    if ($path === '/gmail/status' && $method === 'GET') {
+        GmailController::getStatus($currentUser);
+    }
+    if ($path === '/gmail/configure' && $method === 'POST') {
+        GmailController::configure($currentUser);
+    }
+    if ($path === '/gmail/auth-url' && $method === 'GET') {
+        GmailController::getAuthUrl($currentUser);
+    }
+    if ($path === '/gmail/disconnect' && $method === 'POST') {
+        GmailController::disconnect($currentUser);
+    }
+    if ($path === '/gmail/sync' && $method === 'POST') {
+        GmailController::sync($currentUser);
+    }
+    if ($path === '/gmail/messages' && $method === 'GET') {
+        GmailController::listMessages($currentUser);
+    }
+    if ($path === '/gmail/messages/send' && $method === 'POST') {
+        GmailController::sendMessage($currentUser);
+    }
+    if ($path === '/gmail/drafts' && $method === 'POST') {
+        GmailController::createDraft($currentUser);
+    }
+    if ($path === '/gmail/batch' && $method === 'POST') {
+        GmailController::batchAction($currentUser);
+    }
+    if ($path === '/gmail/labels' && $method === 'GET') {
+        GmailController::getLabels($currentUser);
+    }
+    if (preg_match('#^/gmail/messages/([a-zA-Z0-9_-]+)$#', $path, $matches) && $method === 'GET') {
+        GmailController::getMessage($currentUser, $matches[1]);
+    }
+    if (preg_match('#^/gmail/messages/([a-zA-Z0-9_-]+)/modify$#', $path, $matches) && $method === 'POST') {
+        GmailController::modifyMessage($currentUser, $matches[1]);
+    }
+    if (preg_match('#^/gmail/messages/([a-zA-Z0-9_-]+)/trash$#', $path, $matches) && $method === 'POST') {
+        GmailController::trashMessage($currentUser, $matches[1]);
+    }
+    if (preg_match('#^/gmail/messages/([a-zA-Z0-9_-]+)/untrash$#', $path, $matches) && $method === 'POST') {
+        GmailController::untrashMessage($currentUser, $matches[1]);
+    }
+    if (preg_match('#^/gmail/messages/([a-zA-Z0-9_-]+)/attachment/([a-zA-Z0-9_-]+)$#', $path, $matches) && $method === 'GET') {
+        GmailController::getAttachment($currentUser, $matches[1], $matches[2]);
     }
 
     // Route not found

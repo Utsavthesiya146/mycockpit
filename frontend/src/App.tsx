@@ -18,6 +18,7 @@ import { SuperAdmin } from './pages/SuperAdmin';
 import { SettingsPage } from './pages/Settings';
 import { Leads } from './pages/Leads';
 import { Integrations } from './pages/Integrations';
+import { GmailWorkspace } from './pages/GmailWorkspace';
 import type { NavTab } from './components/layout/Sidebar';
 import { App as CapApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
@@ -25,7 +26,15 @@ import { Capacitor } from '@capacitor/core';
 const AppContent: React.FC = () => {
   const { isAuthenticated, isLoading, user } = useAuth();
   const [activeTab, setActiveTab] = useState<NavTab>(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabParam = urlParams.get('tab')?.toLowerCase();
+    if (tabParam === 'gmail') return 'gmail';
+    if (tabParam === 'apps') return 'apps';
+    if (tabParam === 'leads') return 'leads';
+    if (tabParam === 'integrations') return 'integrations';
+
     const path = window.location.pathname.toLowerCase().replace(/^\//, '').trim();
+    if (path === 'gmail') return 'gmail';
     if (path === 'leads') return 'leads';
     if (path === 'integrations') return 'integrations';
     return 'dashboard';
@@ -107,7 +116,9 @@ const AppContent: React.FC = () => {
       case 'followups':
         return <Followups />;
       case 'apps':
-        return <ConnectedApps />;
+        return <ConnectedApps onNavigateToGmail={() => setActiveTab('gmail')} />;
+      case 'gmail':
+        return <GmailWorkspace />;
       case 'ai':
         return <AIAssistant />;
       case 'superadmin':

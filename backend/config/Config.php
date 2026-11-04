@@ -11,6 +11,9 @@ class Config {
             'jwt_expiry_seconds' => 86400 * 7, // 7 days
             'ai_provider' => getenv('AI_PROVIDER') ?: 'gemini',
             'gemini_api_key' => getenv('GEMINI_API_KEY') ?: '',
+            'google_client_id' => getenv('GOOGLE_CLIENT_ID') ?: '',
+            'google_client_secret' => getenv('GOOGLE_CLIENT_SECRET') ?: '',
+            'google_redirect_uri' => getenv('GOOGLE_REDIRECT_URI') ?: 'http://localhost/mycockpit/backend/api/gmail/oauth/callback',
             'allowed_origins' => [
                 'http://localhost:5173',
                 'http://127.0.0.1:5173',

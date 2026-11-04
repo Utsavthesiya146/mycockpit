@@ -5,11 +5,39 @@ interface BadgeProps {
   type?: 'invoice' | 'task' | 'lead' | 'app' | 'generic';
   variant?: 'green' | 'red' | 'amber' | 'blue' | 'purple' | 'indigo' | 'gray';
   dot?: boolean;
+  className?: string;
   children?: React.ReactNode;
 }
 
-export const Badge: React.FC<BadgeProps> = ({ status, variant, dot, children }) => {
+export const Badge: React.FC<BadgeProps> = ({ status, variant, dot, className, children }) => {
   const normalize = children ? String(children) : (status || '').toLowerCase().replace(/_/g, ' ');
+
+  const formatLabel = (val: string) => {
+    const lower = val.toLowerCase();
+    switch (lower) {
+      case 'auth required':
+      case 'authentication required':
+        return 'Authentication Required';
+      case 'api access required':
+        return 'API Access Required';
+      case 'manual import only':
+        return 'Manual Import Only';
+      case 'sync never run':
+        return 'Sync Never Run';
+      case 'sync successful':
+        return 'Sync Successful';
+      case 'sync failed':
+        return 'Sync Failed';
+      case 'connected':
+        return 'Connected';
+      case 'launcher only':
+        return 'Launcher Shortcut';
+      case 'captcha required':
+        return 'CAPTCHA Challenge';
+      default:
+        return val;
+    }
+  };
 
   const getStyle = () => {
     if (variant) {
@@ -41,6 +69,7 @@ export const Badge: React.FC<BadgeProps> = ({ status, variant, dot, children }) 
       case 'connected & syncing':
       case 'connected syncing':
       case 'webhook configured':
+      case 'sync successful':
         return 'bg-[#ECFDF5] text-[#059669] border-[#A7F3D0]';
       
       case 'partially paid':
@@ -65,6 +94,7 @@ export const Badge: React.FC<BadgeProps> = ({ status, variant, dot, children }) 
       case 'terminated':
       case 'expired':
       case 'error':
+      case 'sync failed':
         return 'bg-[#FEF2F2] text-[#DC2626] border-[#FECDD3] font-bold';
 
       case 'high':
@@ -84,6 +114,7 @@ export const Badge: React.FC<BadgeProps> = ({ status, variant, dot, children }) 
       case 'low':
       case 'disconnected':
       case 'manual import only':
+      case 'sync never run':
       case 'unsupported':
       case 'inactive':
       default:
@@ -92,9 +123,9 @@ export const Badge: React.FC<BadgeProps> = ({ status, variant, dot, children }) 
   };
 
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wider border shadow-2xs ${getStyle()}`}>
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wider border shadow-2xs ${getStyle()} ${className || ''}`}>
       {dot && <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />}
-      {children || normalize}
+      {children || formatLabel(normalize)}
     </span>
   );
 };

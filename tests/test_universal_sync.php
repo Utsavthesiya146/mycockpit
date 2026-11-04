@@ -144,8 +144,8 @@ class UniversalSyncTestSuite {
 
         $bni = new BNIConnector();
 
-        // 1. Test without enterprise credentials returns honest API Access Required
-        $res = $bni->testConnection((int)$user['tenant_id'], ['source_key' => 'bni_connect']);
+        // 1. Test without enterprise credentials returns honest API Access Required (isolated unconfigured tenant)
+        $res = $bni->testConnection(998, ['source_key' => 'bni_connect']);
         $this->assert("BNI without partner license reports honest 'API Access Required'", 
             $res['success'] === false && str_contains($res['message'], 'BNI does not offer an open public API'));
 
@@ -179,8 +179,8 @@ class UniversalSyncTestSuite {
 
         $kvv = new KVVConnector();
 
-        // 1. Test default configuration returns honest Manual Import / Webhook note
-        $res = $kvv->testConnection((int)$user['tenant_id'], ['source_key' => 'kvv_connect']);
+        // 1. Test default configuration returns honest Manual Import / Webhook note (isolated unconfigured tenant)
+        $res = $kvv->testConnection(998, ['source_key' => 'kvv_connect']);
         $this->assert("KVV reports honest status (No open public API without webhook/CSV)", 
             $res['success'] === false && str_contains($res['message'], 'does not provide a public developer API'));
 

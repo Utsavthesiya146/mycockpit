@@ -3,6 +3,12 @@ declare(strict_types=1);
 
 namespace Cockpit\Services;
 
+require_once __DIR__ . '/connectors/LeadConnectorInterface.php';
+require_once __DIR__ . '/connectors/EAFConnector.php';
+require_once __DIR__ . '/connectors/BNIConnector.php';
+require_once __DIR__ . '/connectors/KVVConnector.php';
+require_once __DIR__ . '/connectors/SEOConnector.php';
+
 use Cockpit\Config\Database;
 use Cockpit\Services\Connectors\LeadConnectorInterface;
 use Cockpit\Services\Connectors\EAFConnector;
@@ -32,9 +38,24 @@ class SyncEngine {
         self::$connectors[$connector->getSourceKey()] = $connector;
     }
 
+    public static function normalizeSourceKey(string $sourceKey): string {
+        $aliases = [
+            'bni' => 'bni_connect',
+            'bni_connect' => 'bni_connect',
+            'kvv' => 'kvv_connect',
+            'kvv_connect' => 'kvv_connect',
+            'eaf' => 'eaf_connect',
+            'eaf_connect' => 'eaf_connect',
+            'website_seo' => 'website_seo',
+            'seo' => 'website_seo'
+        ];
+        return $aliases[strtolower(trim($sourceKey))] ?? $sourceKey;
+    }
+
     public static function getConnector(string $sourceKey): ?LeadConnectorInterface {
         self::initConnectors();
-        return self::$connectors[$sourceKey] ?? null;
+        $normalized = self::normalizeSourceKey($sourceKey);
+        return self::$connectors[$normalized] ?? self::$connectors[$sourceKey] ?? null;
     }
 
     /**
@@ -55,8 +76,11 @@ class SyncEngine {
         }
 
         $db = Database::getConnection();
-        $stmt = $db->prepare("SELECT * FROM lead_sources_config WHERE tenant_id = ? AND source_key = ? LIMIT 1");
-        $stmt->execute([$tenantId, $sourceKey]);
+        $normalized = self::normalizeSourceKey($sourceKey);
+        $shortKey = str_replace('_connect', '', $normalized);
+
+        $stmt = $db->prepare("SELECT * FROM lead_sources_config WHERE tenant_id = ? AND (source_key = ? OR source_key = ?) LIMIT 1");
+        $stmt->execute([$tenantId, $sourceKey, $shortKey]);
         $config = $stmt->fetch(PDO::FETCH_ASSOC) ?: [
             'tenant_id' => $tenantId,
             'source_key' => $sourceKey
@@ -105,8 +129,11 @@ class SyncEngine {
         }
 
         $db = Database::getConnection();
-        $stmt = $db->prepare("SELECT * FROM lead_sources_config WHERE tenant_id = ? AND source_key = ? LIMIT 1");
-        $stmt->execute([$tenantId, $sourceKey]);
+        $normalized = self::normalizeSourceKey($sourceKey);
+        $shortKey = str_replace('_connect', '', $normalized);
+
+        $stmt = $db->prepare("SELECT * FROM lead_sources_config WHERE tenant_id = ? AND (source_key = ? OR source_key = ?) LIMIT 1");
+        $stmt->execute([$tenantId, $sourceKey, $shortKey]);
         $config = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$config || empty($config['is_enabled'])) {
@@ -157,7 +184,7 @@ class SyncEngine {
                     SET last_sync_at = NOW(),
                         sync_checkpoint = ?,
                         sync_count = sync_count + ?,
-                        status = 'connected_syncing',
+                        status = 'connected',
                         last_error_message = NULL,
                         last_error_at = NULL,
                         retry_count = 0,
@@ -168,6 +195,18 @@ class SyncEngine {
                     $result['leads_created'] ?? 0,
                     $config['id'],
                     $tenantId
+                ]);
+
+                // Also update connected_apps connection_status
+                $db->prepare("
+                    UPDATE connected_apps 
+                    SET connection_status = 'connected',
+                        updated_at = NOW()
+                    WHERE tenant_id = ? AND (app_url LIKE ? OR name LIKE ?)
+                ")->execute([
+                    $tenantId,
+                    "%{$shortKey}%",
+                    "%{$shortKey}%"
                 ]);
             } else {
                 $db->prepare("

@@ -29,23 +29,59 @@ class BNIConnector implements LeadConnectorInterface {
             $creds = array_merge($creds, $config['credentials']);
         }
 
-        return [
-            'api_endpoint' => trim($creds['api_endpoint'] ?? ''),
-            'client_id' => trim($creds['client_id'] ?? ''),
-            'client_secret' => trim($creds['client_secret'] ?? ''),
-            'partner_token' => trim($creds['partner_token'] ?? '')
-        ];
+        $tenantId = !empty($config['tenant_id']) ? (int)$config['tenant_id'] : 1;
+        if (empty($creds['username']) && empty($creds['email']) && empty($creds['access_token'])) {
+            try {
+                $db = Database::getConnection();
+                $sStmt = $db->prepare("SELECT encrypted_session_data FROM lead_platform_sessions WHERE tenant_id = ? AND source_key = 'bni' LIMIT 1");
+                $sStmt->execute([$tenantId]);
+                $sessRow = $sStmt->fetch(PDO::FETCH_ASSOC);
+                if (!empty($sessRow['encrypted_session_data'])) {
+                    $sessDec = Encryption::decrypt($sessRow['encrypted_session_data']);
+                    if ($sessDec) {
+                        $creds = array_merge(json_decode($sessDec, true) ?: [], $creds);
+                    }
+                }
+            } catch (\Throwable $e) {}
+        }
+
+        return $creds;
     }
 
     public function testConnection(int $tenantId, array $config): array {
+        $config['tenant_id'] = $tenantId;
         $creds = $this->resolveCredentials($config);
+
+        // 1. If member session credentials exist, validate via BNIWebAutomationDriver
+        if (!empty($creds['access_token']) || (!empty($creds['email']) && !empty($creds['password'])) || (!empty($creds['username']) && !empty($creds['password']))) {
+            require_once __DIR__ . '/../automation/PlatformAutomationDriverInterface.php';
+            require_once __DIR__ . '/../automation/BNIWebAutomationDriver.php';
+            $driver = new \Cockpit\Services\Automation\BNIWebAutomationDriver();
+            $val = $driver->validateSession($tenantId, $creds);
+            if (($val['status'] ?? '') === 'active') {
+                return [
+                    'success' => true,
+                    'message' => 'Successfully connected to BNI Connect! Active member session verified.',
+                    'details' => [
+                        'status' => 'connected',
+                        'session_status' => 'active',
+                        'username' => $creds['username'] ?? ($creds['email'] ?? null)
+                    ]
+                ];
+            }
+            return [
+                'success' => false,
+                'message' => 'BNI connection test failed: ' . ($val['message'] ?? 'Invalid session'),
+                'details' => ['status' => $val['status'] ?? 'auth_required']
+            ];
+        }
 
         if (empty($creds['api_endpoint']) && empty($creds['partner_token'])) {
             return [
                 'success' => false,
-                'message' => 'BNI Connect Enterprise API credentials required. BNI does not offer an open public API without an approved BNI Global Partner License. Please configure Enterprise Partner credentials or use CSV synchronization.',
+                'message' => 'BNI Connect credentials required. BNI does not offer an open public API without an approved BNI Global Partner License. Please enter your BNI Connect Username and Password or Enterprise Partner Token.',
                 'details' => [
-                    'status' => 'api_access_required',
+                    'status' => 'auth_required',
                     'official_docs' => 'https://www.bniconnectglobal.com',
                     'alternative' => 'Automated CSV Import / Chapter Email Webhook'
                 ]
@@ -81,7 +117,26 @@ class BNIConnector implements LeadConnectorInterface {
     }
 
     public function sync(int $tenantId, array $config, ?string $checkpoint = null): array {
+        $config['tenant_id'] = $tenantId;
         $creds = $this->resolveCredentials($config);
+
+        // 1. If member credentials or session exist, use BNIWebAutomationDriver
+        if (!empty($creds['access_token']) || (!empty($creds['email']) && !empty($creds['password'])) || (!empty($creds['username']) && !empty($creds['password']))) {
+            require_once __DIR__ . '/../automation/PlatformAutomationDriverInterface.php';
+            require_once __DIR__ . '/../automation/BNIWebAutomationDriver.php';
+            $driver = new \Cockpit\Services\Automation\BNIWebAutomationDriver();
+            $fetchRes = $driver->fetchReceivedReferrals($tenantId, $creds);
+            
+            return [
+                'success' => true,
+                'leads_fetched' => $fetchRes['count'] ?? 0,
+                'leads_created' => 0,
+                'leads_updated' => 0,
+                'leads_skipped' => 0,
+                'new_checkpoint' => $checkpoint,
+                'message' => $fetchRes['capability_note'] ?? 'BNI Connect member session active.'
+            ];
+        }
 
         if (empty($creds['api_endpoint']) && empty($creds['partner_token'])) {
             return [
@@ -91,7 +146,7 @@ class BNIConnector implements LeadConnectorInterface {
                 'leads_updated' => 0,
                 'leads_skipped' => 0,
                 'new_checkpoint' => $checkpoint,
-                'error' => 'BNI Connect API access required. Automatic polling requires BNI Enterprise Partner credentials. Use CSV batch import or Webhook relay.'
+                'error' => 'BNI Connect credentials required. Please connect your member session or configure Partner credentials.'
             ];
         }
 

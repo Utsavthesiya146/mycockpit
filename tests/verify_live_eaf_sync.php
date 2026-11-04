@@ -5,6 +5,8 @@ require_once __DIR__ . '/../backend/config/Database.php';
 require_once __DIR__ . '/../backend/config/Config.php';
 require_once __DIR__ . '/../backend/utils/Encryption.php';
 require_once __DIR__ . '/../backend/services/connectors/LeadConnectorInterface.php';
+require_once __DIR__ . '/../backend/services/automation/PlatformAutomationDriverInterface.php';
+require_once __DIR__ . '/../backend/services/automation/EAFWebAutomationDriver.php';
 require_once __DIR__ . '/../backend/services/connectors/EAFConnector.php';
 require_once __DIR__ . '/../backend/services/SyncEngine.php';
 
@@ -20,17 +22,16 @@ echo "=======================================================\n\n";
 $db = Database::getConnection();
 $tenantId = 1;
 
-// Clean up any test leads previously inserted with EAF Connect for clean benchmark
-// (only test leads created in previous verification runs)
 $eafConnector = new EAFConnector();
 
-$config = [
-    'credentials' => [
-        'base_url' => 'http://localhost/eaf',
-        'api_token' => 'f3792c0b5f1d153b70e7c1b432a5b7d4b155fd49d55ceba5a14cf6fc4acf6b82'
-    ],
+$cfgStmt = $db->prepare("SELECT * FROM lead_sources_config WHERE tenant_id = ? AND source_key = 'eaf' LIMIT 1");
+$cfgStmt->execute([$tenantId]);
+$config = $cfgStmt->fetch(PDO::FETCH_ASSOC) ?: [
+    'tenant_id' => $tenantId,
+    'source_key' => 'eaf',
     'auto_assign_user_id' => 2
 ];
+$config['auto_assign_user_id'] = $config['auto_assign_user_id'] ?? 2;
 
 echo "[1/4] Testing EAF Connection via EAFConnector::testConnection()...\n";
 $testRes = $eafConnector->testConnection($tenantId, $config);
