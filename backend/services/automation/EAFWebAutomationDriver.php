@@ -504,6 +504,21 @@ class EAFWebAutomationDriver implements PlatformAutomationDriverInterface {
 
         // Check if redirected to login
         if ($httpCode === 302 || $httpCode === 303 || str_contains((string)$finalUrl, 'member_login') || (is_string($html) && str_contains($html, 'name="csrf_test_name"') && str_contains($html, 'loginCheck'))) {
+            // Automatic Session Renewal: Re-authenticate using stored member credentials
+            if (!empty($email) && !empty($password) && empty($sessionData['__is_retry'])) {
+                $reauth = $this->authenticateSession($email, $password);
+                if (($reauth['status'] ?? '') === 'active' && !empty($reauth['cookies'])) {
+                    $this->persistSession($tenantId, $reauth, $email, $password);
+                    $retrySession = array_merge($sessionData, [
+                        'cookies' => $reauth['cookies'],
+                        'cookie_jar' => $reauth['cookie_jar'] ?? '',
+                        'ci_session' => $reauth['cookies']['ci_session'] ?? null,
+                        '__is_retry' => true
+                    ]);
+                    return $this->fetchReceivedReferrals($tenantId, $retrySession);
+                }
+            }
+
             return [
                 'success' => false,
                 'status' => 'expired',
@@ -548,6 +563,55 @@ class EAFWebAutomationDriver implements PlatformAutomationDriverInterface {
     }
 
     /**
+     * Persist renewed session data to database for both session and lead_sources_config
+     */
+    public function persistSession(int $tenantId, array $authData, string $email, string $password): void {
+        try {
+            $db = \Cockpit\Config\Database::getConnection();
+            $sessionPayload = [
+                'email' => $email,
+                'password' => $password,
+                'cookies' => $authData['cookies'] ?? [],
+                'cookie_jar' => $authData['cookie_jar'] ?? '',
+                'ci_session' => $authData['cookies']['ci_session'] ?? null,
+                'is_live' => true,
+                'base_url' => $this->baseUrl,
+                'updated_at' => date('Y-m-d H:i:s')
+            ];
+            $encSession = \Cockpit\Utils\Encryption::encrypt(json_encode($sessionPayload));
+
+            // 1. Update lead_platform_sessions
+            $stmt = $db->prepare("
+                INSERT INTO lead_platform_sessions (tenant_id, source_key, session_status, encrypted_session_data, last_validated_at, updated_at)
+                VALUES (?, 'eaf', 'active', ?, NOW(), NOW())
+                ON DUPLICATE KEY UPDATE 
+                    session_status = 'active',
+                    encrypted_session_data = VALUES(encrypted_session_data),
+                    last_validated_at = NOW(),
+                    updated_at = NOW()
+            ");
+            $stmt->execute([$tenantId, $encSession]);
+
+            // 2. Update lead_sources_config
+            $db->prepare("
+                UPDATE lead_sources_config 
+                SET encrypted_credentials = ?, status = 'connected', last_error_message = NULL, last_error_at = NULL, updated_at = NOW()
+                WHERE tenant_id = ? AND (source_key = 'eaf' OR source_key = 'eaf_connect')
+            ")->execute([$encSession, $tenantId]);
+
+            // 3. Update connected_apps
+            $db->prepare("
+                UPDATE connected_apps 
+                SET connection_status = 'connected', updated_at = NOW()
+                WHERE tenant_id = ? AND (app_url LIKE '%eafconnect.com%' OR name = 'EAF Connect')
+            ")->execute([$tenantId]);
+
+        } catch (\Throwable $e) {
+            // Best effort session persistence
+        }
+    }
+
+    /**
      * Parse HTML response from /member/connect for received referrals
      */
     public function parseReceivedReferrals(string $html): array {
@@ -558,12 +622,17 @@ class EAFWebAutomationDriver implements PlatformAutomationDriverInterface {
         if ($recPos !== false) {
             $givPos = strpos($html, 'id="given"', $recPos);
             $recHtml = $givPos !== false ? substr($html, $recPos, $givPos - $recPos) : substr($html, $recPos);
+            // Decode HTML entities so attributes like onclick="edit_refferral_status(&quot;REFF0049&quot;)" become clean
+            $recHtml = html_entity_decode($recHtml, ENT_QUOTES | ENT_HTML5, 'UTF-8');
             $items = preg_split('/<div\s+class="referral-item"/i', $recHtml);
             array_shift($items); // Remove prefix before first item
 
             foreach ($items as $itemHtml) {
                 $code = '';
                 if (preg_match('/edit_refferral(?:_status)?\([\'"]?([^\'")]+)[\'"]?\)/i', $itemHtml, $m)) {
+                    $code = trim($m[1]);
+                }
+                if (empty($code) && preg_match('/(?:Ref(?:erral)?\s*(?:Code|ID|#)?\s*[:#-]?\s*)([A-Z0-9_-]+)/i', $itemHtml, $m)) {
                     $code = trim($m[1]);
                 }
                 if (empty($code)) continue;

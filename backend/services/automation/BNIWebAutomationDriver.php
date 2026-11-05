@@ -291,6 +291,72 @@ class BNIWebAutomationDriver implements PlatformAutomationDriverInterface {
     }
 
     /**
+     * Check if a JWT token is expired or within 60s of expiring
+     */
+    public function isJwtExpired(?string $jwt): bool {
+        if (empty($jwt)) return true;
+        $parts = explode('.', $jwt);
+        if (count($parts) < 2) return true;
+        $payloadRaw = base64_decode(strtr($parts[1], '-_', '+/'));
+        if (!$payloadRaw) return true;
+        $payload = json_decode($payloadRaw, true);
+        if (!is_array($payload) || !isset($payload['exp'])) return false;
+        return ((int)$payload['exp'] < (time() + 60));
+    }
+
+    /**
+     * Persist renewed session and credentials to database
+     */
+    public function persistSession(int $tenantId, array $authData, string $username, string $password): void {
+        try {
+            $db = \Cockpit\Config\Database::getConnection();
+            $sessionPayload = [
+                'username' => $username,
+                'email' => $username,
+                'password' => $password,
+                'access_token' => $authData['access_token'] ?? null,
+                'refresh_token' => $authData['refresh_token'] ?? null,
+                'expires_in' => (int)($authData['expires_in'] ?? 3600),
+                'user_id' => $authData['user_id'] ?? null,
+                'cookies' => $authData['cookies'] ?? [],
+                'cookie_jar' => $authData['cookie_jar'] ?? '',
+                'authenticated_at' => date('Y-m-d H:i:s'),
+                'is_live' => true
+            ];
+            $encSession = \Cockpit\Utils\Encryption::encrypt(json_encode($sessionPayload));
+
+            // 1. Update lead_platform_sessions
+            $stmt = $db->prepare("
+                INSERT INTO lead_platform_sessions (tenant_id, source_key, session_status, encrypted_session_data, last_validated_at, updated_at)
+                VALUES (?, 'bni', 'active', ?, NOW(), NOW())
+                ON DUPLICATE KEY UPDATE 
+                    session_status = 'active',
+                    encrypted_session_data = VALUES(encrypted_session_data),
+                    last_validated_at = NOW(),
+                    updated_at = NOW()
+            ");
+            $stmt->execute([$tenantId, $encSession]);
+
+            // 2. Update lead_sources_config
+            $db->prepare("
+                UPDATE lead_sources_config 
+                SET encrypted_credentials = ?, status = 'connected', last_error_message = NULL, last_error_at = NULL, updated_at = NOW()
+                WHERE tenant_id = ? AND (source_key = 'bni' OR source_key = 'bni_connect')
+            ")->execute([$encSession, $tenantId]);
+
+            // 3. Update connected_apps
+            $db->prepare("
+                UPDATE connected_apps 
+                SET connection_status = 'connected', updated_at = NOW()
+                WHERE tenant_id = ? AND (app_url LIKE '%bniconnectglobal.com%' OR name = 'BNI Connect')
+            ")->execute([$tenantId]);
+
+        } catch (\Throwable $e) {
+            // Best effort session persistence
+        }
+    }
+
+    /**
      * Establish web session cookies against BNI Connect web infrastructure
      * (/web/j_spring_security_jwt_check) using acquired access/refresh tokens.
      */
@@ -301,6 +367,21 @@ class BNIWebAutomationDriver implements PlatformAutomationDriverInterface {
         ?string $refreshToken,
         int $expiresIn
     ): array {
+        // Pre-warm Spring Security cookie session
+        $chPre = curl_init($this->webBaseUrl . '/web/open/login');
+        curl_setopt_array($chPre, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 8,
+            CURLOPT_COOKIEFILE => '',
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        ]);
+        curl_exec($chPre);
+        $preCookies = curl_getinfo($chPre, CURLINFO_COOKIELIST) ?: [];
+        curl_close($chPre);
+
         $jwtCheckUrl = $this->webBaseUrl . '/web/j_spring_security_jwt_check';
         $chJwt = curl_init($jwtCheckUrl);
         curl_setopt_array($chJwt, [
@@ -329,6 +410,9 @@ class BNIWebAutomationDriver implements PlatformAutomationDriverInterface {
             CURLOPT_SSL_VERIFYPEER => false,
             CURLOPT_SSL_VERIFYHOST => false
         ]);
+        foreach ($preCookies as $cl) {
+            curl_setopt($chJwt, CURLOPT_COOKIELIST, $cl);
+        }
 
         $jwtRes = curl_exec($chJwt);
         $jwtCode = (int)curl_getinfo($chJwt, CURLINFO_HTTP_CODE);
@@ -694,9 +778,37 @@ class BNIWebAutomationDriver implements PlatformAutomationDriverInterface {
             ];
         }
 
+        // Automatic Token Renewal: If JWT is expired or missing, renew immediately using stored credentials
+        if ($this->isJwtExpired($accessToken) || empty($accessToken)) {
+            if (!empty($username) && !empty($password)) {
+                $authRes = $this->authenticateSession($username, $password);
+                if (in_array($authRes['status'] ?? '', ['tokens_acquired', 'active'], true) && !empty($authRes['access_token'])) {
+                    $accessToken = $authRes['access_token'];
+                    $refreshToken = $authRes['refresh_token'] ?? $refreshToken;
+                    $expiresIn = (int)($authRes['expires_in'] ?? 3600);
+                    $this->persistSession($tenantId, $authRes, $username, $password);
+                }
+            }
+        }
+
         // 1. Establish or verify web session
         $webRes = $this->establishWebSession($username, $password, $accessToken, $refreshToken, $expiresIn);
         if (empty($webRes['success'])) {
+            // If Spring Security failed, attempt fresh re-authentication once more
+            if (!empty($username) && !empty($password) && empty($sessionData['__reauth_tried'])) {
+                $authRes = $this->authenticateSession($username, $password);
+                if (in_array($authRes['status'] ?? '', ['tokens_acquired', 'active'], true) && !empty($authRes['access_token'])) {
+                    $this->persistSession($tenantId, $authRes, $username, $password);
+                    $retryData = array_merge($sessionData, [
+                        'access_token' => $authRes['access_token'],
+                        'refresh_token' => $authRes['refresh_token'] ?? $refreshToken,
+                        'expires_in' => (int)($authRes['expires_in'] ?? 3600),
+                        '__reauth_tried' => true
+                    ]);
+                    return $this->fetchReceivedReferrals($tenantId, $retryData);
+                }
+            }
+
             return [
                 'success' => false,
                 'count' => 0,

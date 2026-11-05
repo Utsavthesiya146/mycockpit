@@ -15,6 +15,20 @@ export const Badge: React.FC<BadgeProps> = ({ status, variant, dot, className, c
   const formatLabel = (val: string) => {
     const lower = val.toLowerCase();
     switch (lower) {
+      case 'synced':
+        return 'Synced';
+      case 'syncing':
+        return 'Syncing...';
+      case 'sync failed':
+        return 'Sync Failed';
+      case 'reconnect required':
+        return 'Reconnect Required';
+      case 'configuration required':
+        return 'Configuration Required';
+      case 'launcher only':
+        return 'Launcher Only';
+      case 'connected':
+        return 'Connected';
       case 'auth required':
       case 'authentication required':
         return 'Authentication Required';
@@ -30,16 +44,11 @@ export const Badge: React.FC<BadgeProps> = ({ status, variant, dot, className, c
       case 'sync successful - no new leads':
       case 'sync_successful_no_leads':
         return 'Sync Successful (0 New)';
-      case 'sync failed':
-        return 'Sync Failed';
       case 'referral access restricted':
       case 'referral_access_restricted':
         return 'Referral Access Restricted';
-      case 'connected':
-        return 'Connected';
-      case 'launcher only':
-        return 'Launcher Shortcut';
       case 'captcha required':
+      case 'challenge required':
         return 'CAPTCHA Challenge';
       default:
         return val;
@@ -73,11 +82,18 @@ export const Badge: React.FC<BadgeProps> = ({ status, variant, dot, className, c
       case 'active':
       case 'won':
       case 'connected':
+      case 'synced':
       case 'connected & syncing':
       case 'connected syncing':
       case 'webhook configured':
       case 'sync successful':
         return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800/60 font-semibold';
+
+      case 'syncing':
+        return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800/60 font-bold';
+
+      case 'launcher only':
+        return 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/50 dark:text-sky-400 dark:border-sky-800/60 font-medium';
 
       case 'sync successful no new leads':
       case 'sync successful - no new leads':
@@ -95,7 +111,6 @@ export const Badge: React.FC<BadgeProps> = ({ status, variant, dot, className, c
       case 'scheduled':
       case 'new':
       case 'contacted':
-      case 'launcher only':
         return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800/60 font-semibold';
 
       case 'overdue':
@@ -112,13 +127,18 @@ export const Badge: React.FC<BadgeProps> = ({ status, variant, dot, className, c
       case 'high':
       case 'auth required':
       case 'authentication required':
+      case 'reconnect required':
       case 'config required':
       case 'captcha required':
+      case 'challenge required':
       case 'mfa required':
       case 'on leave':
       case 'referral access restricted':
       case 'referral_access_restricted':
         return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800/60 font-bold';
+
+      case 'configuration required':
+        return 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 font-medium';
 
       case 'api access required':
         return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800/60 font-bold';

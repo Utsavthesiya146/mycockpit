@@ -33,13 +33,27 @@ class BNIConnector implements LeadConnectorInterface {
         if (empty($creds['username']) && empty($creds['email']) && empty($creds['access_token'])) {
             try {
                 $db = Database::getConnection();
-                $sStmt = $db->prepare("SELECT encrypted_session_data FROM lead_platform_sessions WHERE tenant_id = ? AND source_key = 'bni' LIMIT 1");
-                $sStmt->execute([$tenantId]);
-                $sessRow = $sStmt->fetch(PDO::FETCH_ASSOC);
-                if (!empty($sessRow['encrypted_session_data'])) {
-                    $sessDec = Encryption::decrypt($sessRow['encrypted_session_data']);
-                    if ($sessDec) {
-                        $creds = array_merge(json_decode($sessDec, true) ?: [], $creds);
+                // 1. Check lead_sources_config
+                $srcStmt = $db->prepare("SELECT encrypted_credentials FROM lead_sources_config WHERE tenant_id = ? AND (source_key = 'bni' OR source_key = 'bni_connect') LIMIT 1");
+                $srcStmt->execute([$tenantId]);
+                $srcRow = $srcStmt->fetch(PDO::FETCH_ASSOC);
+                if (!empty($srcRow['encrypted_credentials'])) {
+                    $srcDec = Encryption::decrypt($srcRow['encrypted_credentials']);
+                    if ($srcDec) {
+                        $creds = array_merge(json_decode($srcDec, true) ?: [], $creds);
+                    }
+                }
+
+                // 2. Check lead_platform_sessions
+                if (empty($creds['username']) && empty($creds['email']) && empty($creds['access_token'])) {
+                    $sStmt = $db->prepare("SELECT encrypted_session_data FROM lead_platform_sessions WHERE tenant_id = ? AND source_key = 'bni' LIMIT 1");
+                    $sStmt->execute([$tenantId]);
+                    $sessRow = $sStmt->fetch(PDO::FETCH_ASSOC);
+                    if (!empty($sessRow['encrypted_session_data'])) {
+                        $sessDec = Encryption::decrypt($sessRow['encrypted_session_data']);
+                        if ($sessDec) {
+                            $creds = array_merge(json_decode($sessDec, true) ?: [], $creds);
+                        }
                     }
                 }
             } catch (\Throwable $e) {}

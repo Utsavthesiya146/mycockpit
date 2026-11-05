@@ -81,11 +81,27 @@ export const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
 
   useEffect(() => {
     fetchStats();
+
+    // Non-blocking background automatic synchronization check on dashboard load
+    api.post('/apps/sync-auto')
+      .then((res: any) => {
+        if (res?.synced_any) {
+          fetchStats();
+        }
+      })
+      .catch((err) => {
+        console.warn('Dashboard auto-sync background check notice:', err);
+      });
   }, [user?.tenant_id, filterSource, filterDateRange, filterAssigned]);
 
   const handleRefresh = () => {
     setRefreshing(true);
     fetchStats();
+    api.post('/apps/sync-auto')
+      .then((res: any) => {
+        if (res?.synced_any) fetchStats();
+      })
+      .catch(() => {});
   };
 
   const handleAskAI = (promptText?: string) => {

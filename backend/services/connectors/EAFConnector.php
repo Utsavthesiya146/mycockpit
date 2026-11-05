@@ -35,18 +35,30 @@ class EAFConnector implements LeadConnectorInterface {
             $creds = array_merge($creds, $config['credentials']);
         }
 
-        // If credentials not found in config, check lead_platform_sessions ONLY if config has database ID
+        // If credentials not found in config, look up in lead_sources_config and lead_platform_sessions
         $tenantId = !empty($config['tenant_id']) ? (int)$config['tenant_id'] : 1;
-        if (!empty($config['id']) && empty($creds['email']) && empty($creds['cookie_jar'])) {
+        if (empty($creds['email']) && empty($creds['cookie_jar'])) {
             try {
                 $db = Database::getConnection();
-                $sStmt = $db->prepare("SELECT encrypted_session_data FROM lead_platform_sessions WHERE tenant_id = ? AND source_key = 'eaf' LIMIT 1");
-                $sStmt->execute([$tenantId]);
-                $sessRow = $sStmt->fetch(PDO::FETCH_ASSOC);
-                if (!empty($sessRow['encrypted_session_data'])) {
-                    $sessDec = Encryption::decrypt($sessRow['encrypted_session_data']);
-                    if ($sessDec) {
-                        $creds = array_merge(json_decode($sessDec, true) ?: [], $creds);
+                $srcStmt = $db->prepare("SELECT encrypted_credentials FROM lead_sources_config WHERE tenant_id = ? AND (source_key = 'eaf' OR source_key = 'eaf_connect') LIMIT 1");
+                $srcStmt->execute([$tenantId]);
+                $srcRow = $srcStmt->fetch(PDO::FETCH_ASSOC);
+                if (!empty($srcRow['encrypted_credentials'])) {
+                    $srcDec = Encryption::decrypt($srcRow['encrypted_credentials']);
+                    if ($srcDec) {
+                        $creds = array_merge(json_decode($srcDec, true) ?: [], $creds);
+                    }
+                }
+
+                if (empty($creds['email'])) {
+                    $sStmt = $db->prepare("SELECT encrypted_session_data FROM lead_platform_sessions WHERE tenant_id = ? AND source_key = 'eaf' LIMIT 1");
+                    $sStmt->execute([$tenantId]);
+                    $sessRow = $sStmt->fetch(PDO::FETCH_ASSOC);
+                    if (!empty($sessRow['encrypted_session_data'])) {
+                        $sessDec = Encryption::decrypt($sessRow['encrypted_session_data']);
+                        if ($sessDec) {
+                            $creds = array_merge(json_decode($sessDec, true) ?: [], $creds);
+                        }
                     }
                 }
             } catch (\Throwable $e) {
@@ -241,31 +253,22 @@ class EAFConnector implements LeadConnectorInterface {
         $creds = $this->resolveCredentials($config);
 
         $referrals = null;
+        $driverError = null;
+
         // 1. Try web automation driver if session or credentials exist
         if (!empty($creds['cookie_jar']) || !empty($creds['cookies']) || (!empty($creds['email']) && !empty($creds['password']))) {
             $driver = new \Cockpit\Services\Automation\EAFWebAutomationDriver($creds['base_url'] ?? 'https://eafconnect.com');
             $fetchRes = $driver->fetchReceivedReferrals($tenantId, $creds);
-            if ($fetchRes['success']) {
+            if (!empty($fetchRes['success']) && is_array($fetchRes['referrals'])) {
                 $referrals = $fetchRes['referrals'];
+            } else {
+                $driverError = $fetchRes['message'] ?? 'Failed to retrieve received referrals from EAF Connect member portal';
             }
         }
 
-        // 2. Fallback to API endpoint if referrals not fetched yet
-        if ($referrals === null) {
-            $auth = $this->getValidToken($creds);
-            if (!$auth['success']) {
-                return [
-                    'success' => false,
-                    'leads_fetched' => 0,
-                    'leads_created' => 0,
-                    'leads_updated' => 0,
-                    'leads_skipped' => 0,
-                    'new_checkpoint' => $checkpoint,
-                    'error' => 'Authentication failed: ' . $auth['message']
-                ];
-            }
-
-            $token = $auth['token'];
+        // 2. Fallback to API endpoint ONLY if explicit api_token was provided
+        if ($referrals === null && !empty($creds['api_token'])) {
+            $token = $creds['api_token'];
             $connectUrl = $creds['base_url'] . '/api/v1/connect';
             $res = $this->httpRequest($connectUrl, 'GET', [
                 'Authorization' => "Bearer {$token}",
@@ -274,15 +277,7 @@ class EAFConnector implements LeadConnectorInterface {
 
             $referrals = $res['data']['data']['received'] ?? $res['data']['received'] ?? null;
             if ($res['status'] !== 'success' || !is_array($referrals)) {
-                return [
-                    'success' => false,
-                    'leads_fetched' => 0,
-                    'leads_created' => 0,
-                    'leads_updated' => 0,
-                    'leads_skipped' => 0,
-                    'new_checkpoint' => $checkpoint,
-                    'error' => 'Failed to retrieve received referrals: ' . ($res['error'] ?? 'Invalid response')
-                ];
+                $driverError = 'API Error: ' . ($res['error'] ?? 'Invalid response');
             }
         }
 
@@ -294,7 +289,7 @@ class EAFConnector implements LeadConnectorInterface {
                 'leads_updated' => 0,
                 'leads_skipped' => 0,
                 'new_checkpoint' => $checkpoint,
-                'error' => 'Failed to retrieve received referrals from EAF Connect'
+                'error' => $driverError ?? 'Failed to retrieve received referrals from EAF Connect'
             ];
         }
 

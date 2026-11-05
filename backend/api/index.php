@@ -298,6 +298,18 @@ try {
     }
 
     // Connected Applications Hub
+    if ($path === '/apps/sync-auto' && $method === 'POST') {
+        AppHubController::autoSync($currentUser);
+    }
+    if ($path === '/apps/sync-status' && $method === 'GET') {
+        AppHubController::getSyncStatus($currentUser);
+    }
+    if ($path === '/apps/sync-all' && $method === 'POST') {
+        AppHubController::syncAll($currentUser);
+    }
+    if (preg_match('#^/apps/sync/([a-zA-Z0-9_-]+)$#', $path, $matches) && $method === 'POST') {
+        AppHubController::syncSingle($currentUser, $matches[1]);
+    }
     if ($path === '/apps') {
         if ($method === 'GET') AppHubController::listApps($currentUser);
         if ($method === 'POST') AppHubController::addApp($currentUser);

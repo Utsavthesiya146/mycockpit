@@ -295,6 +295,46 @@ class AppHubController {
                 INDEX `idx_tenant_folder` (`tenant_id`, `is_trash`, `is_spam`, `is_read`, `date_sent`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
+            // 11. Ensure integration_sync_state table exists for central auto-sync engine
+            $db->exec("CREATE TABLE IF NOT EXISTS `integration_sync_state` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `tenant_id` INT NOT NULL,
+                `source_key` VARCHAR(50) NOT NULL,
+                `sync_status` VARCHAR(50) DEFAULT 'idle',
+                `sync_interval_minutes` INT DEFAULT 15,
+                `last_synced_at` DATETIME NULL,
+                `last_attempted_at` DATETIME NULL,
+                `next_sync_at` DATETIME NULL,
+                `lock_expires_at` DATETIME NULL,
+                `retry_count` INT DEFAULT 0,
+                `last_error_message` TEXT NULL,
+                `last_error_at` DATETIME NULL,
+                `records_synced` INT DEFAULT 0,
+                `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY `uk_tenant_source_state` (`tenant_id`, `source_key`),
+                INDEX `idx_iss_tenant_next` (`tenant_id`, `next_sync_at`),
+                INDEX `idx_iss_lock` (`lock_expires_at`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+            // 12. Ensure connected_apps has tracking columns
+            try {
+                $caColsStmt = $db->query("SHOW COLUMNS FROM `connected_apps`");
+                $caCols = [];
+                while ($c = $caColsStmt->fetch(PDO::FETCH_ASSOC)) {
+                    $caCols[] = strtolower($c['Field']);
+                }
+                if (!in_array('last_synced_at', $caCols)) {
+                    $db->exec("ALTER TABLE `connected_apps` ADD COLUMN `last_synced_at` DATETIME NULL AFTER `connection_status`");
+                }
+                if (!in_array('records_synced', $caCols)) {
+                    $db->exec("ALTER TABLE `connected_apps` ADD COLUMN `records_synced` INT DEFAULT 0 AFTER `last_synced_at`");
+                }
+                if (!in_array('last_error', $caCols)) {
+                    $db->exec("ALTER TABLE `connected_apps` ADD COLUMN `last_error` TEXT NULL AFTER `records_synced`");
+                }
+            } catch (\Throwable $e) {}
+
         } catch (\Throwable $e) {
             error_log('Schema compatibility check notice: ' . $e->getMessage());
         }
@@ -467,7 +507,7 @@ class AppHubController {
         $db->prepare("UPDATE connected_apps SET name = 'Gmail' WHERE tenant_id = ? AND name LIKE '%Gmail Workspace%'")->execute([$tenantId]);
         $db->prepare("UPDATE connected_apps SET app_url = 'https://app.kannadigaravyaapaaravedike.com' WHERE tenant_id = ? AND app_url LIKE '%kvv.gov.in%'")->execute([$tenantId]);
 
-        // 3. Fetch apps
+        // 3. Fetch apps and live integration sync states
         $stmt = $db->prepare("
             SELECT * FROM connected_apps
             WHERE tenant_id = ?
@@ -476,14 +516,30 @@ class AppHubController {
         $stmt->execute([$tenantId]);
         $apps = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // 4. Enrich portal apps with real connection metadata
+        $syncStatesStmt = $db->prepare("SELECT * FROM integration_sync_state WHERE tenant_id = ?");
+        $syncStatesStmt->execute([$tenantId]);
+        $syncStates = [];
+        while ($sr = $syncStatesStmt->fetch(PDO::FETCH_ASSOC)) {
+            $syncStates[$sr['source_key']] = $sr;
+        }
+
+        // 4. Enrich portal apps with real connection and auto-sync metadata
         $enriched = [];
+        $now = time();
         foreach ($apps as $app) {
             $sourceKey = self::resolveSourceKey($app['name'] ?? '', $app['app_url'] ?? '');
             
             if ($sourceKey) {
                 $app['is_portal'] = true;
                 $app['source_key'] = $sourceKey;
+
+                $stateRow = $syncStates[$sourceKey] ?? null;
+                $isSyncing = !empty($stateRow['lock_expires_at']) && strtotime($stateRow['lock_expires_at']) > $now;
+                $nextSyncAt = $stateRow['next_sync_at'] ?? null;
+                $secondsUntilNext = $nextSyncAt ? max(0, strtotime($nextSyncAt) - $now) : 0;
+                $recordsSynced = (int)($stateRow['records_synced'] ?? ($app['records_synced'] ?? 0));
+                require_once __DIR__ . '/../services/SyncEngine.php';
+                $intervalMinutes = (int)($stateRow['sync_interval_minutes'] ?? \Cockpit\Services\SyncEngine::getDefaultInterval($sourceKey));
 
                 // Query lead_platform_sessions (NO secrets returned!)
                 $sStmt = $db->prepare("SELECT session_status, last_validated_at, 
@@ -632,6 +688,29 @@ class AppHubController {
                         }
                     }
                 }
+
+                // Determine Live Badge
+                if ($isSyncing) {
+                    $liveBadge = 'Syncing';
+                } elseif ($authStatus === 'auth_required' || $sessionStatus === 'expired') {
+                    $liveBadge = 'Reconnect Required';
+                } elseif ($sessionStatus === 'captcha_required') {
+                    $liveBadge = 'Challenge Required';
+                } elseif ($syncStatus === 'sync_failed') {
+                    $liveBadge = 'Sync Failed';
+                } elseif ($authStatus === 'connected') {
+                    $liveBadge = 'Synced';
+                } else {
+                    $liveBadge = 'Configuration Required';
+                }
+
+                $app['sync_interval_minutes'] = $intervalMinutes;
+                $app['next_sync_at'] = $nextSyncAt;
+                $app['seconds_until_next'] = $secondsUntilNext;
+                $app['records_synced'] = $recordsSynced;
+                $app['is_syncing'] = $isSyncing;
+                $app['live_badge'] = $liveBadge;
+
             } else {
                 $app['is_portal'] = false;
                 $app['source_key'] = null;
@@ -643,12 +722,86 @@ class AppHubController {
                 $app['last_error'] = null;
                 $app['next_action'] = 'Launch Application';
                 $app['next_action_key'] = 'launch';
+                $app['live_badge'] = 'Launcher Only';
+                $app['sync_interval_minutes'] = null;
+                $app['next_sync_at'] = null;
+                $app['seconds_until_next'] = null;
+                $app['records_synced'] = 0;
+                $app['is_syncing'] = false;
             }
 
             $enriched[] = $app;
         }
 
         Response::success($enriched);
+    }
+
+    /**
+     * POST /apps/sync-auto
+     * Background, rate-limited automatic synchronization runner on page load / refresh
+     */
+    public static function autoSync(array $currentUser): void {
+        $tenantId = TenantMiddleware::resolveTenantId($currentUser);
+        $db = Database::getConnection();
+        self::ensureSchemaCompatibility($db);
+
+        require_once __DIR__ . '/../services/SyncEngine.php';
+        $result = \Cockpit\Services\SyncEngine::checkAndRunAutoSync($tenantId);
+        Response::success($result, 'Automatic synchronization checked');
+    }
+
+    /**
+     * GET /apps/sync-status
+     * Retrieve live synchronization state, countdowns, and active sync locks
+     */
+    public static function getSyncStatus(array $currentUser): void {
+        $tenantId = TenantMiddleware::resolveTenantId($currentUser);
+        $db = Database::getConnection();
+        self::ensureSchemaCompatibility($db);
+
+        require_once __DIR__ . '/../services/SyncEngine.php';
+        $status = \Cockpit\Services\SyncEngine::getIntegrationSyncStatus($tenantId);
+        Response::success($status, 'Integration synchronization status retrieved');
+    }
+
+    /**
+     * POST /apps/sync-all
+     * Immediate manual synchronization of all connected applications
+     */
+    public static function syncAll(array $currentUser): void {
+        TenantMiddleware::requireRole($currentUser, ['super_admin', 'tenant_owner', 'tenant_admin', 'manager', 'sales_rep']);
+        $tenantId = TenantMiddleware::resolveTenantId($currentUser);
+        $db = Database::getConnection();
+        self::ensureSchemaCompatibility($db);
+
+        require_once __DIR__ . '/../services/SyncEngine.php';
+        $result = \Cockpit\Services\SyncEngine::syncAllSourcesForTenant($tenantId, 'manual');
+        Response::success($result, 'All connected applications synchronized successfully');
+    }
+
+    /**
+     * POST /apps/sync/{sourceKey}
+     * Immediate manual synchronization of a single connected application
+     */
+    public static function syncSingle(array $currentUser, string $sourceKey): void {
+        TenantMiddleware::requireRole($currentUser, ['super_admin', 'tenant_owner', 'tenant_admin', 'manager', 'sales_rep']);
+        $tenantId = TenantMiddleware::resolveTenantId($currentUser);
+        $db = Database::getConnection();
+        self::ensureSchemaCompatibility($db);
+
+        require_once __DIR__ . '/../services/SyncEngine.php';
+        $norm = \Cockpit\Services\SyncEngine::normalizeSourceKey($sourceKey);
+        $shortKey = str_replace('_connect', '', $norm);
+
+        // Force lock for manual sync
+        \Cockpit\Services\SyncEngine::acquireLock($tenantId, $shortKey, 180);
+        $result = \Cockpit\Services\SyncEngine::executeSourceSync($tenantId, $shortKey, 'manual');
+
+        if (!empty($result['success'])) {
+            Response::success($result, "Synchronized {$shortKey} successfully");
+        } else {
+            Response::error($result['error'] ?? "Failed to synchronize {$shortKey}", 400, $result);
+        }
     }
 
     public static function connectPortal(array $currentUser, int $id): void {

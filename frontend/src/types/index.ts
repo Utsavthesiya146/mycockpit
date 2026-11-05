@@ -327,6 +327,12 @@ export interface ConnectedApp {
   next_action_key?: string;
   connected_email?: string;
   redirect_uri?: string;
+  sync_interval_minutes?: number | null;
+  next_sync_at?: string | null;
+  seconds_until_next?: number | null;
+  records_synced?: number;
+  is_syncing?: boolean;
+  live_badge?: 'Connected' | 'Syncing' | 'Synced' | 'Sync Failed' | 'Reconnect Required' | 'Configuration Required' | 'Launcher Only' | string;
   latest_sync_log?: {
     leads_fetched: number;
     leads_created: number;
