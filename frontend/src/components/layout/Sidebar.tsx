@@ -16,8 +16,8 @@ import {
   ChevronRight,
   X,
   Zap,
-  RefreshCw,
-  Mail
+  Mail,
+  ChevronLeft
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -42,16 +42,25 @@ interface SidebarProps {
   setActiveTab: (tab: NavTab) => void;
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
+  isCollapsed?: boolean;
+  setIsCollapsed?: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpen, setIsOpen }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ 
+  activeTab, 
+  setActiveTab, 
+  isOpen, 
+  setIsOpen,
+  isCollapsed = false,
+  setIsCollapsed
+}) => {
   const { user, tenant, logout } = useAuth();
 
   const isSuperAdmin = user?.role === 'super_admin';
 
   const navItems = [
     { id: 'dashboard' as NavTab, label: 'Cockpit Overview', icon: LayoutDashboard },
-    { id: 'leads' as NavTab, label: 'Centralized Leads', icon: Users2, badge: 'All Sources', badgeRed: true },
+    { id: 'leads' as NavTab, label: 'Centralized Leads', icon: Users2, badge: '244+', badgeRed: true },
     { id: 'integrations' as NavTab, label: 'Lead Sync Hub', icon: Zap },
     { id: 'ai' as NavTab, label: 'Personal AI Agent', icon: Sparkles, badge: 'Live' },
     { id: 'invoices' as NavTab, label: 'Invoices & Finance', icon: Receipt },
@@ -71,53 +80,60 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpe
       {/* Mobile Backdrop */}
       {isOpen && (
         <div 
-          className="fixed inset-0 bg-slate-900/35 backdrop-blur-xs z-40 lg:hidden transition-opacity"
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-40 lg:hidden transition-opacity"
           onClick={() => setIsOpen(false)}
         />
       )}
 
       <aside className={`
-        fixed top-0 bottom-0 left-0 z-50 w-72 bg-white border-r border-[#E9EAEE] flex flex-col
-        transition-transform duration-250 ease-in-out shadow-xs
+        fixed top-0 bottom-0 left-0 z-50 bg-white dark:bg-[#0B0F19] border-r border-slate-200 dark:border-slate-800/80 flex flex-col
+        transition-all duration-250 ease-in-out shadow-xs
+        ${isCollapsed ? 'lg:w-20' : 'lg:w-72'}
+        w-72
         lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         {/* Brand Header */}
-        <div className="p-4 sm:p-5 border-b border-[#E9EAEE] flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#D62839] flex items-center justify-center shadow-md shadow-[#D62839]/25 text-white">
+        <div className={`p-4 border-b border-slate-200 dark:border-slate-800/80 flex items-center justify-between ${isCollapsed ? 'lg:justify-center lg:px-2' : ''}`}>
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-[#D62839] flex items-center justify-center shadow-md shadow-[#D62839]/25 text-white shrink-0">
               <Layers className="w-5 h-5" />
             </div>
-            <div>
-              <div className="font-bold text-base tracking-tight text-[#20242C] flex items-center gap-1.5">
-                MY COCKPIT <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#FFF1F2] text-[#D62839] font-mono font-bold border border-[#FECDD3]">AI</span>
+            {!isCollapsed && (
+              <div className="min-w-0">
+                <div className="font-extrabold text-base tracking-tight text-slate-900 dark:text-white flex items-center gap-1.5">
+                  MY COCKPIT <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-50 text-[#D62839] dark:bg-rose-950/60 dark:text-rose-400 font-mono font-bold border border-rose-200 dark:border-rose-900/60">AI</span>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[150px] font-medium">
+                  {tenant?.name || 'Enterprise System'}
+                </p>
               </div>
-              <p className="text-[11px] text-[#667085] truncate max-w-[150px] font-medium">
-                {tenant?.name || 'Enterprise System'}
-              </p>
-            </div>
+            )}
           </div>
+
           {/* Mobile close button */}
           <button 
             onClick={() => setIsOpen(false)} 
-            className="p-1.5 rounded-lg text-[#667085] hover:text-[#D62839] hover:bg-[#FFF1F2] lg:hidden cursor-pointer"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-[#D62839] hover:bg-rose-50 dark:hover:bg-rose-950/40 lg:hidden cursor-pointer"
             aria-label="Close menu"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Workspace Identifier */}
-        <div className="px-4 py-2.5 bg-[#F8F9FB] border-b border-[#E9EAEE]">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-[#667085] font-medium">Workspace:</span>
-            <span className="font-mono px-2 py-0.5 rounded-md bg-white text-[#D62839] font-semibold border border-[#E9EAEE] shadow-2xs">
-              /{user?.tenant_slug || (isSuperAdmin ? 'system-root' : 'isolated')}
-            </span>
+        {/* Workspace Identifier (Hidden when collapsed on desktop) */}
+        {!isCollapsed && (
+          <div className="px-4 py-2.5 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800/80">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-500 dark:text-slate-400 font-medium">Workspace:</span>
+              <span className="font-mono px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 text-[#D62839] dark:text-rose-400 font-semibold border border-slate-200 dark:border-slate-700 shadow-2xs">
+                /{user?.tenant_slug || (isSuperAdmin ? 'system-root' : 'isolated')}
+              </span>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Navigation Links */}
-        <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
+        <nav className="flex-1 overflow-y-auto px-2.5 py-3 space-y-1">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -128,29 +144,32 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpe
                   setActiveTab(item.id);
                   setIsOpen(false);
                 }}
+                title={isCollapsed ? item.label : undefined}
                 className={`
-                  w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-180 group cursor-pointer
+                  w-full flex items-center ${isCollapsed ? 'lg:justify-center lg:px-0' : 'justify-between px-3'} py-2.5 rounded-xl text-sm font-medium transition-all duration-180 group cursor-pointer
                   ${isActive 
-                    ? 'bg-[#FFF1F2] text-[#D62839] border border-[#FECDD3] shadow-2xs font-bold' 
-                    : 'text-[#667085] hover:text-[#20242C] hover:bg-[#FFF1F2]/50 border border-transparent'}
+                    ? 'bg-rose-50 text-[#D62839] border border-rose-200 shadow-2xs font-bold dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-900/50' 
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800/60 border border-transparent'}
                 `}
               >
                 <div className="flex items-center gap-3">
-                  <Icon className={`w-4 h-4 transition-colors ${isActive ? 'text-[#D62839]' : 'text-[#94A3B8] group-hover:text-[#D62839]'}`} />
-                  <span>{item.label}</span>
+                  <Icon className={`w-4 h-4 shrink-0 transition-colors ${isActive ? 'text-[#D62839] dark:text-rose-400' : 'text-slate-400 group-hover:text-[#D62839] dark:group-hover:text-rose-400'}`} />
+                  {!isCollapsed && <span className="truncate">{item.label}</span>}
                 </div>
-                {item.badge ? (
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border ${
-                    item.badgeRed 
-                      ? 'bg-[#FFF1F2] text-[#D62839] border-[#FECDD3]' 
-                      : item.badgeAmber 
-                        ? 'bg-[#FEF3C7] text-[#D97706] border-[#FDE68A]'
-                        : 'bg-[#FFF1F2] text-[#D62839] border-[#FECDD3]'
-                  }`}>
-                    {item.badge}
-                  </span>
-                ) : (
-                  isActive && <ChevronRight className="w-3.5 h-3.5 text-[#D62839] opacity-80" />
+                {!isCollapsed && (
+                  item.badge ? (
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border shrink-0 ${
+                      item.badgeRed 
+                        ? 'bg-rose-50 text-[#D62839] border-rose-200 dark:bg-rose-950/60 dark:text-rose-400 dark:border-rose-900/60' 
+                        : item.badgeAmber 
+                          ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-400 dark:border-amber-900/60'
+                          : 'bg-rose-50 text-[#D62839] border-rose-200 dark:bg-rose-950/60 dark:text-rose-400 dark:border-rose-900/60'
+                    }`}>
+                      {item.badge}
+                    </span>
+                  ) : (
+                    isActive && <ChevronRight className="w-3.5 h-3.5 text-[#D62839] dark:text-rose-400 opacity-80" />
+                  )
                 )}
               </button>
             );
@@ -158,25 +177,45 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpe
         </nav>
 
         {/* Profile Card & Session Controls */}
-        <div className="p-4 border-t border-[#E9EAEE] bg-[#F8F9FB]">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-9 h-9 rounded-full bg-[#FFF1F2] border border-[#FECDD3] flex items-center justify-center text-xs font-bold text-[#D62839] shrink-0 shadow-2xs">
+        <div className={`p-3.5 border-t border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-900/40 ${isCollapsed ? 'lg:p-2' : ''}`}>
+          {!isCollapsed ? (
+            <>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-9 h-9 rounded-full bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900/60 flex items-center justify-center text-xs font-bold text-[#D62839] dark:text-rose-400 shrink-0 shadow-2xs">
+                    {user?.name?.charAt(0) || 'U'}
+                  </div>
+                  <div className="truncate min-w-0">
+                    <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{user?.name}</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{user?.email}</p>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={logout}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#D62839] hover:text-[#B91C2C] bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-950/70 border border-rose-200 dark:border-rose-900/60 transition-all duration-180 cursor-pointer"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Sign Out</span>
+              </button>
+            </>
+          ) : (
+            <div className="flex flex-col items-center gap-2">
+              <div 
+                title={`${user?.name} (${user?.email})`}
+                className="w-9 h-9 rounded-full bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900/60 flex items-center justify-center text-xs font-bold text-[#D62839] dark:text-rose-400 shrink-0 shadow-2xs cursor-pointer"
+              >
                 {user?.name?.charAt(0) || 'U'}
               </div>
-              <div className="truncate">
-                <p className="text-xs font-bold text-[#20242C] truncate">{user?.name}</p>
-                <p className="text-[11px] text-[#667085] truncate">{user?.email}</p>
-              </div>
+              <button
+                onClick={logout}
+                title="Sign Out Session"
+                className="p-2 rounded-xl text-[#D62839] hover:bg-rose-100 dark:hover:bg-rose-950/60 transition-colors cursor-pointer"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
             </div>
-          </div>
-          <button
-            onClick={logout}
-            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#D62839] hover:text-[#B91C2C] bg-[#FFF1F2] hover:bg-[#FFE4E6] border border-[#FECDD3] transition-all duration-180 cursor-pointer"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span>Sign Out Session</span>
-          </button>
+          )}
         </div>
       </aside>
     </>

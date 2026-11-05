@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { BottomNav } from './components/layout/BottomNav';
@@ -40,9 +41,10 @@ const AppContent: React.FC = () => {
     return 'dashboard';
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [authView, setAuthView] = useState<'login' | 'register'>('login');
 
-  // Check URL pathname on initial load for personal client URL routing (e.g. /utsav, /rahul, /leads)
+  // Check URL pathname on initial load for personal client URL routing
   useEffect(() => {
     const path = window.location.pathname.replace(/^\//, '').trim();
     if (path && !['login', 'register', 'admin', 'api', 'leads', 'integrations'].includes(path.toLowerCase())) {
@@ -78,11 +80,11 @@ const AppContent: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[#F8F9FA] dark:bg-[#090D16] flex items-center justify-center p-4">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-12 h-12 border-4 border-[#D62839]/20 border-t-[#D62839] rounded-full animate-spin" />
-          <p className="text-xs font-bold text-[#20242C] tracking-tight">Initializing MY COCKPIT AI Platform...</p>
-          <p className="text-[11px] text-[#667085]">Connecting secure workspace session</p>
+          <div className="w-12 h-12 border-4 border-rose-200 dark:border-rose-900/60 border-t-[#D62839] rounded-full animate-spin" />
+          <p className="text-xs font-bold text-slate-900 dark:text-white tracking-tight">Initializing MY COCKPIT AI Platform...</p>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400">Connecting secure workspace session</p>
         </div>
       </div>
     );
@@ -131,24 +133,28 @@ const AppContent: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] text-[#20242C] flex antialiased">
-      {/* Sidebar Navigation (Desktop Drawer & Mobile Full Drawer) */}
+    <div className="min-h-screen bg-[#F8F9FA] dark:bg-[#090D16] text-slate-900 dark:text-slate-100 flex antialiased selection:bg-rose-500/20 selection:text-[#D62839]">
+      {/* Sidebar Navigation */}
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         isOpen={isSidebarOpen}
         setIsOpen={setIsSidebarOpen}
+        isCollapsed={isSidebarCollapsed}
+        setIsCollapsed={setIsSidebarCollapsed}
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 lg:pl-72 flex flex-col min-h-screen min-w-0">
+      <div className={`flex-1 ${isSidebarCollapsed ? 'lg:pl-20' : 'lg:pl-72'} flex flex-col min-h-screen min-w-0 transition-all duration-250 ease-in-out`}>
         <Header
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           setIsSidebarOpen={setIsSidebarOpen}
+          isSidebarCollapsed={isSidebarCollapsed}
+          setIsSidebarCollapsed={setIsSidebarCollapsed}
         />
 
-        <main className="flex-1 p-3.5 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto pb-24 lg:pb-8">
+        <main className="flex-1 p-3.5 sm:p-5 lg:p-7 max-w-7xl w-full mx-auto pb-24 lg:pb-10">
           {renderActiveView()}
         </main>
 
@@ -165,9 +171,11 @@ const AppContent: React.FC = () => {
 
 export const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </ThemeProvider>
   );
 };
 
