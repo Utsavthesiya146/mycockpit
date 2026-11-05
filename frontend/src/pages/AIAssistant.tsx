@@ -72,6 +72,17 @@ export const AIAssistant: React.FC = () => {
     fetchConversations();
   }, [user?.tenant_id]);
 
+  // Handle pending AI inquiry passed from Dashboard
+  useEffect(() => {
+    const pending = sessionStorage.getItem('cockpit_pending_ai_query');
+    if (pending) {
+      sessionStorage.removeItem('cockpit_pending_ai_query');
+      setTimeout(() => {
+        handleSendMessage(pending);
+      }, 400);
+    }
+  }, []);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);

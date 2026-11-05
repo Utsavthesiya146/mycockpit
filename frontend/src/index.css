@@ -13,7 +13,7 @@
     --color-red-soft: #FFF1F2;
     --color-red-border: #FECDD3;
     
-    /* Light Theme (Crisp Executive) */
+    /* Light Theme (Crisp Porcelain Executive) */
     --bg-primary: #F8F9FA;
     --surface-main: #FFFFFF;
     --surface-secondary: #F3F4F6;
@@ -37,24 +37,24 @@
 
   .dark {
     /* Obsidian Dark Theme (Linear / Stripe Executive) */
-    --bg-primary: #090D16;
-    --surface-main: #0F172A;
-    --surface-secondary: #131D31;
-    --surface-hover: #1E293B;
+    --bg-primary: #07090E;
+    --surface-main: #0D111A;
+    --surface-secondary: #131826;
+    --surface-hover: #192033;
     
     --text-primary: #F8FAFC;
     --text-secondary: #94A3B8;
     --text-muted: #64748B;
     
-    --color-border: #1E293B;
-    --color-border-subtle: #172033;
+    --color-border: rgba(255, 255, 255, 0.08);
+    --color-border-subtle: rgba(255, 255, 255, 0.04);
     
-    --color-red-soft: rgba(214, 40, 57, 0.15);
-    --color-red-border: rgba(214, 40, 57, 0.35);
+    --color-red-soft: rgba(214, 40, 57, 0.16);
+    --color-red-border: rgba(214, 40, 57, 0.38);
 
-    --color-success-soft: rgba(5, 150, 105, 0.15);
-    --color-warning-soft: rgba(217, 119, 6, 0.15);
-    --color-error-soft: rgba(220, 38, 38, 0.15);
+    --color-success-soft: rgba(5, 150, 105, 0.16);
+    --color-warning-soft: rgba(217, 119, 6, 0.16);
+    --color-error-soft: rgba(220, 38, 38, 0.16);
   }
 
   body {
@@ -69,48 +69,106 @@
 }
 
 /* ===================================================
-   HK SIR PREMIUM EXECUTIVE SAAS DESIGN SYSTEM
+   HK SIR PREMIUM EXECUTIVE SAAS DESIGN SYSTEM V2
    =================================================== */
 
-/* Cards & Surfaces */
+/* Ambient Lighting & Gradients */
+.cockpit-mesh-dark {
+  background: radial-gradient(circle at 15% 15%, rgba(214, 40, 57, 0.09) 0%, transparent 40%),
+              radial-gradient(circle at 85% 85%, rgba(59, 130, 246, 0.07) 0%, transparent 45%),
+              #07090E;
+}
+
+.cockpit-mesh-light {
+  background: radial-gradient(circle at 20% 20%, rgba(254, 205, 211, 0.25) 0%, transparent 50%),
+              radial-gradient(circle at 80% 80%, rgba(224, 231, 255, 0.3) 0%, transparent 50%),
+              #F8F9FA;
+}
+
+/* Elevated Cards & Surfaces */
 .cockpit-card {
   background-color: var(--surface-main);
   border: 1px solid var(--color-border);
-  border-radius: 1rem;
+  border-radius: 1.25rem;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.02);
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .dark .cockpit-card {
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4), 0 1px 3px 0 rgba(255, 255, 255, 0.02);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5), 0 1px 2px 0 rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .cockpit-card-hover {
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
 }
 
 .cockpit-card-hover:hover {
-  border-color: #D62839;
+  border-color: rgba(214, 40, 57, 0.4);
   transform: translateY(-2px);
-  box-shadow: 0 12px 28px -6px rgba(214, 40, 57, 0.12), 0 4px 10px -2px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 14px 32px -8px rgba(214, 40, 57, 0.12), 0 4px 12px -2px rgba(0, 0, 0, 0.05);
 }
 
 .dark .cockpit-card-hover:hover {
-  border-color: rgba(214, 40, 57, 0.5);
-  box-shadow: 0 14px 30px -6px rgba(214, 40, 57, 0.2), 0 4px 12px -2px rgba(0, 0, 0, 0.6);
+  border-color: rgba(214, 40, 57, 0.6);
+  box-shadow: 0 16px 36px -8px rgba(214, 40, 57, 0.25), 0 4px 16px -2px rgba(0, 0, 0, 0.7);
 }
 
 /* Glassmorphism for floating panels & headers */
 .cockpit-glass {
   background-color: rgba(255, 255, 255, 0.88);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--color-border);
 }
 
 .dark .cockpit-glass {
-  background-color: rgba(11, 15, 25, 0.88);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  background-color: rgba(13, 17, 26, 0.88);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Glass Surface Panels */
+.cockpit-glass-surface {
+  background-color: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.dark .cockpit-glass-surface {
+  background-color: rgba(13, 17, 26, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* AI Command Center Elements */
+.ai-pulse-dot {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background-color: #D62839;
+}
+
+.ai-pulse-dot::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 9999px;
+  background-color: rgba(214, 40, 57, 0.4);
+  animation: aiPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes aiPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
 }
 
 /* Premium Buttons & Micro-Interactions */
@@ -121,13 +179,13 @@
   gap: 0.5rem;
   background-color: #D62839;
   color: #FFFFFF;
-  font-weight: 600;
+  font-weight: 700;
   font-size: 0.8125rem;
   line-height: 1.25rem;
   padding: 0.625rem 1.125rem;
   border-radius: 0.75rem;
   border: 1px solid transparent;
-  box-shadow: 0 2px 6px -1px rgba(214, 40, 57, 0.35);
+  box-shadow: 0 2px 8px -1px rgba(214, 40, 57, 0.4);
   transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   cursor: pointer;
   user-select: none;
@@ -136,7 +194,7 @@
 .cockpit-btn-primary:hover:not(:disabled) {
   background-color: #B91C2C;
   transform: translateY(-1px);
-  box-shadow: 0 6px 16px -2px rgba(214, 40, 57, 0.45);
+  box-shadow: 0 6px 18px -2px rgba(214, 40, 57, 0.5);
 }
 
 .cockpit-btn-primary:active:not(:disabled) {
@@ -182,13 +240,9 @@
 }
 
 .dark .cockpit-btn-secondary:hover:not(:disabled) {
-  background-color: rgba(214, 40, 57, 0.12);
-  border-color: rgba(214, 40, 57, 0.4);
+  background-color: rgba(214, 40, 57, 0.14);
+  border-color: rgba(214, 40, 57, 0.45);
   color: #EF4444;
-}
-
-.cockpit-btn-secondary:active:not(:disabled) {
-  transform: translateY(0);
 }
 
 .cockpit-btn-subtle {
@@ -230,8 +284,8 @@
 }
 
 .dark .cockpit-input {
-  background-color: #0F172A;
-  border-color: #1E293B;
+  background-color: #0D111A;
+  border-color: rgba(255, 255, 255, 0.1);
   color: #F8FAFC;
 }
 
@@ -251,7 +305,7 @@
 .cockpit-input:focus {
   outline: none;
   border-color: #D62839;
-  box-shadow: 0 0 0 3px rgba(214, 40, 57, 0.14);
+  box-shadow: 0 0 0 3px rgba(214, 40, 57, 0.15);
 }
 
 /* Mobile Safe Areas and Touch Ergonomics */
