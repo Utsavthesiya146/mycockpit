@@ -36,6 +36,8 @@ import {
 import { api } from '../services/api';
 import { Badge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
+import { EmptyState } from '../components/common/EmptyState';
+import { Cockpit3DLoader } from '../components/common/Cockpit3DLoader';
 import type { GmailMessage, GmailStatus, GmailFolderType, GmailAttachment } from '../types';
 
 export const GmailWorkspace: React.FC = () => {
@@ -497,20 +499,20 @@ export const GmailWorkspace: React.FC = () => {
   return (
     <div className="space-y-4">
       {/* Top Banner & Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-4 sm:p-5 rounded-2xl border border-[#E9EAEE] shadow-xs">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white dark:bg-[#0D111A] p-4 sm:p-5 rounded-2xl border border-slate-200/90 dark:border-white/[0.08] shadow-xs">
         <div>
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-[#FFF1F2] border border-[#FECDD3] flex items-center justify-center text-[#D62839]">
+            <div className="w-9 h-9 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 flex items-center justify-center text-[#D62839] dark:text-rose-400">
               <Mail className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-lg sm:text-xl font-bold text-[#20242C] tracking-tight flex items-center gap-2">
+              <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
                 Gmail Workspace
-                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#FFF1F2] text-[#D62839] border border-[#FECDD3]">
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/40 text-[#D62839] dark:text-rose-400 border border-rose-200 dark:border-rose-900/50">
                   OAuth 2.0
                 </span>
               </h1>
-              <p className="text-xs text-[#667085]">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 Complete email management inside My Cockpit AI. Read, compose, send, archive, and organize.
               </p>
             </div>
@@ -523,10 +525,10 @@ export const GmailWorkspace: React.FC = () => {
               <button
                 onClick={handleSyncEmails}
                 disabled={isSyncing}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-[#F8F9FB] border border-[#E9EAEE] text-xs font-semibold text-[#20242C] transition-all cursor-pointer shadow-xs disabled:opacity-60"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-[#07090E] hover:bg-slate-50 dark:hover:bg-slate-900/60 border border-slate-200/90 dark:border-white/[0.08] text-xs font-semibold text-slate-700 dark:text-slate-200 transition-all cursor-pointer shadow-xs disabled:opacity-60"
                 title="Synchronize emails with Gmail API"
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-[#D62839]' : 'text-[#667085]'}`} />
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-[#D62839] dark:text-rose-400' : 'text-slate-400'}`} />
                 <span>{isSyncing ? 'Syncing...' : 'Sync Emails'}</span>
               </button>
               <button
@@ -552,15 +554,15 @@ export const GmailWorkspace: React.FC = () => {
       {/* Notification Toast */}
       {feedback && (
         <div className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 text-xs font-medium transition-all ${
-          feedback.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
-          feedback.type === 'error' ? 'bg-rose-50 border-rose-200 text-rose-800' :
-          'bg-blue-50 border-blue-200 text-blue-800'
+          feedback.type === 'success' ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900/50 text-emerald-800 dark:text-emerald-300' :
+          feedback.type === 'error' ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900/50 text-rose-800 dark:text-rose-300' :
+          'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900/50 text-blue-800 dark:text-blue-300'
         }`}>
           <div className="flex items-center gap-2">
-            {feedback.type === 'success' ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <AlertCircle className="w-4 h-4 text-rose-600" />}
+            {feedback.type === 'success' ? <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /> : <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400" />}
             <span>{feedback.message}</span>
           </div>
-          <button onClick={() => setFeedback(null)} className="text-gray-400 hover:text-gray-600 cursor-pointer">
+          <button onClick={() => setFeedback(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -570,8 +572,8 @@ export const GmailWorkspace: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
         {/* Left Column: Folders & Account Card (3 Cols) */}
         <div className="lg:col-span-3 space-y-4">
-          <div className="bg-white rounded-2xl border border-[#E9EAEE] p-3 shadow-xs space-y-1">
-            <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-[#98A2B3]">
+          <div className="bg-white dark:bg-[#0D111A] rounded-2xl border border-slate-200/90 dark:border-white/[0.08] p-3 shadow-xs space-y-1">
+            <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
               Mailboxes
             </div>
             {folders.map(f => {
@@ -585,12 +587,12 @@ export const GmailWorkspace: React.FC = () => {
                   onClick={() => handleSelectFolder(f.id)}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                     isActive 
-                      ? 'bg-[#FFF1F2] text-[#D62839] border border-[#FECDD3]' 
-                      : 'text-[#667085] hover:bg-[#F8F9FB] hover:text-[#20242C]'
+                      ? 'bg-rose-50 dark:bg-rose-950/40 text-[#D62839] dark:text-rose-400 border border-rose-200 dark:border-rose-900/50' 
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900/60 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
-                    <Icon className={`w-4 h-4 ${isActive ? 'text-[#D62839]' : 'text-[#98A2B3]'}`} />
+                    <Icon className={`w-4 h-4 ${isActive ? 'text-[#D62839] dark:text-rose-400' : 'text-slate-400'}`} />
                     <span>{f.label}</span>
                   </div>
                   {unread > 0 && (
@@ -599,7 +601,7 @@ export const GmailWorkspace: React.FC = () => {
                     </span>
                   )}
                   {unread === 0 && countInfo && countInfo.count > 0 && (
-                    <span className="text-[11px] text-[#98A2B3]">
+                    <span className="text-[11px] text-slate-400 dark:text-slate-500 font-mono">
                       {countInfo.count}
                     </span>
                   )}
@@ -609,9 +611,9 @@ export const GmailWorkspace: React.FC = () => {
           </div>
 
           {/* Account Status Card */}
-          <div className="bg-white rounded-2xl border border-[#E9EAEE] p-4 shadow-xs space-y-3">
+          <div className="bg-white dark:bg-[#0D111A] rounded-2xl border border-slate-200/90 dark:border-white/[0.08] p-4 shadow-xs space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-[#20242C]">Connected Account</span>
+              <span className="text-xs font-bold text-slate-900 dark:text-white">Connected Account</span>
               <Badge 
                 variant={status?.is_connected ? 'green' : 'gray'}
                 className="text-[10px]"
@@ -622,26 +624,26 @@ export const GmailWorkspace: React.FC = () => {
 
             {status?.is_connected ? (
               <div className="space-y-2">
-                <div className="flex items-center gap-2 text-xs text-[#20242C] font-semibold break-all">
-                  <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                <div className="flex items-center gap-2 text-xs text-slate-900 dark:text-white font-semibold break-all">
+                  <div className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0">
                     <User className="w-3.5 h-3.5" />
                   </div>
                   <span>{status.email_address}</span>
                 </div>
-                <div className="flex items-center justify-between text-[11px] text-[#667085] pt-1 border-t border-[#E9EAEE]">
+                <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-200/80 dark:border-white/[0.06]">
                   <span>Last Sync:</span>
                   <span className="font-mono">{status.last_sync_at ? status.last_sync_at.split(' ')[1] : 'Never'}</span>
                 </div>
                 <button
                   onClick={handleDisconnect}
-                  className="w-full mt-2 py-1.5 px-3 rounded-xl bg-gray-50 hover:bg-rose-50 text-gray-600 hover:text-rose-600 border border-gray-200 text-xs font-semibold transition-all cursor-pointer"
+                  className="w-full mt-2 py-1.5 px-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-600 dark:text-slate-400 hover:text-rose-600 border border-slate-200/90 dark:border-white/[0.08] text-xs font-semibold transition-all cursor-pointer"
                 >
                   Disconnect Gmail
                 </button>
               </div>
             ) : (
               <div className="space-y-2">
-                <p className="text-[11px] text-[#667085]">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
                   Connect your Google account to send, read, and manage emails with official OAuth 2.0.
                 </p>
                 <button
@@ -658,25 +660,25 @@ export const GmailWorkspace: React.FC = () => {
         {/* Middle & Right Column: Messages List + Reading Pane (9 Cols) */}
         <div className="lg:col-span-9 grid grid-cols-1 md:grid-cols-12 gap-4">
           {/* Messages List (5 Cols on Desktop) */}
-          <div className={`bg-white rounded-2xl border border-[#E9EAEE] shadow-xs flex flex-col min-h-[580px] ${
+          <div className={`bg-white dark:bg-[#0D111A] rounded-2xl border border-slate-200/90 dark:border-white/[0.08] shadow-xs flex flex-col min-h-[580px] ${
             selectedMessage ? 'hidden md:flex md:col-span-5' : 'col-span-12 md:col-span-12'
           }`}>
             {/* Search Bar & Toolbar */}
-            <div className="p-3 border-b border-[#E9EAEE] space-y-2">
+            <div className="p-3 border-b border-slate-200/90 dark:border-white/[0.08] space-y-2">
               <form onSubmit={handleSearchSubmit} className="relative">
-                <Search className="w-3.5 h-3.5 text-[#98A2B3] absolute left-3 top-1/2 -translate-y-1/2" />
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   placeholder="Search sender, subject, keywords..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  className="w-full pl-8 pr-8 py-1.5 rounded-xl border border-[#E9EAEE] bg-[#F8F9FB] focus:bg-white focus:border-[#D62839] text-xs transition-all outline-hidden"
+                  className="cockpit-input pl-8 pr-8 py-1.5 text-xs w-full"
                 />
                 {searchQuery && (
                   <button 
                     type="button" 
                     onClick={() => { setSearchQuery(''); fetchMessages(activeFolder, 1, ''); }}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -688,47 +690,47 @@ export const GmailWorkspace: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <button 
                     onClick={handleSelectAll}
-                    className="text-[#667085] hover:text-[#20242C] cursor-pointer"
+                    className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer"
                     title={selectedIds.length === messages.length ? 'Deselect All' : 'Select All'}
                   >
                     {selectedIds.length > 0 && selectedIds.length === messages.length ? (
-                      <CheckSquare className="w-4 h-4 text-[#D62839]" />
+                      <CheckSquare className="w-4 h-4 text-[#D62839] dark:text-rose-400" />
                     ) : (
                       <Square className="w-4 h-4" />
                     )}
                   </button>
-                  <span className="text-[11px] text-[#98A2B3] capitalize">
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 capitalize">
                     {activeFolder} ({totalMessages})
                   </span>
                 </div>
 
                 {selectedIds.length > 0 && (
-                  <div className="flex items-center gap-1.5 bg-[#FFF1F2] px-2 py-1 rounded-lg border border-[#FECDD3]">
-                    <span className="text-[11px] font-bold text-[#D62839] mr-1">{selectedIds.length}</span>
+                  <div className="flex items-center gap-1.5 bg-rose-50 dark:bg-rose-950/40 px-2 py-1 rounded-lg border border-rose-200 dark:border-rose-900/50">
+                    <span className="text-[11px] font-bold text-[#D62839] dark:text-rose-400 mr-1">{selectedIds.length}</span>
                     <button 
                       onClick={() => handleBulkAction('mark_read')}
-                      className="p-1 hover:bg-white rounded text-[#D62839] cursor-pointer" 
+                      className="p-1 hover:bg-white dark:hover:bg-slate-800 rounded text-[#D62839] dark:text-rose-400 cursor-pointer" 
                       title="Mark as Read"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
                     </button>
                     <button 
                       onClick={() => handleBulkAction('mark_unread')}
-                      className="p-1 hover:bg-white rounded text-[#D62839] cursor-pointer" 
+                      className="p-1 hover:bg-white dark:hover:bg-slate-800 rounded text-[#D62839] dark:text-rose-400 cursor-pointer" 
                       title="Mark as Unread"
                     >
                       <Mail className="w-3.5 h-3.5" />
                     </button>
                     <button 
                       onClick={() => handleBulkAction('archive')}
-                      className="p-1 hover:bg-white rounded text-[#D62839] cursor-pointer" 
+                      className="p-1 hover:bg-white dark:hover:bg-slate-800 rounded text-[#D62839] dark:text-rose-400 cursor-pointer" 
                       title="Archive Selected"
                     >
                       <Archive className="w-3.5 h-3.5" />
                     </button>
                     <button 
                       onClick={() => setIsBulkTrashConfirmOpen(true)}
-                      className="p-1 hover:bg-white rounded text-rose-600 cursor-pointer" 
+                      className="p-1 hover:bg-white dark:hover:bg-slate-800 rounded text-rose-600 dark:text-rose-400 cursor-pointer" 
                       title="Move to Trash"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -739,23 +741,35 @@ export const GmailWorkspace: React.FC = () => {
             </div>
 
             {/* Messages Scrollable List */}
-            <div className="flex-1 overflow-y-auto divide-y divide-[#E9EAEE]">
+            <div className="flex-1 overflow-y-auto divide-y divide-slate-200/80 dark:divide-white/[0.06]">
               {messagesLoading ? (
-                <div className="p-8 text-center space-y-2">
-                  <div className="w-7 h-7 border-2 border-[#D62839]/20 border-t-[#D62839] rounded-full animate-spin mx-auto" />
-                  <p className="text-xs text-[#667085]">Loading emails...</p>
+                <div className="p-8 text-center">
+                  <Cockpit3DLoader 
+                    variant="module"
+                    size="sm"
+                    text="Synchronizing Gmail Threads..."
+                    subtitle="Fetching authenticated messages via Google REST API v1"
+                  />
                 </div>
               ) : messages.length === 0 ? (
-                <div className="p-12 text-center space-y-3">
-                  <div className="w-12 h-12 rounded-2xl bg-[#F8F9FB] border border-[#E9EAEE] flex items-center justify-center text-[#98A2B3] mx-auto">
-                    <Mail className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-[#20242C]">No messages in {activeFolder}</p>
-                    <p className="text-[11px] text-[#667085] mt-0.5">
-                      {status?.is_connected ? 'Click "Sync Emails" to fetch new messages.' : 'Connect your Gmail account to manage emails.'}
-                    </p>
-                  </div>
+                <div className="py-8 px-4">
+                  <EmptyState
+                    icon={Mail}
+                    title={`No messages in ${activeFolder}`}
+                    description={status?.is_connected
+                      ? "Your mailbox is synchronized. Click 'Sync Emails' or 'Compose' to initiate a conversation."
+                      : "Connect your official Google account to manage communications directly within My Cockpit AI."
+                    }
+                    primaryAction={status?.is_connected ? {
+                      label: "Compose Email",
+                      onClick: handleOpenCompose,
+                      icon: Plus
+                    } : {
+                      label: "Connect Google Account",
+                      onClick: handleInitiateOAuth,
+                      icon: Mail
+                    }}
+                  />
                 </div>
               ) : (
                 messages.map(msg => {
@@ -767,19 +781,19 @@ export const GmailWorkspace: React.FC = () => {
                       onClick={() => handleSelectMessage(msg)}
                       className={`p-3 transition-all cursor-pointer relative flex items-start gap-2.5 ${
                         isSelected 
-                          ? 'bg-[#FFF1F2]/60 border-l-4 border-l-[#D62839]' 
+                          ? 'bg-rose-50/70 dark:bg-rose-950/40 border-l-4 border-l-[#D62839]' 
                           : !msg.is_read 
-                            ? 'bg-white border-l-4 border-l-[#D62839] hover:bg-[#F8F9FB]' 
-                            : 'bg-white hover:bg-[#F8F9FB]'
+                            ? 'bg-white dark:bg-[#0D111A] border-l-4 border-l-[#D62839] hover:bg-slate-50 dark:hover:bg-slate-900/60' 
+                            : 'bg-white dark:bg-[#0D111A] hover:bg-slate-50 dark:hover:bg-slate-900/60'
                       }`}
                     >
                       {/* Checkbox */}
                       <button
                         onClick={e => { e.stopPropagation(); handleToggleSelect(msg.message_id); }}
-                        className="mt-0.5 text-gray-400 hover:text-gray-600 cursor-pointer"
+                        className="mt-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
                       >
                         {isChecked ? (
-                          <CheckSquare className="w-4 h-4 text-[#D62839]" />
+                          <CheckSquare className="w-4 h-4 text-[#D62839] dark:text-rose-400" />
                         ) : (
                           <Square className="w-4 h-4" />
                         )}
@@ -789,7 +803,7 @@ export const GmailWorkspace: React.FC = () => {
                       <button
                         onClick={e => handleToggleStar(e, msg)}
                         className={`mt-0.5 cursor-pointer ${
-                          msg.is_starred ? 'text-amber-400 hover:text-amber-500' : 'text-gray-300 hover:text-gray-400'
+                          msg.is_starred ? 'text-amber-400 hover:text-amber-500' : 'text-slate-300 dark:text-slate-600 hover:text-slate-400'
                         }`}
                         title={msg.is_starred ? 'Unstar' : 'Star'}
                       >
@@ -799,23 +813,23 @@ export const GmailWorkspace: React.FC = () => {
                       {/* Email Content */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-1">
-                          <span className={`text-xs truncate ${!msg.is_read ? 'font-bold text-[#20242C]' : 'font-medium text-[#667085]'}`}>
+                          <span className={`text-xs truncate ${!msg.is_read ? 'font-bold text-slate-900 dark:text-white' : 'font-medium text-slate-500 dark:text-slate-400'}`}>
                             {msg.from_name || msg.from_email || 'Unknown'}
                           </span>
-                          <span className="text-[10px] text-[#98A2B3] shrink-0 font-mono">
+                          <span className="text-[10px] text-slate-400 shrink-0 font-mono">
                             {msg.date_sent ? msg.date_sent.split(' ')[0] : ''}
                           </span>
                         </div>
-                        <div className={`text-xs truncate mt-0.5 ${!msg.is_read ? 'font-bold text-[#20242C]' : 'text-[#20242C]'}`}>
+                        <div className={`text-xs truncate mt-0.5 ${!msg.is_read ? 'font-bold text-slate-900 dark:text-white' : 'text-slate-700 dark:text-slate-300'}`}>
                           {msg.subject || '(No Subject)'}
                         </div>
-                        <p className="text-[11px] text-[#667085] truncate mt-0.5">
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
                           {msg.snippet}
                         </p>
                       </div>
 
                       {msg.has_attachments && (
-                        <Paperclip className="w-3.5 h-3.5 text-[#98A2B3] shrink-0 mt-1" />
+                        <Paperclip className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-1" />
                       )}
                     </div>
                   );
@@ -825,20 +839,20 @@ export const GmailWorkspace: React.FC = () => {
 
             {/* Pagination Controls */}
             {totalPages > 1 && (
-              <div className="p-2.5 border-t border-[#E9EAEE] flex items-center justify-between text-xs text-[#667085]">
+              <div className="p-2.5 border-t border-slate-200/90 dark:border-white/[0.08] flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
                 <span>Page {page} of {totalPages}</span>
                 <div className="flex items-center gap-1">
                   <button
                     disabled={page <= 1}
                     onClick={() => { const p = page - 1; setPage(p); fetchMessages(activeFolder, p); }}
-                    className="p-1.5 rounded-lg border border-[#E9EAEE] hover:bg-[#F8F9FB] disabled:opacity-40 cursor-pointer"
+                    className="p-1.5 rounded-lg border border-slate-200/90 dark:border-white/[0.08] hover:bg-slate-50 dark:hover:bg-slate-900/60 disabled:opacity-40 cursor-pointer"
                   >
                     <ChevronLeft className="w-3.5 h-3.5" />
                   </button>
                   <button
                     disabled={page >= totalPages}
                     onClick={() => { const p = page + 1; setPage(p); fetchMessages(activeFolder, p); }}
-                    className="p-1.5 rounded-lg border border-[#E9EAEE] hover:bg-[#F8F9FB] disabled:opacity-40 cursor-pointer"
+                    className="p-1.5 rounded-lg border border-slate-200/90 dark:border-white/[0.08] hover:bg-slate-50 dark:hover:bg-slate-900/60 disabled:opacity-40 cursor-pointer"
                   >
                     <ChevronRight className="w-3.5 h-3.5" />
                   </button>
@@ -849,13 +863,13 @@ export const GmailWorkspace: React.FC = () => {
 
           {/* Reading Pane (7 Cols on Desktop) */}
           {selectedMessage && (
-            <div className="col-span-12 md:col-span-7 bg-white rounded-2xl border border-[#E9EAEE] shadow-xs flex flex-col min-h-[580px]">
+            <div className="col-span-12 md:col-span-7 bg-white dark:bg-[#0D111A] rounded-2xl border border-slate-200/90 dark:border-white/[0.08] shadow-xs flex flex-col min-h-[580px]">
               {/* Reading Header & Actions */}
-              <div className="p-4 border-b border-[#E9EAEE] space-y-3">
+              <div className="p-4 border-b border-slate-200/90 dark:border-white/[0.08] space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <button
                     onClick={() => setSelectedMessage(null)}
-                    className="md:hidden p-1.5 rounded-lg border border-[#E9EAEE] text-gray-600 hover:bg-gray-50 flex items-center gap-1 text-xs"
+                    className="md:hidden p-1.5 rounded-lg border border-slate-200/90 dark:border-white/[0.08] text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900/60 flex items-center gap-1 text-xs cursor-pointer"
                   >
                     <ChevronLeft className="w-4 h-4" />
                     <span>Back</span>
@@ -864,8 +878,8 @@ export const GmailWorkspace: React.FC = () => {
                   <div className="flex items-center gap-1.5 ml-auto">
                     <button
                       onClick={e => handleToggleStar(e, selectedMessage)}
-                      className={`p-2 rounded-xl border border-[#E9EAEE] hover:bg-[#F8F9FB] cursor-pointer ${
-                        selectedMessage.is_starred ? 'text-amber-400' : 'text-gray-400'
+                      className={`p-2 rounded-xl border border-slate-200/90 dark:border-white/[0.08] hover:bg-slate-50 dark:hover:bg-slate-900/60 cursor-pointer ${
+                        selectedMessage.is_starred ? 'text-amber-400' : 'text-slate-400'
                       }`}
                       title={selectedMessage.is_starred ? 'Unstar' : 'Star'}
                     >
@@ -873,14 +887,14 @@ export const GmailWorkspace: React.FC = () => {
                     </button>
                     <button
                       onClick={() => handleToggleRead(selectedMessage)}
-                      className="p-2 rounded-xl border border-[#E9EAEE] hover:bg-[#F8F9FB] text-gray-500 cursor-pointer"
+                      className="p-2 rounded-xl border border-slate-200/90 dark:border-white/[0.08] hover:bg-slate-50 dark:hover:bg-slate-900/60 text-slate-500 dark:text-slate-400 cursor-pointer"
                       title={selectedMessage.is_read ? 'Mark Unread' : 'Mark Read'}
                     >
                       <Mail className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => handleArchive(selectedMessage)}
-                      className="p-2 rounded-xl border border-[#E9EAEE] hover:bg-[#F8F9FB] text-gray-500 cursor-pointer"
+                      className="p-2 rounded-xl border border-slate-200/90 dark:border-white/[0.08] hover:bg-slate-50 dark:hover:bg-slate-900/60 text-slate-500 dark:text-slate-400 cursor-pointer"
                       title="Archive"
                     >
                       <Archive className="w-4 h-4" />
@@ -888,7 +902,7 @@ export const GmailWorkspace: React.FC = () => {
                     {selectedMessage.is_trash ? (
                       <button
                         onClick={() => handleRestoreFromTrash(selectedMessage)}
-                        className="p-2 rounded-xl border border-[#E9EAEE] bg-emerald-50 text-emerald-600 hover:bg-emerald-100 cursor-pointer"
+                        className="p-2 rounded-xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 cursor-pointer"
                         title="Restore from Trash to Inbox"
                       >
                         <RotateCcw className="w-4 h-4" />
@@ -896,7 +910,7 @@ export const GmailWorkspace: React.FC = () => {
                     ) : (
                       <button
                         onClick={() => { setPendingTrashId(selectedMessage.message_id); setIsTrashConfirmOpen(true); }}
-                        className="p-2 rounded-xl border border-[#E9EAEE] text-gray-500 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
+                        className="p-2 rounded-xl border border-slate-200/90 dark:border-white/[0.08] text-slate-500 dark:text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 cursor-pointer"
                         title="Move to Trash"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -904,7 +918,7 @@ export const GmailWorkspace: React.FC = () => {
                     )}
                     <button
                       onClick={() => handleToggleSpam(selectedMessage)}
-                      className="p-2 rounded-xl border border-[#E9EAEE] text-gray-500 hover:text-amber-600 hover:bg-amber-50 cursor-pointer"
+                      className="p-2 rounded-xl border border-slate-200/90 dark:border-white/[0.08] text-slate-500 dark:text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40 cursor-pointer"
                       title={selectedMessage.is_spam ? 'Not Spam' : 'Report Spam'}
                     >
                       <AlertOctagon className="w-4 h-4" />
@@ -913,26 +927,26 @@ export const GmailWorkspace: React.FC = () => {
                 </div>
 
                 {/* Subject Header */}
-                <h2 className="text-base sm:text-lg font-bold text-[#20242C] tracking-tight">
+                <h2 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white tracking-tight">
                   {selectedMessage.subject || '(No Subject)'}
                 </h2>
 
                 {/* Sender & Recipient Box */}
                 <div className="flex items-start justify-between gap-3 text-xs pt-1">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-full bg-[#FFF1F2] border border-[#FECDD3] text-[#D62839] flex items-center justify-center font-bold text-xs">
+                    <div className="w-8 h-8 rounded-full bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 text-[#D62839] dark:text-rose-400 flex items-center justify-center font-bold text-xs">
                       {(selectedMessage.from_name || selectedMessage.from_email || 'U').charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <div className="font-bold text-[#20242C]">
+                      <div className="font-bold text-slate-900 dark:text-white">
                         {selectedMessage.from_name || selectedMessage.from_email}
                       </div>
-                      <div className="text-[11px] text-[#667085]">
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400">
                         to {selectedMessage.to_recipients || 'me'}
                       </div>
                     </div>
                   </div>
-                  <div className="text-[11px] text-[#98A2B3] font-mono shrink-0">
+                  <div className="text-[11px] text-slate-400 font-mono shrink-0">
                     {selectedMessage.date_sent}
                   </div>
                 </div>
@@ -941,12 +955,12 @@ export const GmailWorkspace: React.FC = () => {
               {/* Email Content Body */}
               <div className="p-4 sm:p-5 flex-1 overflow-y-auto space-y-4">
                 {/* Format Switcher & Privacy Bar */}
-                <div className="flex items-center justify-between text-xs bg-[#F8F9FB] p-2 rounded-xl border border-[#E9EAEE]">
+                <div className="flex items-center justify-between text-xs bg-slate-50 dark:bg-slate-900/60 p-2 rounded-xl border border-slate-200/90 dark:border-white/[0.08]">
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setViewFormat('html')}
                       className={`px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer ${
-                        viewFormat === 'html' ? 'bg-white shadow-xs text-[#D62839]' : 'text-gray-500'
+                        viewFormat === 'html' ? 'bg-white dark:bg-[#0D111A] shadow-xs text-[#D62839] dark:text-rose-400 font-bold border border-slate-200/90 dark:border-white/[0.08]' : 'text-slate-500 dark:text-slate-400'
                       }`}
                     >
                       Rich HTML
@@ -954,7 +968,7 @@ export const GmailWorkspace: React.FC = () => {
                     <button
                       onClick={() => setViewFormat('plain')}
                       className={`px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer ${
-                        viewFormat === 'plain' ? 'bg-white shadow-xs text-[#D62839]' : 'text-gray-500'
+                        viewFormat === 'plain' ? 'bg-white dark:bg-[#0D111A] shadow-xs text-[#D62839] dark:text-rose-400 font-bold border border-slate-200/90 dark:border-white/[0.08]' : 'text-slate-500 dark:text-slate-400'
                       }`}
                     >
                       Plain Text
@@ -974,12 +988,16 @@ export const GmailWorkspace: React.FC = () => {
 
                 {/* Email Body Rendering */}
                 {detailLoading ? (
-                  <div className="p-8 text-center space-y-2">
-                    <div className="w-6 h-6 border-2 border-[#D62839]/20 border-t-[#D62839] rounded-full animate-spin mx-auto" />
-                    <p className="text-xs text-[#667085]">Loading email body...</p>
+                  <div className="p-8 text-center">
+                    <Cockpit3DLoader 
+                      variant="module"
+                      size="sm"
+                      text="Rendering Sanitized Email..."
+                      subtitle="Decrypting and parsing email payload"
+                    />
                   </div>
                 ) : viewFormat === 'html' && selectedMessage.body_html ? (
-                  <div className="prose prose-sm max-w-none text-[#20242C] overflow-x-auto">
+                  <div className="prose prose-sm max-w-none text-slate-900 dark:text-white overflow-x-auto">
                     {/* Sandboxed Email View */}
                     <iframe
                       title="Email Content"
@@ -990,7 +1008,10 @@ export const GmailWorkspace: React.FC = () => {
                           <head>
                             <base target="_blank">
                             <style>
-                              body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 13px; line-height: 1.5; color: #20242C; margin: 0; padding: 4px; word-break: break-word; }
+                              body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 13px; line-height: 1.5; color: #1e293b; background: transparent; margin: 0; padding: 4px; word-break: break-word; }
+                              @media (prefers-color-scheme: dark) {
+                                body { color: #f1f5f9; }
+                              }
                               a { color: #D62839; }
                               img { max-width: 100%; height: auto; }
                             </style>
@@ -1002,38 +1023,38 @@ export const GmailWorkspace: React.FC = () => {
                           }</body>
                         </html>
                       `}
-                      className="w-full border-0 min-h-[350px]"
+                      className="w-full border-0 min-h-[350px] bg-transparent"
                     />
                   </div>
                 ) : (
-                  <pre className="whitespace-pre-wrap font-sans text-xs text-[#20242C] leading-relaxed">
+                  <pre className="whitespace-pre-wrap font-sans text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
                     {selectedMessage.body_plain || selectedMessage.snippet}
                   </pre>
                 )}
 
                 {/* Attachments Section */}
                 {selectedMessage.attachments && selectedMessage.attachments.length > 0 && (
-                  <div className="pt-4 border-t border-[#E9EAEE] space-y-2">
-                    <div className="text-xs font-bold text-[#20242C] flex items-center gap-1.5">
-                      <Paperclip className="w-4 h-4 text-[#D62839]" />
+                  <div className="pt-4 border-t border-slate-200/80 dark:border-white/[0.06] space-y-2">
+                    <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <Paperclip className="w-4 h-4 text-[#D62839] dark:text-rose-400" />
                       <span>Attachments ({selectedMessage.attachments.length})</span>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {selectedMessage.attachments.map((att, i) => (
                         <div 
                           key={i}
-                          className="flex items-center justify-between p-2.5 rounded-xl border border-[#E9EAEE] bg-[#F8F9FB] hover:bg-white transition-all text-xs"
+                          className="flex items-center justify-between p-2.5 rounded-xl border border-slate-200/90 dark:border-white/[0.08] bg-slate-50 dark:bg-slate-900/60 hover:bg-white dark:hover:bg-[#07090E] transition-all text-xs"
                         >
                           <div className="min-w-0 pr-2">
-                            <p className="font-semibold text-[#20242C] truncate">{att.filename}</p>
-                            <p className="text-[10px] text-[#98A2B3]">{(att.size / 1024).toFixed(1)} KB</p>
+                            <p className="font-semibold text-slate-900 dark:text-white truncate">{att.filename}</p>
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">{(att.size / 1024).toFixed(1)} KB</p>
                           </div>
                           {att.attachment_id && (
                             <a
                               href={`/api/gmail/messages/${selectedMessage.message_id}/attachment/${att.attachment_id}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="p-1.5 rounded-lg border border-[#E9EAEE] hover:bg-[#FFF1F2] text-[#D62839] transition-all"
+                              className="p-1.5 rounded-lg border border-slate-200/90 dark:border-white/[0.08] hover:bg-rose-50 dark:hover:bg-rose-950/40 text-[#D62839] dark:text-rose-400 transition-all cursor-pointer"
                               title="Download Attachment"
                             >
                               <Download className="w-4 h-4" />
@@ -1047,26 +1068,26 @@ export const GmailWorkspace: React.FC = () => {
               </div>
 
               {/* Bottom Quick Reply Actions */}
-              <div className="p-3 border-t border-[#E9EAEE] bg-[#F8F9FB] flex items-center gap-2">
+              <div className="p-3 border-t border-slate-200/90 dark:border-white/[0.08] bg-slate-50/70 dark:bg-slate-900/30 flex items-center gap-2">
                 <button
                   onClick={() => handleReply(false)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-gray-50 border border-[#E9EAEE] text-xs font-semibold text-[#20242C] cursor-pointer shadow-xs"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-[#07090E] hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200/90 dark:border-white/[0.08] text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer shadow-xs"
                 >
-                  <CornerUpLeft className="w-3.5 h-3.5 text-[#D62839]" />
+                  <CornerUpLeft className="w-3.5 h-3.5 text-[#D62839] dark:text-rose-400" />
                   <span>Reply</span>
                 </button>
                 <button
                   onClick={() => handleReply(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-gray-50 border border-[#E9EAEE] text-xs font-semibold text-[#20242C] cursor-pointer shadow-xs"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-[#07090E] hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200/90 dark:border-white/[0.08] text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer shadow-xs"
                 >
-                  <CornerUpLeft className="w-3.5 h-3.5 text-blue-600" />
+                  <CornerUpLeft className="w-3.5 h-3.5 text-blue-500" />
                   <span>Reply All</span>
                 </button>
                 <button
                   onClick={handleForward}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-gray-50 border border-[#E9EAEE] text-xs font-semibold text-[#20242C] cursor-pointer shadow-xs"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-[#07090E] hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200/90 dark:border-white/[0.08] text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer shadow-xs"
                 >
-                  <CornerUpRight className="w-3.5 h-3.5 text-purple-600" />
+                  <CornerUpRight className="w-3.5 h-3.5 text-purple-500" />
                   <span>Forward</span>
                 </button>
               </div>
@@ -1085,12 +1106,12 @@ export const GmailWorkspace: React.FC = () => {
         <form onSubmit={handleSendEmail} className="space-y-3.5">
           {/* To Field */}
           <div>
-            <div className="flex items-center justify-between text-xs text-[#667085] mb-1 font-semibold">
-              <label>To <span className="text-[#D62839]">*</span></label>
+            <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 mb-1 font-semibold">
+              <label>To <span className="text-[#D62839] dark:text-rose-400">*</span></label>
               <button 
                 type="button" 
                 onClick={() => setShowCcBcc(!showCcBcc)}
-                className="text-[#D62839] hover:underline cursor-pointer"
+                className="text-[#D62839] dark:text-rose-400 hover:underline cursor-pointer"
               >
                 {showCcBcc ? 'Hide CC/BCC' : 'Cc / Bcc'}
               </button>
@@ -1101,7 +1122,7 @@ export const GmailWorkspace: React.FC = () => {
               placeholder="recipient@example.com"
               value={composeTo}
               onChange={e => setComposeTo(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-[#E9EAEE] text-xs focus:border-[#D62839] outline-hidden"
+              className="cockpit-input w-full px-3 py-2 text-xs"
             />
           </div>
 
@@ -1109,23 +1130,23 @@ export const GmailWorkspace: React.FC = () => {
           {showCcBcc && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-[#667085] mb-1">Cc</label>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Cc</label>
                 <input
                   type="text"
                   placeholder="cc@example.com"
                   value={composeCc}
                   onChange={e => setComposeCc(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-[#E9EAEE] text-xs focus:border-[#D62839] outline-hidden"
+                  className="cockpit-input w-full px-3 py-2 text-xs"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-[#667085] mb-1">Bcc</label>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Bcc</label>
                 <input
                   type="text"
                   placeholder="bcc@example.com"
                   value={composeBcc}
                   onChange={e => setComposeBcc(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-[#E9EAEE] text-xs focus:border-[#D62839] outline-hidden"
+                  className="cockpit-input w-full px-3 py-2 text-xs"
                 />
               </div>
             </div>
@@ -1133,41 +1154,41 @@ export const GmailWorkspace: React.FC = () => {
 
           {/* Subject Field */}
           <div>
-            <label className="block text-xs font-semibold text-[#667085] mb-1">Subject</label>
+            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Subject</label>
             <input
               type="text"
               placeholder="Subject line"
               value={composeSubject}
               onChange={e => setComposeSubject(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-[#E9EAEE] text-xs focus:border-[#D62839] outline-hidden font-medium"
+              className="cockpit-input w-full px-3 py-2 text-xs font-medium"
             />
           </div>
 
           {/* Body Textarea */}
           <div>
-            <label className="block text-xs font-semibold text-[#667085] mb-1">Body</label>
+            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Body</label>
             <textarea
               rows={8}
               placeholder="Write your email here..."
               value={composeBody}
               onChange={e => setComposeBody(e.target.value)}
-              className="w-full p-3 rounded-xl border border-[#E9EAEE] text-xs focus:border-[#D62839] outline-hidden font-sans leading-relaxed"
+              className="cockpit-input w-full p-3 text-xs font-sans leading-relaxed resize-y"
             />
           </div>
 
           {/* Attachments Section */}
           {composeAttachments.length > 0 && (
             <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-[#667085]">Attached Files</label>
+              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400">Attached Files</label>
               <div className="flex flex-wrap gap-2">
                 {composeAttachments.map((att, i) => (
-                  <div key={i} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#F8F9FB] border border-[#E9EAEE] text-xs">
-                    <Paperclip className="w-3.5 h-3.5 text-[#D62839]" />
+                  <div key={i} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200/90 dark:border-white/[0.08] text-xs text-slate-700 dark:text-slate-300">
+                    <Paperclip className="w-3.5 h-3.5 text-[#D62839] dark:text-rose-400" />
                     <span className="max-w-[150px] truncate">{att.name}</span>
                     <button 
                       type="button" 
                       onClick={() => handleRemoveComposeAttachment(i)}
-                      className="text-gray-400 hover:text-rose-600"
+                      className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 cursor-pointer"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -1178,7 +1199,7 @@ export const GmailWorkspace: React.FC = () => {
           )}
 
           {/* Modal Footer Actions */}
-          <div className="flex items-center justify-between pt-3 border-t border-[#E9EAEE]">
+          <div className="flex items-center justify-between pt-3 border-t border-slate-200/90 dark:border-white/[0.08]">
             <div className="flex items-center gap-2">
               <input
                 ref={fileInputRef}
@@ -1190,7 +1211,7 @@ export const GmailWorkspace: React.FC = () => {
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="p-2 rounded-xl border border-[#E9EAEE] hover:bg-[#F8F9FB] text-gray-600 cursor-pointer"
+                className="p-2 rounded-xl border border-slate-200/90 dark:border-white/[0.08] hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 cursor-pointer"
                 title="Attach files"
               >
                 <Paperclip className="w-4 h-4" />
@@ -1198,7 +1219,7 @@ export const GmailWorkspace: React.FC = () => {
               <button
                 type="button"
                 onClick={handleSaveDraft}
-                className="px-3 py-2 rounded-xl border border-[#E9EAEE] hover:bg-[#F8F9FB] text-xs font-semibold text-gray-600 cursor-pointer"
+                className="px-3 py-2 rounded-xl border border-slate-200/90 dark:border-white/[0.08] hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-semibold text-slate-600 dark:text-slate-400 cursor-pointer"
               >
                 Save Draft
               </button>
@@ -1208,7 +1229,7 @@ export const GmailWorkspace: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsComposeOpen(false)}
-                className="px-3 py-2 rounded-xl text-xs font-semibold text-[#667085] hover:bg-gray-100 cursor-pointer"
+                className="px-3 py-2 rounded-xl text-xs font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
               >
                 Discard
               </button>
@@ -1233,8 +1254,8 @@ export const GmailWorkspace: React.FC = () => {
         maxWidth="max-w-md"
       >
         <div className="space-y-4">
-          <div className="flex items-start gap-3 p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800">
-            <Trash2 className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="flex items-start gap-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 text-xs text-amber-800 dark:text-amber-300">
+            <Trash2 className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
             <div>
               <p className="font-bold">Important Delete Rule</p>
               <p className="mt-0.5">
@@ -1243,10 +1264,10 @@ export const GmailWorkspace: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E9EAEE]">
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200/90 dark:border-white/[0.08]">
             <button
               onClick={() => setIsTrashConfirmOpen(false)}
-              className="px-3 py-1.5 rounded-xl border border-[#E9EAEE] text-xs font-semibold text-gray-600 hover:bg-gray-50 cursor-pointer"
+              className="px-3 py-1.5 rounded-xl border border-slate-200/90 dark:border-white/[0.08] text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
             >
               Cancel
             </button>
@@ -1268,14 +1289,14 @@ export const GmailWorkspace: React.FC = () => {
         maxWidth="max-w-md"
       >
         <div className="space-y-4">
-          <p className="text-xs text-[#667085]">
+          <p className="text-xs text-slate-600 dark:text-slate-400">
             Are you sure you want to move <strong>{selectedIds.length}</strong> selected messages to Gmail Trash?
           </p>
 
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E9EAEE]">
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200/90 dark:border-white/[0.08]">
             <button
               onClick={() => setIsBulkTrashConfirmOpen(false)}
-              className="px-3 py-1.5 rounded-xl border border-[#E9EAEE] text-xs font-semibold text-gray-600 hover:bg-gray-50 cursor-pointer"
+              className="px-3 py-1.5 rounded-xl border border-slate-200/90 dark:border-white/[0.08] text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
             >
               Cancel
             </button>

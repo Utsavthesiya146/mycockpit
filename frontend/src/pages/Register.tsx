@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Layers, ArrowRight, Lock, Mail, Building, User, Link as LinkIcon, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Layers, ArrowRight, Lock, Mail, Building, User, Link as LinkIcon, AlertCircle, Sun, Moon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 interface RegisterProps {
@@ -15,6 +15,23 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isDark, setIsDark] = useState(true);
+
+  useEffect(() => {
+    setIsDark(document.documentElement.classList.contains('dark'));
+  }, []);
+
+  const toggleTheme = () => {
+    const nextDark = !isDark;
+    setIsDark(nextDark);
+    if (nextDark) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('mycockpit_theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('mycockpit_theme', 'light');
+    }
+  };
 
   const handleCompanyChange = (val: string) => {
     setCompanyName(val);
@@ -44,27 +61,38 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] flex flex-col justify-center items-center px-4 sm:px-6 lg:px-8 py-12 relative overflow-hidden">
+    <div className="min-h-screen bg-[#FAFAFA] dark:bg-[#07090E] text-slate-900 dark:text-white flex flex-col justify-center items-center px-4 sm:px-6 lg:px-8 py-12 relative overflow-hidden transition-colors duration-200">
+      {/* Theme Toggle Top Right */}
+      <div className="absolute top-4 right-4 z-20">
+        <button
+          onClick={toggleTheme}
+          className="p-2.5 rounded-xl bg-white dark:bg-[#0D111A] text-slate-600 dark:text-slate-300 border border-slate-200/90 dark:border-white/[0.08] hover:border-slate-300 dark:hover:border-white/[0.15] shadow-xs cursor-pointer transition-all"
+          title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
+          aria-label="Toggle theme"
+        >
+          {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-700" />}
+        </button>
+      </div>
       {/* Warm ambient accents */}
-      <div className="absolute top-1/4 -left-32 w-96 h-96 bg-[#FFF1F2] rounded-full blur-3xl pointer-events-none opacity-80" />
-      <div className="absolute bottom-1/4 -right-32 w-96 h-96 bg-[#FFF1F2] rounded-full blur-3xl pointer-events-none opacity-60" />
+      <div className="absolute top-1/4 -left-32 w-96 h-96 bg-rose-500/10 rounded-full blur-3xl pointer-events-none opacity-80 dark:opacity-20" />
+      <div className="absolute bottom-1/4 -right-32 w-96 h-96 bg-rose-500/10 rounded-full blur-3xl pointer-events-none opacity-60 dark:opacity-20" />
 
       <div className="w-full max-w-md space-y-6 z-10">
         <div className="text-center">
           <div className="inline-flex w-14 h-14 rounded-2xl bg-[#D62839] items-center justify-center shadow-lg shadow-[#D62839]/25 mb-4 text-white">
             <Layers className="w-7 h-7" />
           </div>
-          <h1 className="text-3xl font-extrabold text-[#20242C] tracking-tight">
+          <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
             Register Organization
           </h1>
-          <p className="mt-2 text-sm text-[#667085] font-medium">
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 font-medium">
             Launch your multi-tenant cockpit with personal AI
           </p>
         </div>
 
-        <div className="bg-white border border-[#E9EAEE] rounded-3xl p-6 sm:p-8 shadow-xl shadow-slate-200/40">
+        <div className="bg-white dark:bg-[#0D111A] border border-slate-200/90 dark:border-white/[0.08] rounded-3xl p-6 sm:p-8 shadow-xl dark:shadow-none">
           {error && (
-            <div className="mb-6 p-4 rounded-xl bg-[#FEF2F2] border border-[#FECDD3] flex items-center gap-3 text-sm text-[#DC2626]">
+            <div className="mb-6 p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 flex items-center gap-3 text-sm text-rose-600 dark:text-rose-400">
               <AlertCircle className="w-5 h-5 shrink-0" />
               <span>{error}</span>
             </div>
@@ -72,14 +100,15 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
+              <label htmlFor="reg-name" className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
                 Full Name
               </label>
               <div className="relative flex items-center">
-                <div className="absolute left-3.5 flex items-center pointer-events-none text-[#94A3B8]">
+                <div className="absolute left-3.5 flex items-center pointer-events-none text-slate-400">
                   <User className="w-4 h-4" />
                 </div>
                 <input
+                  id="reg-name"
                   type="text"
                   required
                   value={name}
@@ -92,14 +121,15 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
+              <label htmlFor="reg-company" className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
                 Company / Business Name
               </label>
               <div className="relative flex items-center">
-                <div className="absolute left-3.5 flex items-center pointer-events-none text-[#94A3B8]">
+                <div className="absolute left-3.5 flex items-center pointer-events-none text-slate-400">
                   <Building className="w-4 h-4" />
                 </div>
                 <input
+                  id="reg-company"
                   type="text"
                   required
                   value={companyName}
@@ -112,14 +142,15 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
+              <label htmlFor="reg-slug" className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
                 Personal Client URL Slug
               </label>
               <div className="relative flex items-center">
-                <div className="absolute left-3.5 flex items-center pointer-events-none text-[#94A3B8]">
+                <div className="absolute left-3.5 flex items-center pointer-events-none text-slate-400">
                   <LinkIcon className="w-4 h-4" />
                 </div>
                 <input
+                  id="reg-slug"
                   type="text"
                   required
                   value={slug}
@@ -129,20 +160,21 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
                   style={{ paddingLeft: '2.75rem' }}
                 />
               </div>
-              <p className="mt-1 text-[11px] text-[#667085] font-mono">
-                Your vanity URL: <span className="text-[#D62839] font-bold">mycockpit.ai/{slug || 'yourname'}</span>
+              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 font-mono">
+                Your vanity URL: <span className="text-[#D62839] dark:text-rose-400 font-bold">akiradigital.in/{slug || 'yourname'}</span>
               </p>
             </div>
 
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
+              <label htmlFor="reg-email" className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
                 Work Email Address
               </label>
               <div className="relative flex items-center">
-                <div className="absolute left-3.5 flex items-center pointer-events-none text-[#94A3B8]">
+                <div className="absolute left-3.5 flex items-center pointer-events-none text-slate-400">
                   <Mail className="w-4 h-4" />
                 </div>
                 <input
+                  id="reg-email"
                   type="email"
                   required
                   value={email}
@@ -155,14 +187,15 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#667085] mb-1.5">
+              <label htmlFor="reg-password" className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
                 Password
               </label>
               <div className="relative flex items-center">
-                <div className="absolute left-3.5 flex items-center pointer-events-none text-[#94A3B8]">
+                <div className="absolute left-3.5 flex items-center pointer-events-none text-slate-400">
                   <Lock className="w-4 h-4" />
                 </div>
                 <input
+                  id="reg-password"
                   type="password"
                   required
                   minLength={8}
@@ -178,18 +211,18 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-2 py-3 rounded-xl bg-[#D62839] hover:bg-[#B91C2C] text-white font-semibold text-sm shadow-md shadow-[#D62839]/25 flex items-center justify-center gap-2 transition-all duration-180 disabled:opacity-50 cursor-pointer"
+              className="w-full py-3 rounded-xl bg-[#D62839] hover:bg-[#B91C2C] text-white font-semibold text-sm shadow-md shadow-[#D62839]/25 flex items-center justify-center gap-2 transition-all duration-180 disabled:opacity-50 cursor-pointer mt-2"
             >
-              <span>{loading ? 'Creating Workspace...' : 'Initialize Cockpit'}</span>
+              <span>{loading ? 'Registering Workspace...' : 'Create My Cockpit Account'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
 
-          <div className="mt-6 text-center text-xs text-[#667085]">
-            Already have an organization?{' '}
+          <div className="mt-6 text-center text-xs text-slate-500 dark:text-slate-400">
+            Already have an active workspace?{' '}
             <button
               onClick={onSwitchToLogin}
-              className="text-[#D62839] hover:text-[#B91C2C] font-semibold underline underline-offset-4 cursor-pointer"
+              className="text-[#D62839] dark:text-rose-400 hover:underline font-semibold cursor-pointer"
             >
               Sign In
             </button>
@@ -199,3 +232,4 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
     </div>
   );
 };
+export default Register;

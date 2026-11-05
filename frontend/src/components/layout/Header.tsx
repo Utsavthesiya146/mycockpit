@@ -11,7 +11,8 @@ import {
   Layers,
   ArrowUpRight,
   ShieldCheck,
-  Zap
+  Zap,
+  Search
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -23,6 +24,7 @@ interface HeaderProps {
   setIsSidebarOpen: (open: boolean) => void;
   isSidebarCollapsed?: boolean;
   setIsSidebarCollapsed?: React.Dispatch<React.SetStateAction<boolean>>;
+  onOpenCommandPalette?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ 
@@ -30,7 +32,8 @@ export const Header: React.FC<HeaderProps> = ({
   setActiveTab, 
   setIsSidebarOpen,
   isSidebarCollapsed = false,
-  setIsSidebarCollapsed
+  setIsSidebarCollapsed,
+  onOpenCommandPalette
 }) => {
   const { user, tenant } = useAuth();
   const { isDark, toggleTheme } = useTheme();
@@ -56,9 +59,10 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://mycockpit-0e86.onrender.com';
   const personalUrl = user?.tenant_slug 
-    ? `http://localhost:5173/${user.tenant_slug}`
-    : `http://localhost:5173/admin`;
+    ? `${origin}/${user.tenant_slug}`
+    : `${origin}/admin`;
 
   const copyUrl = () => {
     navigator.clipboard.writeText(personalUrl);
@@ -114,8 +118,21 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Right Controls: Personal URL, Theme Switcher, AI Summon */}
+      {/* Right Controls: Command Bar, Personal URL, Theme Switcher, AI Summon */}
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        {/* Command Palette Trigger */}
+        {onOpenCommandPalette && (
+          <button
+            onClick={onOpenCommandPalette}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100/90 dark:bg-slate-900/60 hover:bg-slate-200/70 dark:hover:bg-slate-800 border border-slate-200/90 dark:border-white/[0.08] text-xs text-slate-500 dark:text-slate-400 transition-all cursor-pointer shadow-2xs"
+            title="Press Ctrl+K to search or run commands"
+            aria-label="Open command palette"
+          >
+            <Search className="w-3.5 h-3.5 text-slate-400" />
+            <span className="hidden md:inline font-medium">Quick search...</span>
+            <kbd className="hidden sm:inline-flex px-1.5 py-0.5 rounded text-[10px] font-mono bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400">Ctrl K</kbd>
+          </button>
+        )}
         {/* Personal Client URL Badge */}
         {user?.tenant_slug && (
           <button

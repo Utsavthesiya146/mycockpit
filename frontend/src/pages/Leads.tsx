@@ -30,11 +30,17 @@ import {
   SlidersHorizontal,
   ChevronDown,
   Check,
-  Info
+  Info,
+  TrendingUp,
+  Award
 } from 'lucide-react';
 import { api } from '../services/api';
 import { Badge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
+import { SlideOverDrawer } from '../components/common/SlideOverDrawer';
+import { EmptyState } from '../components/common/EmptyState';
+import { Cockpit3DLoader } from '../components/common/Cockpit3DLoader';
+import { formatCurrency, createWhatsAppUrl } from '../utils/formatters';
 import type { Lead, LeadActivity, Followup, Employee, LeadSourceConfig } from '../types';
 
 interface LeadsProps {
@@ -50,12 +56,10 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
 
   // Filters
   const [activeTabFilter, setActiveTabFilter] = useState<string>('all'); 
-  // 'all' | 'bni' | 'kvv' | 'eaf' | 'seo' | 'new' | 'pending' | 'today' | 'overdue' | 'converted' | 'lost'
-  
   const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [employeeFilter, setEmployeeFilter] = useState<string>('all');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
-  const [dateFilter, setDateFilter] = useState<string>('all'); // all, today, this_week, this_month
+  const [dateFilter, setDateFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
 
   // Sorting & Pagination
@@ -71,6 +75,18 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
   const [isFollowupModalOpen, setIsFollowupModalOpen] = useState(false);
   const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+
+  // External sync state
+  const [syncingExternal, setSyncingExternal] = useState(false);
+  const [syncFeedback, setSyncFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [confirmExternalSyncOpen, setConfirmExternalSyncOpen] = useState(false);
+  const [conflictModalOpen, setConflictModalOpen] = useState(false);
+  const [conflictData, setConflictData] = useState<any>(null);
+  const [conflictQueueId, setConflictQueueId] = useState<number | null>(null);
+
+  // CSV Import State
+  const [csvContent, setCsvContent] = useState('');
+  const [importSource, setImportSource] = useState('BNI');
 
   // Form states
   const [newLeadForm, setNewLeadForm] = useState({
@@ -101,30 +117,19 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
     description: ''
   });
 
-  const [csvContent, setCsvContent] = useState('');
-  const [importSource, setImportSource] = useState('BNI');
-
-  // External Platform Bidirectional Sync & Conflict States
-  const [conflictModalOpen, setConflictModalOpen] = useState(false);
-  const [conflictQueueId, setConflictQueueId] = useState<number | null>(null);
-  const [conflictData, setConflictData] = useState<any>(null);
-  const [syncingExternal, setSyncingExternal] = useState(false);
-  const [confirmExternalSyncOpen, setConfirmExternalSyncOpen] = useState(false);
-  const [syncFeedback, setSyncFeedback] = useState<{ type: 'success' | 'error' | 'warning'; message: string } | null>(null);
-
   const fetchLeads = async () => {
     try {
       setRefreshing(true);
-      const [leadsRes, empsRes, sourcesRes] = await Promise.all([
-        api.get<Lead[]>('/crm/leads'),
-        api.get<Employee[]>('/hrm/employees').catch(() => []),
-        api.get<LeadSourceConfig[]>('/crm/lead-sources').catch(() => [])
+      const [leadsRes, empRes, sourcesRes]: any = await Promise.all([
+        api.get('/crm/leads'),
+        api.get('/hrm/employees'),
+        api.get('/crm/leads/sources')
       ]);
       setLeads(leadsRes || []);
-      setEmployees(empsRes || []);
+      setEmployees(empRes || []);
       setSources(sourcesRes || []);
-    } catch (err: any) {
-      console.error('Failed to load leads:', err);
+    } catch (err) {
+      console.error('Failed to fetch centralized leads data', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -135,108 +140,103 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
     fetchLeads();
   }, []);
 
-  // Filtered & Sorted Leads
+  // Compute KPI summaries from leads
+  const stats = useMemo(() => {
+    const total = leads.length;
+    const fresh = leads.filter(l => l.status === 'new').length;
+    const won = leads.filter(l => l.status === 'won').length;
+    const overdue = leads.filter(l => l.next_followup_date && new Date(l.next_followup_date) < new Date() && !['won', 'lost'].includes(l.status)).length;
+    const bniCount = leads.filter(l => l.source?.includes('BNI')).length;
+    const kvvCount = leads.filter(l => l.source?.includes('KVV')).length;
+    const eafCount = leads.filter(l => l.source?.includes('EAF')).length;
+    return { total, fresh, won, overdue, bniCount, kvvCount, eafCount };
+  }, [leads]);
+
+  // Filtering Logic
   const filteredLeads = useMemo(() => {
-    return leads.filter((lead) => {
-      // 1. Source / Tab filter
-      if (activeTabFilter === 'bni') {
-        const isBni = lead.source?.toLowerCase().includes('bni') || lead.source_platform === 'bni';
-        if (!isBni) return false;
-      } else if (activeTabFilter === 'kvv') {
-        const isKvv = lead.source?.toLowerCase().includes('kvv') || lead.source_platform === 'kvv';
-        if (!isKvv) return false;
-      } else if (activeTabFilter === 'eaf') {
-        const isEaf = lead.source?.toLowerCase().includes('eaf') || lead.source_platform === 'eaf';
-        if (!isEaf) return false;
-      } else if (activeTabFilter === 'seo') {
-        const isSeo = lead.source?.toLowerCase().includes('seo') || lead.source?.toLowerCase().includes('website') || lead.source_platform === 'seo';
-        if (!isSeo) return false;
-      } else if (activeTabFilter === 'new') {
-        if (lead.status !== 'new') return false;
-      } else if (activeTabFilter === 'pending') {
-        if (lead.status === 'won' || lead.status === 'lost') return false;
-        if (!lead.next_followup_date || new Date(lead.next_followup_date) < new Date()) return false;
-      } else if (activeTabFilter === 'today') {
-        if (lead.status === 'won' || lead.status === 'lost') return false;
+    return leads.filter(lead => {
+      // 1. Tab View Filter
+      if (activeTabFilter === 'bni' && !lead.source?.includes('BNI')) return false;
+      if (activeTabFilter === 'kvv' && !lead.source?.includes('KVV')) return false;
+      if (activeTabFilter === 'eaf' && !lead.source?.includes('EAF')) return false;
+      if (activeTabFilter === 'seo' && !lead.source?.toLowerCase().includes('seo') && !lead.source?.toLowerCase().includes('website')) return false;
+      if (activeTabFilter === 'new' && lead.status !== 'new') return false;
+      if (activeTabFilter === 'converted' && lead.status !== 'won') return false;
+      if (activeTabFilter === 'lost' && lead.status !== 'lost') return false;
+      if (activeTabFilter === 'pending' && (!lead.next_followup_date || ['won', 'lost'].includes(lead.status))) return false;
+      if (activeTabFilter === 'today') {
         if (!lead.next_followup_date) return false;
         const d = new Date(lead.next_followup_date).toDateString();
-        const today = new Date().toDateString();
-        if (d !== today) return false;
-      } else if (activeTabFilter === 'overdue') {
-        if (lead.status === 'won' || lead.status === 'lost') return false;
-        if (!lead.next_followup_date || new Date(lead.next_followup_date) >= new Date()) return false;
-      } else if (activeTabFilter === 'converted') {
-        if (lead.status !== 'won') return false;
-      } else if (activeTabFilter === 'lost') {
-        if (lead.status !== 'lost') return false;
+        if (d !== new Date().toDateString()) return false;
+      }
+      if (activeTabFilter === 'overdue') {
+        if (!lead.next_followup_date) return false;
+        if (new Date(lead.next_followup_date) >= new Date() || ['won', 'lost'].includes(lead.status)) return false;
       }
 
-      // 2. Dropdown Source Filter
-      if (sourceFilter !== 'all' && lead.source !== sourceFilter) {
-        return false;
-      }
-
-      // 3. Employee Filter
+      // 2. Dropdown Filters
+      if (sourceFilter !== 'all' && lead.source !== sourceFilter) return false;
       if (employeeFilter !== 'all') {
         if (employeeFilter === 'unassigned' && lead.assigned_to) return false;
         if (employeeFilter !== 'unassigned' && String(lead.assigned_to) !== employeeFilter) return false;
       }
-
-      // 4. Priority Filter
-      if (priorityFilter !== 'all' && lead.priority !== priorityFilter) {
-        return false;
-      }
-
-      // 5. Date Filter (Created Date)
+      if (priorityFilter !== 'all' && lead.priority !== priorityFilter) return false;
       if (dateFilter !== 'all') {
         const leadDate = new Date(lead.created_at);
         const now = new Date();
-        if (dateFilter === 'today') {
-          if (leadDate.toDateString() !== now.toDateString()) return false;
-        } else if (dateFilter === 'this_week') {
-          const weekAgo = new Date();
-          weekAgo.setDate(now.getDate() - 7);
-          if (leadDate < weekAgo) return false;
-        } else if (dateFilter === 'this_month') {
-          if (leadDate.getMonth() !== now.getMonth() || leadDate.getFullYear() !== now.getFullYear()) return false;
+        if (dateFilter === 'today' && leadDate.toDateString() !== now.toDateString()) return false;
+        if (dateFilter === 'this_week') {
+          const sevenDaysAgo = new Date();
+          sevenDaysAgo.setDate(now.getDate() - 7);
+          if (leadDate < sevenDaysAgo) return false;
+        }
+        if (dateFilter === 'this_month') {
+          const thirtyDaysAgo = new Date();
+          thirtyDaysAgo.setDate(now.getDate() - 30);
+          if (leadDate < thirtyDaysAgo) return false;
         }
       }
 
-      // 6. Global Search
+      // 3. Search Query
       if (search.trim()) {
-        const term = search.toLowerCase();
-        const matchName = lead.name?.toLowerCase().includes(term);
-        const matchComp = lead.company?.toLowerCase().includes(term);
-        const matchPhone = lead.phone?.toLowerCase().includes(term);
-        const matchEmail = lead.email?.toLowerCase().includes(term);
-        const matchReq = lead.service_requirement?.toLowerCase().includes(term);
-        const matchSource = lead.source?.toLowerCase().includes(term);
-        if (!matchName && !matchComp && !matchPhone && !matchEmail && !matchReq && !matchSource) {
-          return false;
-        }
+        const q = search.toLowerCase();
+        const matchesName = lead.name?.toLowerCase().includes(q);
+        const matchesCompany = lead.company?.toLowerCase().includes(q);
+        const matchesPhone = lead.phone?.toLowerCase().includes(q);
+        const matchesEmail = lead.email?.toLowerCase().includes(q);
+        const matchesService = lead.service_requirement?.toLowerCase().includes(q);
+        if (!matchesName && !matchesCompany && !matchesPhone && !matchesEmail && !matchesService) return false;
       }
 
       return true;
-    }).sort((a, b) => {
-      let aVal = (a as any)[sortBy];
-      let bVal = (b as any)[sortBy];
+    });
+  }, [leads, activeTabFilter, sourceFilter, employeeFilter, priorityFilter, dateFilter, search]);
 
-      if (sortBy === 'priority') {
-        const pOrder: any = { urgent: 4, high: 3, medium: 2, low: 1 };
-        aVal = pOrder[a.priority] || 0;
-        bVal = pOrder[b.priority] || 0;
+  // Sorting
+  const sortedLeads = useMemo(() => {
+    return [...filteredLeads].sort((a: any, b: any) => {
+      let valA = a[sortBy] ?? '';
+      let valB = b[sortBy] ?? '';
+      if (sortBy === 'created_at' || sortBy === 'next_followup_date' || sortBy === 'last_contact_date') {
+        valA = valA ? new Date(valA).getTime() : 0;
+        valB = valB ? new Date(valB).getTime() : 0;
       }
+      if (typeof valA === 'string') valA = valA.toLowerCase();
+      if (typeof valB === 'string') valB = valB.toLowerCase();
 
-      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
-      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+      if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [leads, activeTabFilter, sourceFilter, employeeFilter, priorityFilter, dateFilter, search, sortBy, sortDirection]);
+  }, [filteredLeads, sortBy, sortDirection]);
 
-  // Pagination Slice
-  const totalLeadsCount = filteredLeads.length;
-  const totalPages = Math.ceil(totalLeadsCount / pageSize) || 1;
-  const paginatedLeads = filteredLeads.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  // Pagination
+  const totalLeadsCount = sortedLeads.length;
+  const totalPages = Math.max(1, Math.ceil(totalLeadsCount / pageSize));
+  const paginatedLeads = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return sortedLeads.slice(start, start + pageSize);
+  }, [sortedLeads, currentPage, pageSize]);
 
   const handleSort = (field: string) => {
     if (sortBy === field) {
@@ -248,13 +248,25 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
   };
 
   const handleViewLeadDetail = async (lead: Lead) => {
+    setSelectedLead(lead);
+    setIsDetailDrawerOpen(true);
     try {
-      const fullLead = await api.get<Lead>(`/crm/leads/${lead.id}`);
+      const fullLead: any = await api.get(`/crm/leads/${lead.id}`);
       setSelectedLead(fullLead);
-      setIsDetailDrawerOpen(true);
+    } catch (err) {
+      console.error('Failed to load full lead details', err);
+    }
+  };
+
+  const handleUpdateStatus = async (leadId: number, newStatus: Lead['status']) => {
+    try {
+      await api.put(`/crm/leads/${leadId}`, { status: newStatus });
+      setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status: newStatus } : l));
+      if (selectedLead?.id === leadId) {
+        setSelectedLead(prev => prev ? { ...prev, status: newStatus } : null);
+      }
     } catch (err: any) {
-      setSelectedLead(lead);
-      setIsDetailDrawerOpen(true);
+      alert('Failed to update lead status: ' + (err.message || 'Error'));
     }
   };
 
@@ -263,7 +275,8 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
     try {
       await api.post('/crm/leads', {
         ...newLeadForm,
-        assigned_to: newLeadForm.assigned_to ? Number(newLeadForm.assigned_to) : null
+        assigned_to: newLeadForm.assigned_to ? Number(newLeadForm.assigned_to) : null,
+        value: Number(newLeadForm.value) || 0
       });
       setIsNewLeadModalOpen(false);
       setNewLeadForm({
@@ -282,18 +295,6 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
       fetchLeads();
     } catch (err: any) {
       alert('Failed to create lead: ' + err.message);
-    }
-  };
-
-  const handleUpdateStatus = async (leadId: number, status: string) => {
-    try {
-      await api.post(`/crm/leads/${leadId}/status`, { status });
-      fetchLeads();
-      if (selectedLead && selectedLead.id === leadId) {
-        setSelectedLead({ ...selectedLead, status: status as any });
-      }
-    } catch (err: any) {
-      alert('Status update failed: ' + err.message);
     }
   };
 
@@ -437,31 +438,31 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
       switch (extSyncStatus) {
         case 'synced':
           return (
-            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#059669] bg-green-50 px-2 py-0.5 rounded-full border border-green-200" title="Externally verified and synchronized">
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 dark:text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800" title="Externally verified and synchronized">
               <CheckCircle2 className="w-3 h-3" /> Ext Synced
             </span>
           );
         case 'pending_writeback':
           return (
-            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#D97706] bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200" title="Awaiting external platform synchronization">
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-400 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800" title="Awaiting external platform synchronization">
               <Clock className="w-3 h-3 animate-pulse" /> Pending Sync
             </span>
           );
         case 'conflict':
           return (
-            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#EA580C] bg-orange-50 px-2 py-0.5 rounded-full border border-orange-200 animate-pulse" title="External drift detected! Click to resolve conflict">
-              <AlertTriangle className="w-3 h-3 text-[#EA580C]" /> Conflict
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-600 bg-rose-50 dark:bg-rose-950/60 dark:text-rose-400 px-2 py-0.5 rounded-full border border-rose-200 dark:border-rose-800 animate-pulse" title="External drift detected! Click to resolve conflict">
+              <AlertTriangle className="w-3 h-3" /> Conflict
             </span>
           );
         case 'failed':
           return (
-            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#DC2626] bg-red-50 px-2 py-0.5 rounded-full border border-red-200" title="External synchronization failed">
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-600 bg-rose-50 dark:bg-rose-950/60 dark:text-rose-400 px-2 py-0.5 rounded-full border border-rose-200 dark:border-rose-800" title="External synchronization failed">
               <AlertTriangle className="w-3 h-3" /> Sync Failed
             </span>
           );
         case 'manual_required':
           return (
-            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#7C3AED] bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200" title="Platform does not support automated write-back">
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-purple-600 bg-purple-50 dark:bg-purple-950/60 dark:text-purple-400 px-2 py-0.5 rounded-full border border-purple-200 dark:border-purple-800" title="Platform does not support automated write-back">
               <User className="w-3 h-3" /> Manual Required
             </span>
           );
@@ -470,30 +471,34 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
 
     switch (syncStatus) {
       case 'synced':
-        return <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#059669]"><CheckCircle2 className="w-3 h-3" /> Auto Synced</span>;
+        return <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="w-3 h-3" /> Auto Synced</span>;
       case 'webhook':
-        return <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#0284C7]"><Zap className="w-3 h-3" /> Webhook</span>;
+        return <span className="inline-flex items-center gap-1 text-[11px] font-bold text-sky-600 dark:text-sky-400"><Zap className="w-3 h-3" /> Webhook</span>;
       case 'error':
-        return <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#DC2626]"><AlertTriangle className="w-3 h-3" /> Sync Error</span>;
+        return <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-600 dark:text-rose-400"><AlertTriangle className="w-3 h-3" /> Sync Error</span>;
       case 'manual':
       default:
-        return <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[#667085]"><User className="w-3 h-3" /> Manual / CSV</span>;
+        return <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 dark:text-slate-400"><User className="w-3 h-3" /> Manual / CSV</span>;
     }
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6 animate-in fade-in duration-300">
+      
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-5 rounded-2xl border border-[#EAECF0] shadow-sm">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#D62839]" />
-            <h1 className="text-xl sm:text-2xl font-black text-[#20242C] tracking-tight">
-              Centralized Leads Management
+      <div className="p-6 rounded-3xl bg-white dark:bg-[#0D111A] border border-slate-200/90 dark:border-white/[0.08] shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5 cockpit-card-hover">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2.5">
+            <div className="w-2.5 h-6 bg-[#D62839] rounded-full shrink-0" />
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+              Centralized Leads Portfolio
             </h1>
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-rose-50 text-[#D62839] dark:bg-rose-950/60 dark:text-rose-400 font-mono font-bold border border-rose-200 dark:border-rose-900/60">
+              {stats.total} Total
+            </span>
           </div>
-          <p className="text-xs sm:text-sm text-[#667085] mt-1">
-            Universal real-time lead hub across BNI Connect, KVV, EAF Connect, SEO Forms, and Direct Outreach.
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+            Unified intake connecting BNI Chapter referrals, KVV Portal members, EAF Connect, SEO, and Direct Outreach.
           </p>
         </div>
 
@@ -501,33 +506,33 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
           {onNavigateToIntegrations && (
             <button
               onClick={onNavigateToIntegrations}
-              className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-[#344054] bg-[#F9FAFB] hover:bg-[#F2F4F7] border border-[#D0D5DD] rounded-xl transition"
+              className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-slate-200 dark:border-slate-700 rounded-xl transition cursor-pointer shadow-2xs"
             >
               <Zap className="w-3.5 h-3.5 text-[#D62839]" />
-              Sync Connectors Hub
+              <span>Lead Sync Hub</span>
             </button>
           )}
 
           <button
             onClick={() => setIsImportModalOpen(true)}
-            className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-[#344054] bg-[#F9FAFB] hover:bg-[#F2F4F7] border border-[#D0D5DD] rounded-xl transition"
+            className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-xl transition cursor-pointer shadow-2xs"
           >
             <Upload className="w-3.5 h-3.5" />
-            Import CSV
+            <span>Import CSV</span>
           </button>
 
           <button
             onClick={() => setIsNewLeadModalOpen(true)}
-            className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-white bg-[#D62839] hover:bg-[#B91C1C] rounded-xl shadow-sm transition"
+            className="cockpit-btn-primary shadow-xs"
           >
             <Plus className="w-4 h-4" />
-            New Lead
+            <span>New Lead</span>
           </button>
 
           <button
             onClick={fetchLeads}
             disabled={refreshing}
-            className="p-2 border border-[#D0D5DD] rounded-xl hover:bg-[#F9FAFB] transition text-[#344054]"
+            className="p-2.5 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition text-slate-600 dark:text-slate-300 cursor-pointer shadow-2xs"
             title="Refresh All Leads"
           >
             <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
@@ -535,19 +540,43 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
         </div>
       </div>
 
-      {/* Filter Tabs (11 Required Views) */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs font-bold">
+      {/* KPI Micro-Cards Row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+        <div className="p-4 rounded-2xl bg-white dark:bg-[#0D111A] border border-slate-200/90 dark:border-white/[0.08] shadow-xs">
+          <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Total Leads</span>
+          <p className="text-2xl font-black text-slate-900 dark:text-white font-mono mt-1">{stats.total}</p>
+          <span className="text-[10px] text-slate-500 dark:text-slate-400">All authenticated sources</span>
+        </div>
+        <div className="p-4 rounded-2xl bg-white dark:bg-[#0D111A] border border-slate-200/90 dark:border-white/[0.08] shadow-xs">
+          <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Fresh Inquiries</span>
+          <p className="text-2xl font-black text-[#D62839] dark:text-rose-400 font-mono mt-1">{stats.fresh}</p>
+          <span className="text-[10px] text-rose-600 dark:text-rose-400 font-bold">Awaiting first contact</span>
+        </div>
+        <div className="p-4 rounded-2xl bg-white dark:bg-[#0D111A] border border-slate-200/90 dark:border-white/[0.08] shadow-xs">
+          <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Converted Won</span>
+          <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono mt-1">{stats.won}</p>
+          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">Successfully closed</span>
+        </div>
+        <div className={`p-4 rounded-2xl border shadow-xs ${stats.overdue > 0 ? 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50' : 'bg-white dark:bg-[#0D111A] border-slate-200/90 dark:border-white/[0.08]'}`}>
+          <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Overdue Follow-ups</span>
+          <p className={`text-2xl font-black font-mono mt-1 ${stats.overdue > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>{stats.overdue}</p>
+          <span className="text-[10px] text-rose-600 dark:text-rose-400 font-bold">{stats.overdue > 0 ? '⚠️ Action Required' : 'Zero overdue'}</span>
+        </div>
+      </div>
+
+      {/* Filter Tabs Strip */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none text-xs font-bold">
         {[
-          { id: 'all', label: 'All Sources' },
-          { id: 'bni', label: 'BNI Connect' },
-          { id: 'kvv', label: 'KVV Leads' },
-          { id: 'eaf', label: 'EAF Connect' },
+          { id: 'all', label: `All Leads (${stats.total})` },
+          { id: 'bni', label: `BNI Connect (${stats.bniCount})` },
+          { id: 'kvv', label: `KVV Leads (${stats.kvvCount})` },
+          { id: 'eaf', label: `EAF Connect (${stats.eafCount})` },
           { id: 'seo', label: 'SEO & Website' },
-          { id: 'new', label: 'New Leads' },
+          { id: 'new', label: `New (${stats.fresh})` },
           { id: 'pending', label: 'Pending Follow-ups' },
           { id: 'today', label: "Today's Follow-ups" },
-          { id: 'overdue', label: 'Overdue ⚠️' },
-          { id: 'converted', label: 'Converted' },
+          { id: 'overdue', label: `Overdue (${stats.overdue}) ⚠️` },
+          { id: 'converted', label: `Converted (${stats.won})` },
           { id: 'lost', label: 'Lost' }
         ].map(tab => (
           <button
@@ -556,10 +585,10 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
               setActiveTabFilter(tab.id);
               setCurrentPage(1);
             }}
-            className={`px-3.5 py-2 rounded-xl transition whitespace-nowrap shrink-0 ${
+            className={`px-3.5 py-2 rounded-xl transition whitespace-nowrap shrink-0 cursor-pointer ${
               activeTabFilter === tab.id
-                ? 'bg-[#D62839] text-white shadow-sm'
-                : 'bg-white text-[#475467] border border-[#EAECF0] hover:bg-[#F9FAFB]'
+                ? 'bg-[#D62839] text-white shadow-xs font-bold'
+                : 'bg-white dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 border border-slate-200/90 dark:border-white/[0.08] hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
             {tab.label}
@@ -567,10 +596,10 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
         ))}
       </div>
 
-      {/* Search & Secondary Filter Controls */}
-      <div className="bg-white p-4 rounded-2xl border border-[#EAECF0] shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
+      {/* Search & Filter Bar */}
+      <div className="p-4 rounded-2xl bg-white dark:bg-[#0D111A] border border-slate-200/90 dark:border-white/[0.08] shadow-xs flex flex-col md:flex-row items-center justify-between gap-3">
         <div className="relative w-full md:w-80">
-          <Search className="w-4 h-4 text-[#98A2B3] absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             placeholder="Search leads, company, phone, email..."
@@ -579,24 +608,23 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
               setSearch(e.target.value);
               setCurrentPage(1);
             }}
-            className="w-full pl-10 pr-4 py-2 text-xs border border-[#D0D5DD] rounded-xl focus:ring-2 focus:ring-[#D62839] focus:outline-none"
+            className="cockpit-input pl-10"
           />
           {search && (
-            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer">
               <X className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
-          {/* Source Dropdown */}
           <select
             value={sourceFilter}
             onChange={(e) => {
               setSourceFilter(e.target.value);
               setCurrentPage(1);
             }}
-            className="px-3 py-1.5 text-xs border border-[#D0D5DD] rounded-xl bg-white text-[#344054]"
+            className="px-3 py-2 text-xs border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 cursor-pointer"
           >
             <option value="all">Sources: All</option>
             {sources.map(s => (
@@ -604,14 +632,13 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
             ))}
           </select>
 
-          {/* Assigned Employee */}
           <select
             value={employeeFilter}
             onChange={(e) => {
               setEmployeeFilter(e.target.value);
               setCurrentPage(1);
             }}
-            className="px-3 py-1.5 text-xs border border-[#D0D5DD] rounded-xl bg-white text-[#344054]"
+            className="px-3 py-2 text-xs border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 cursor-pointer"
           >
             <option value="all">Rep: All Team</option>
             <option value="unassigned">Unassigned Rep</option>
@@ -622,14 +649,13 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
             ))}
           </select>
 
-          {/* Priority */}
           <select
             value={priorityFilter}
             onChange={(e) => {
               setPriorityFilter(e.target.value);
               setCurrentPage(1);
             }}
-            className="px-3 py-1.5 text-xs border border-[#D0D5DD] rounded-xl bg-white text-[#344054]"
+            className="px-3 py-2 text-xs border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 cursor-pointer"
           >
             <option value="all">Priority: All</option>
             <option value="urgent">Urgent</option>
@@ -638,14 +664,13 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
             <option value="low">Low</option>
           </select>
 
-          {/* Date Created */}
           <select
             value={dateFilter}
             onChange={(e) => {
               setDateFilter(e.target.value);
               setCurrentPage(1);
             }}
-            className="px-3 py-1.5 text-xs border border-[#D0D5DD] rounded-xl bg-white text-[#344054]"
+            className="px-3 py-2 text-xs border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 cursor-pointer"
           >
             <option value="all">Created: All Time</option>
             <option value="today">Created Today</option>
@@ -653,69 +678,65 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
             <option value="this_month">This Month</option>
           </select>
 
-          <span className="text-xs text-[#667085] ml-2">
+          <span className="text-xs text-slate-500 dark:text-slate-400 ml-2 font-medium">
             Showing <strong>{filteredLeads.length}</strong> leads
           </span>
         </div>
       </div>
 
-      {/* Central 14-Column Unified Table */}
-      <div className="bg-white rounded-2xl border border-[#EAECF0] shadow-sm overflow-hidden">
+      {/* Central Unified Table */}
+      <div className="bg-white dark:bg-[#0D111A] rounded-3xl border border-slate-200/90 dark:border-white/[0.08] shadow-xs overflow-hidden">
         {loading ? (
-          <div className="p-12 text-center text-xs text-[#667085] flex flex-col items-center gap-2">
-            <div className="w-8 h-8 border-3 border-[#D62839]/20 border-t-[#D62839] rounded-full animate-spin" />
-            Loading centralized business leads...
+          <div className="p-8 text-center">
+            <Cockpit3DLoader 
+              variant="module"
+              size="md"
+              text="Loading Centralized Business Leads..."
+              subtitle="Retrieving real-time records from BNI, KVV, EAF, and SEO channels"
+            />
           </div>
         ) : paginatedLeads.length === 0 ? (
-          <div className="p-12 text-center text-xs text-[#667085]">
-            No leads match the selected criteria. Adjust filters or connect an intake source.
-          </div>
+          <EmptyState
+            icon={Users2}
+            title="No leads match the selected criteria"
+            description="Adjust your active filters or create a new business inquiry to start building your qualified pipeline."
+            primaryAction={{
+              label: "Create Business Lead",
+              onClick: () => setIsNewLeadModalOpen(true),
+              icon: Plus
+            }}
+            secondaryAction={onNavigateToIntegrations ? {
+              label: "Universal Sync Hub",
+              onClick: onNavigateToIntegrations
+            } : undefined}
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="border-b border-[#EAECF0] bg-[#F9FAFB] text-[#475467] uppercase font-bold text-[10px]">
-                  {/* 1. Lead Name */}
+                <tr className="border-b border-slate-200 dark:border-white/[0.08] bg-slate-50/70 dark:bg-slate-900/40 text-slate-600 dark:text-slate-400 uppercase font-bold text-[10px] tracking-wider">
                   <th className="py-3 px-3 cursor-pointer select-none" onClick={() => handleSort('name')}>
                     <div className="flex items-center gap-1">Lead Name <ArrowUpDown className="w-3 h-3" /></div>
                   </th>
-                  {/* 2. Company */}
                   <th className="py-3 px-3">Company</th>
-                  {/* 3. Phone */}
-                  <th className="py-3 px-3">Phone</th>
-                  {/* 4. Email */}
-                  <th className="py-3 px-3">Email</th>
-                  {/* 5. Lead Source */}
+                  <th className="py-3 px-3">Contact</th>
                   <th className="py-3 px-3 cursor-pointer select-none" onClick={() => handleSort('source')}>
                     <div className="flex items-center gap-1">Source <ArrowUpDown className="w-3 h-3" /></div>
                   </th>
-                  {/* 6. Service / Requirement */}
-                  <th className="py-3 px-3">Service / Requirement</th>
-                  {/* 7. Assigned Employee */}
+                  <th className="py-3 px-3">Requirement</th>
                   <th className="py-3 px-3">Assigned Rep</th>
-                  {/* 8. Lead Status */}
                   <th className="py-3 px-3">Status</th>
-                  {/* 9. Priority */}
                   <th className="py-3 px-3 cursor-pointer select-none" onClick={() => handleSort('priority')}>
                     <div className="flex items-center gap-1">Priority <ArrowUpDown className="w-3 h-3" /></div>
                   </th>
-                  {/* 10. Last Contact */}
-                  <th className="py-3 px-3">Last Contact</th>
-                  {/* 11. Next Follow-up */}
                   <th className="py-3 px-3 cursor-pointer select-none" onClick={() => handleSort('next_followup_date')}>
                     <div className="flex items-center gap-1">Next Follow-up <ArrowUpDown className="w-3 h-3" /></div>
                   </th>
-                  {/* 12. Created Date */}
-                  <th className="py-3 px-3 cursor-pointer select-none" onClick={() => handleSort('created_at')}>
-                    <div className="flex items-center gap-1">Created Date <ArrowUpDown className="w-3 h-3" /></div>
-                  </th>
-                  {/* 13. Sync Status */}
                   <th className="py-3 px-3">Sync Status</th>
-                  {/* 14. Actions */}
                   <th className="py-3 px-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#F2F4F7]">
+              <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
                 {paginatedLeads.map((lead) => {
                   const isOverdue = lead.next_followup_date && new Date(lead.next_followup_date) < new Date() && !['won', 'lost'].includes(lead.status);
                   const isToday = lead.next_followup_date && new Date(lead.next_followup_date).toDateString() === new Date().toDateString();
@@ -724,100 +745,82 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
                     <tr 
                       key={lead.id}
                       onClick={() => handleViewLeadDetail(lead)}
-                      className="hover:bg-[#FFF5F5]/60 transition cursor-pointer"
+                      className="hover:bg-rose-50/40 dark:hover:bg-rose-950/20 transition cursor-pointer group"
                     >
-                      {/* 1. Name */}
-                      <td className="py-3 px-3 font-bold text-[#20242C] whitespace-nowrap">
-                        {lead.name}
+                      <td className="py-3 px-3 font-bold text-slate-900 dark:text-white whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-bold text-[10px] text-slate-700 dark:text-slate-300 shrink-0">
+                            {lead.name?.charAt(0) || 'L'}
+                          </div>
+                          <span>{lead.name}</span>
+                        </div>
                       </td>
 
-                      {/* 2. Company */}
-                      <td className="py-3 px-3 text-[#344054] whitespace-nowrap">
+                      <td className="py-3 px-3 text-slate-600 dark:text-slate-300 whitespace-nowrap font-medium">
                         {lead.company || '—'}
                       </td>
 
-                      {/* 3. Phone */}
-                      <td className="py-3 px-3 text-[#475467] font-mono whitespace-nowrap">
-                        {lead.phone ? (
-                          <a 
-                            href={`tel:${lead.phone}`} 
-                            onClick={(e) => e.stopPropagation()}
-                            className="text-[#D62839] hover:underline flex items-center gap-1"
-                          >
-                            <Phone className="w-3 h-3" /> {lead.phone}
-                          </a>
-                        ) : '—'}
+                      <td className="py-3 px-3 text-slate-600 dark:text-slate-400 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-2">
+                          {lead.phone ? (
+                            <a 
+                              href={`tel:${lead.phone}`} 
+                              className="text-[#D62839] hover:underline font-mono text-xs flex items-center gap-1 font-semibold"
+                            >
+                              <Phone className="w-3 h-3" /> {lead.phone}
+                            </a>
+                          ) : '—'}
+                          {lead.phone && (
+                            <a
+                              href={`https://wa.me/${lead.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hello ${lead.name}, connecting regarding ${lead.service_requirement || 'your inquiry'}.`)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1 rounded text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/60"
+                              title="Chat on WhatsApp"
+                            >
+                              <MessageSquare className="w-3 h-3" />
+                            </a>
+                          )}
+                        </div>
                       </td>
 
-                      {/* 4. Email */}
-                      <td className="py-3 px-3 text-[#475467] whitespace-nowrap">
-                        {lead.email ? (
-                          <a 
-                            href={`mailto:${lead.email}`} 
-                            onClick={(e) => e.stopPropagation()}
-                            className="hover:text-[#D62839] truncate block max-w-[130px]"
-                            title={lead.email}
-                          >
-                            {lead.email}
-                          </a>
-                        ) : '—'}
-                      </td>
-
-                      {/* 5. Lead Source */}
                       <td className="py-3 px-3 whitespace-nowrap">
-                        <span className="font-semibold text-[#1D2939] px-2 py-0.5 rounded bg-[#F2F4F7] text-[11px]">
+                        <span className="font-semibold text-slate-800 dark:text-slate-200 px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[11px] border border-slate-200 dark:border-slate-700">
                           {lead.source}
                         </span>
                       </td>
 
-                      {/* 6. Service / Requirement */}
-                      <td className="py-3 px-3 text-[#344054] max-w-[160px] truncate" title={lead.service_requirement || ''}>
+                      <td className="py-3 px-3 text-slate-600 dark:text-slate-300 max-w-[160px] truncate" title={lead.service_requirement || ''}>
                         {lead.service_requirement || '—'}
                       </td>
 
-                      {/* 7. Assigned Rep */}
-                      <td className="py-3 px-3 text-[#475467] whitespace-nowrap">
-                        {lead.assigned_user_name || <span className="text-gray-400 italic">Unassigned</span>}
+                      <td className="py-3 px-3 text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                        {lead.assigned_user_name || <span className="text-slate-400 italic">Unassigned</span>}
                       </td>
 
-                      {/* 8. Status */}
                       <td className="py-3 px-3 whitespace-nowrap">
                         {getStatusBadge(lead.status)}
                       </td>
 
-                      {/* 9. Priority */}
                       <td className="py-3 px-3 whitespace-nowrap">
                         {getPriorityBadge(lead.priority)}
                       </td>
 
-                      {/* 10. Last Contact */}
-                      <td className="py-3 px-3 text-[#667085] whitespace-nowrap">
-                        {lead.last_contact_date ? new Date(lead.last_contact_date).toLocaleDateString('en-IN') : <span className="text-gray-400">None</span>}
-                      </td>
-
-                      {/* 11. Next Follow-up */}
                       <td className="py-3 px-3 whitespace-nowrap">
                         {lead.next_followup_date ? (
-                          <span className={`font-semibold ${isOverdue ? 'text-[#DC2626]' : isToday ? 'text-[#D97706]' : 'text-[#344054]'}`}>
+                          <span className={`font-semibold ${isOverdue ? 'text-rose-600 dark:text-rose-400 font-bold' : isToday ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-300'}`}>
                             {new Date(lead.next_followup_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                             {isOverdue && ' ⚠️'}
                           </span>
                         ) : (
-                          <span className="text-gray-400">Not set</span>
+                          <span className="text-slate-400">Not set</span>
                         )}
                       </td>
 
-                      {/* 12. Created Date */}
-                      <td className="py-3 px-3 text-[#667085] whitespace-nowrap">
-                        {new Date(lead.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </td>
-
-                      {/* 13. Sync Status */}
                       <td className="py-3 px-3 whitespace-nowrap">
                         {getSyncStatusBadge(lead.sync_status, lead.external_sync_status)}
                       </td>
 
-                      {/* 14. Actions */}
                       <td className="py-3 px-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1.5">
                           <button
@@ -825,7 +828,7 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
                               setSelectedLead(lead);
                               setIsFollowupModalOpen(true);
                             }}
-                            className="p-1 text-[#344054] hover:text-[#D62839] hover:bg-[#FEE4E2] rounded transition"
+                            className="p-1.5 text-slate-500 hover:text-[#D62839] hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition cursor-pointer"
                             title="Schedule Next Follow-up"
                           >
                             <Calendar className="w-3.5 h-3.5" />
@@ -835,14 +838,14 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
                               setSelectedLead(lead);
                               setIsActivityModalOpen(true);
                             }}
-                            className="p-1 text-[#344054] hover:text-[#059669] hover:bg-[#ECFDF5] rounded transition"
+                            className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 rounded-lg transition cursor-pointer"
                             title="Log Activity Touchpoint"
                           >
                             <PhoneCall className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => handleViewLeadDetail(lead)}
-                            className="p-1 text-[#667085] hover:text-[#20242C] rounded transition"
+                            className="p-1.5 text-slate-400 hover:text-slate-800 dark:hover:text-white rounded-lg transition cursor-pointer"
                             title="View Full Details"
                           >
                             <ChevronRight className="w-4 h-4" />
@@ -858,7 +861,7 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
         )}
 
         {/* Pagination Controls */}
-        <div className="p-4 border-t border-[#EAECF0] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#667085]">
+        <div className="p-4 border-t border-slate-100 dark:border-white/[0.06] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
           <div className="flex items-center gap-2">
             <span>Rows per page:</span>
             <select
@@ -867,7 +870,7 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
                 setPageSize(Number(e.target.value));
                 setCurrentPage(1);
               }}
-              className="px-2 py-1 border border-[#D0D5DD] rounded-lg bg-white"
+              className="px-2 py-1 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200"
             >
               <option value={10}>10</option>
               <option value={15}>15</option>
@@ -881,15 +884,15 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
             <button
               onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
               disabled={currentPage === 1}
-              className="p-1.5 border border-[#D0D5DD] rounded-lg disabled:opacity-40 hover:bg-[#F9FAFB]"
+              className="p-2 border border-slate-200 dark:border-slate-700 rounded-lg disabled:opacity-40 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <span className="px-2 font-bold text-[#20242C]">Page {currentPage} of {totalPages}</span>
+            <span className="px-2 font-bold text-slate-800 dark:text-slate-200">Page {currentPage} of {totalPages}</span>
             <button
               onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
               disabled={currentPage >= totalPages}
-              className="p-1.5 border border-[#D0D5DD] rounded-lg disabled:opacity-40 hover:bg-[#F9FAFB]"
+              className="p-2 border border-slate-200 dark:border-slate-700 rounded-lg disabled:opacity-40 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -897,33 +900,44 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
         </div>
       </div>
 
-      {/* Lead Detail Panel / Drawer */}
-      {isDetailDrawerOpen && selectedLead && (
-        <div className="fixed inset-0 z-50 overflow-hidden bg-black/40 flex justify-end">
-          <div className="w-full max-w-xl bg-white h-full shadow-2xl p-6 overflow-y-auto space-y-6">
-            <div className="flex items-start justify-between pb-4 border-b border-[#EAECF0]">
-              <div>
-                <span className="text-[11px] font-bold text-[#667085] uppercase tracking-wider">{selectedLead.source}</span>
-                <h2 className="text-xl font-bold text-[#20242C]">{selectedLead.name}</h2>
-                <p className="text-xs text-[#475467]">{selectedLead.company || 'Individual Account'}</p>
-              </div>
-              <button onClick={() => setIsDetailDrawerOpen(false)} className="p-1 text-gray-400 hover:text-black">
-                <X className="w-5 h-5" />
+      {/* Slide-over Lead Detail Drawer */}
+      {selectedLead && (
+        <SlideOverDrawer
+          isOpen={isDetailDrawerOpen}
+          onClose={() => setIsDetailDrawerOpen(false)}
+          title={selectedLead.name}
+          subtitle={selectedLead.company || 'Individual Account'}
+          badge={
+            <Badge variant="red" className="text-[10px]">
+              {selectedLead.source}
+            </Badge>
+          }
+          maxWidth="max-w-xl"
+          footer={
+            <div className="flex items-center justify-between w-full">
+              <span className="text-xs text-slate-500 font-mono">Lead Record #{selectedLead.id}</span>
+              <button
+                onClick={() => setIsDetailDrawerOpen(false)}
+                className="cockpit-btn-secondary py-1.5 px-4 text-xs font-semibold"
+              >
+                Done
               </button>
             </div>
-
-            {/* Stage Quick Change */}
+          }
+        >
+          <div className="space-y-5">
+            {/* Pipeline Stage Quick Changer */}
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-[#667085] uppercase">Lead Stage Pipeline</label>
+              <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Pipeline Stage</label>
               <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
                 {(['new', 'contacted', 'qualified', 'proposal', 'won', 'lost'] as const).map(st => (
                   <button
                     key={st}
                     onClick={() => handleUpdateStatus(selectedLead.id, st)}
-                    className={`py-1.5 px-2 rounded-lg text-xs font-bold transition capitalize ${
+                    className={`py-1.5 px-2 rounded-xl text-xs font-bold transition capitalize cursor-pointer ${
                       selectedLead.status === st
-                        ? 'bg-[#D62839] text-white shadow-sm'
-                        : 'bg-[#F2F4F7] text-[#475467] hover:bg-[#EAECF0]'
+                        ? 'bg-[#D62839] text-white shadow-xs'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
                     }`}
                   >
                     {st}
@@ -933,51 +947,79 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
             </div>
 
             {/* Quick Metrics */}
-            <div className="grid grid-cols-2 gap-3 p-4 bg-[#F9FAFB] rounded-xl border border-[#F2F4F7] text-xs">
+            <div className="grid grid-cols-2 gap-3 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-200/80 dark:border-white/[0.06] text-xs">
               <div>
-                <span className="text-[10px] uppercase font-bold text-[#667085] block">Requirement</span>
-                <strong className="text-[#20242C]">{selectedLead.service_requirement || 'General'}</strong>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Requirement</span>
+                <strong className="text-slate-900 dark:text-white">{selectedLead.service_requirement || 'General Inquiry'}</strong>
               </div>
               <div>
-                <span className="text-[10px] uppercase font-bold text-[#667085] block">Priority</span>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Priority</span>
                 {getPriorityBadge(selectedLead.priority)}
               </div>
               <div>
-                <span className="text-[10px] uppercase font-bold text-[#667085] block">Contact</span>
-                <span className="font-mono text-[#D62839]">{selectedLead.phone || 'No phone'}</span>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Estimated Deal Value</span>
+                <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">{formatCurrency(selectedLead.value || 0)}</span>
               </div>
               <div>
-                <span className="text-[10px] uppercase font-bold text-[#667085] block">Assigned Rep</span>
-                <span className="text-[#20242C]">{selectedLead.assigned_user_name || 'Unassigned'}</span>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Assigned Specialist</span>
+                <span className="text-slate-800 dark:text-slate-200 font-semibold">{selectedLead.assigned_user_name || 'Unassigned'}</span>
               </div>
             </div>
 
+            {/* Direct Communication Channels */}
+            {selectedLead.phone && (
+              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200/80 dark:border-white/[0.06] flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Phone Contact</span>
+                  <span className="font-mono text-xs font-bold text-slate-900 dark:text-white">{selectedLead.phone}</span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <a
+                    href={`tel:${selectedLead.phone}`}
+                    className="p-2 rounded-xl bg-white dark:bg-slate-800 hover:bg-rose-50 text-slate-700 dark:text-slate-200 hover:text-[#D62839] border border-slate-200 dark:border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                  >
+                    <PhoneCall className="w-3.5 h-3.5 text-[#D62839]" />
+                    <span>Call</span>
+                  </a>
+                  <a
+                    href={createWhatsAppUrl(selectedLead.phone, `Hello ${selectedLead.name}, following up regarding your requirement: ${selectedLead.service_requirement || 'our service'}.`)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    <span>WhatsApp</span>
+                  </a>
+                </div>
+              </div>
+            )}
+
             {/* Quick Action Buttons */}
-            <div className="flex gap-2">
+            <div className="flex gap-2.5">
               <button
                 onClick={() => setIsFollowupModalOpen(true)}
-                className="flex-1 py-2 text-xs font-bold text-white bg-[#D62839] hover:bg-[#B91C1C] rounded-xl transition flex items-center justify-center gap-1.5"
+                className="flex-1 py-2.5 text-xs font-bold text-white bg-[#D62839] hover:bg-[#B91C1C] rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
               >
                 <Calendar className="w-3.5 h-3.5" />
-                Schedule Follow-up
+                <span>Schedule Follow-up</span>
               </button>
               <button
                 onClick={() => setIsActivityModalOpen(true)}
-                className="flex-1 py-2 text-xs font-bold text-[#344054] bg-[#F2F4F7] hover:bg-[#E4E7EC] rounded-xl transition flex items-center justify-center gap-1.5"
+                className="flex-1 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
               >
                 <PhoneCall className="w-3.5 h-3.5" />
-                Log Touchpoint
+                <span>Log Touchpoint</span>
               </button>
             </div>
 
-            {/* External Platform Bidirectional Sync & Writeback Block */}
+            {/* External Platform Writeback */}
             {selectedLead.source_platform && (
-              <div className="p-4 bg-[#F8FAFC] rounded-2xl border border-[#E2E8F0] space-y-3 shadow-xs">
+              <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-200/80 dark:border-white/[0.06] space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-[#0284C7]" />
-                    <h3 className="text-xs font-bold text-[#1E293B] uppercase tracking-wider">
-                      External Platform Sync ({selectedLead.source_platform.toUpperCase()})
+                    <span className="w-2 h-2 rounded-full bg-sky-500" />
+                    <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                      Platform Writeback ({selectedLead.source_platform.toUpperCase()})
                     </h3>
                   </div>
                   <div>
@@ -985,90 +1027,52 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
                   </div>
                 </div>
 
-                <div className="text-xs text-[#475467] space-y-1">
+                <div className="text-xs text-slate-600 dark:text-slate-400 space-y-1">
                   <div className="flex justify-between">
-                    <span className="text-[#64748B]">Original Slip / Lead ID:</span>
-                    <strong className="font-mono text-[#0F172A]">{selectedLead.source_lead_id || '—'}</strong>
+                    <span>Slip / Record ID:</span>
+                    <strong className="font-mono text-slate-900 dark:text-white">{selectedLead.source_lead_id || '—'}</strong>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-[#64748B]">Last External Synchronization:</span>
+                    <span>Last Sync:</span>
                     <span>{selectedLead.last_external_sync_at ? new Date(selectedLead.last_external_sync_at).toLocaleString('en-IN') : 'Not yet synchronized'}</span>
                   </div>
                 </div>
 
-                {/* Conflict banner if conflict detected */}
-                {selectedLead.external_sync_status === 'conflict' && (
-                  <div className="p-3 bg-[#FFF7ED] rounded-xl border border-[#FDBA74] text-xs space-y-2">
-                    <div className="flex items-center gap-2 text-[#C2410C] font-bold">
-                      <AlertTriangle className="w-4 h-4 shrink-0" />
-                      External Platform Drift Detected!
-                    </div>
-                    <p className="text-[11px] text-[#9A3412]">
-                      The record was modified directly on {selectedLead.source_platform.toUpperCase()} outside Cockpit. To prevent overwriting external work, please review differences before updating.
-                    </p>
-                    <button
-                      onClick={async () => {
-                        try {
-                          const res: any = await api.get(`/crm/leads/${selectedLead.id}/sync-status`);
-                          const latestQueue = res.writeback_queue?.[0];
-                          if (latestQueue?.conflict_details) {
-                            setConflictData(latestQueue.conflict_details);
-                            setConflictQueueId(latestQueue.id);
-                            setConflictModalOpen(true);
-                          }
-                        } catch (e) {}
-                      }}
-                      className="w-full py-1.5 px-3 bg-[#EA580C] hover:bg-[#C2410C] text-white rounded-lg font-bold text-xs transition flex items-center justify-center gap-1.5 shadow-sm"
-                    >
-                      <AlertTriangle className="w-3.5 h-3.5" />
-                      Review & Resolve Conflict
-                    </button>
-                  </div>
-                )}
-
-                {/* Sync feedback */}
-                {syncFeedback && (
-                  <div className={`p-2.5 rounded-lg text-xs ${syncFeedback.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
-                    {syncFeedback.message}
-                  </div>
-                )}
-
-                {/* Write-back button with confirmation */}
                 <button
                   onClick={() => setConfirmExternalSyncOpen(true)}
                   disabled={syncingExternal}
-                  className="w-full py-2 px-3 bg-white hover:bg-[#F1F5F9] border border-[#CBD5E1] text-[#334155] rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 shadow-xs"
+                  className="w-full py-2 px-3 bg-white dark:bg-slate-800 hover:bg-slate-100 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 shadow-2xs cursor-pointer"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 text-[#0284C7] ${syncingExternal ? 'animate-spin' : ''}`} />
-                  Sync Changes to {selectedLead.source_platform.toUpperCase()}
+                  <RefreshCw className={`w-3.5 h-3.5 text-sky-500 ${syncingExternal ? 'animate-spin' : ''}`} />
+                  <span>Sync Changes to {selectedLead.source_platform.toUpperCase()}</span>
                 </button>
               </div>
             )}
 
             {/* Activity History */}
             <div className="space-y-3 pt-2">
-              <h3 className="text-xs font-bold text-[#20242C] uppercase tracking-wider">
+              <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
                 Follow-up & Activity History
               </h3>
               {(!selectedLead.activities || selectedLead.activities.length === 0) ? (
-                <p className="text-xs text-gray-400 italic">No activity logs recorded yet.</p>
+                <p className="text-xs text-slate-400 italic">No activity logs recorded yet.</p>
               ) : (
                 <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                   {selectedLead.activities.map(act => (
-                    <div key={act.id} className="p-3 bg-[#F9FAFB] rounded-xl border border-[#F2F4F7] text-xs">
-                      <div className="flex items-center justify-between text-[#667085] text-[10px] mb-1">
+                    <div key={act.id} className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200/80 dark:border-white/[0.04] text-xs">
+                      <div className="flex items-center justify-between text-slate-500 text-[10px] mb-1">
                         <span className="font-bold uppercase text-[#D62839]">{act.activity_type}</span>
                         <span>{new Date(act.activity_date).toLocaleString('en-IN')}</span>
                       </div>
-                      <h4 className="font-bold text-[#20242C]">{act.title}</h4>
-                      {act.description && <p className="text-[#475467] mt-0.5">{act.description}</p>}
+                      <h4 className="font-bold text-slate-900 dark:text-white">{act.title}</h4>
+                      {act.description && <p className="text-slate-500 dark:text-slate-400 mt-0.5">{act.description}</p>}
                     </div>
                   ))}
                 </div>
               )}
             </div>
           </div>
-        </div>
+        </SlideOverDrawer>
       )}
 
       {/* New Lead Modal */}
@@ -1076,55 +1080,55 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
         <form onSubmit={handleCreateLead} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-[#344054] mb-1">Contact Name *</label>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Contact Name *</label>
               <input
                 type="text"
                 required
                 value={newLeadForm.name}
                 onChange={e => setNewLeadForm({ ...newLeadForm, name: e.target.value })}
-                className="w-full px-3 py-2 text-xs border border-[#D0D5DD] rounded-xl"
+                className="cockpit-input text-xs"
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-[#344054] mb-1">Company</label>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Company</label>
               <input
                 type="text"
                 value={newLeadForm.company}
                 onChange={e => setNewLeadForm({ ...newLeadForm, company: e.target.value })}
-                className="w-full px-3 py-2 text-xs border border-[#D0D5DD] rounded-xl"
+                className="cockpit-input text-xs"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-[#344054] mb-1">Phone Number *</label>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Phone Number *</label>
               <input
                 type="tel"
                 required
                 value={newLeadForm.phone}
                 onChange={e => setNewLeadForm({ ...newLeadForm, phone: e.target.value })}
-                className="w-full px-3 py-2 text-xs border border-[#D0D5DD] rounded-xl"
+                className="cockpit-input text-xs"
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-[#344054] mb-1">Email</label>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Email</label>
               <input
                 type="email"
                 value={newLeadForm.email}
                 onChange={e => setNewLeadForm({ ...newLeadForm, email: e.target.value })}
-                className="w-full px-3 py-2 text-xs border border-[#D0D5DD] rounded-xl"
+                className="cockpit-input text-xs"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-[#344054] mb-1">Lead Source</label>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Lead Source</label>
               <select
                 value={newLeadForm.source}
                 onChange={e => setNewLeadForm({ ...newLeadForm, source: e.target.value })}
-                className="w-full px-3 py-2 text-xs border border-[#D0D5DD] rounded-xl"
+                className="cockpit-input text-xs"
               >
                 <option value="BNI">BNI Connect</option>
                 <option value="KVV">KVV Leads</option>
@@ -1134,24 +1138,24 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-bold text-[#344054] mb-1">Service / Requirement</label>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Service / Requirement</label>
               <input
                 type="text"
                 placeholder="e.g. ERP Implementation, Web App"
                 value={newLeadForm.service_requirement}
                 onChange={e => setNewLeadForm({ ...newLeadForm, service_requirement: e.target.value })}
-                className="w-full px-3 py-2 text-xs border border-[#D0D5DD] rounded-xl"
+                className="cockpit-input text-xs"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-[#344054] mb-1">Priority</label>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Priority</label>
               <select
                 value={newLeadForm.priority}
                 onChange={e => setNewLeadForm({ ...newLeadForm, priority: e.target.value as any })}
-                className="w-full px-3 py-2 text-xs border border-[#D0D5DD] rounded-xl"
+                className="cockpit-input text-xs"
               >
                 <option value="urgent">Urgent</option>
                 <option value="high">High</option>
@@ -1160,11 +1164,11 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-bold text-[#344054] mb-1">Assign Rep</label>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Assign Rep</label>
               <select
                 value={newLeadForm.assigned_to}
                 onChange={e => setNewLeadForm({ ...newLeadForm, assigned_to: e.target.value })}
-                className="w-full px-3 py-2 text-xs border border-[#D0D5DD] rounded-xl"
+                className="cockpit-input text-xs"
               >
                 <option value="">Unassigned</option>
                 {employees.map(emp => (
@@ -1177,12 +1181,12 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-[#344054] mb-1">Initial Next Follow-up</label>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Initial Next Follow-up</label>
             <input
               type="datetime-local"
               value={newLeadForm.next_followup_date}
               onChange={e => setNewLeadForm({ ...newLeadForm, next_followup_date: e.target.value })}
-              className="w-full px-3 py-2 text-xs border border-[#D0D5DD] rounded-xl"
+              className="cockpit-input text-xs"
             />
           </div>
 
@@ -1190,13 +1194,13 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
             <button
               type="button"
               onClick={() => setIsNewLeadModalOpen(false)}
-              className="px-4 py-2 text-xs font-bold text-[#344054] border border-[#D0D5DD] rounded-xl"
+              className="px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-xs font-bold text-white bg-[#D62839] hover:bg-[#B91C1C] rounded-xl"
+              className="cockpit-btn-primary"
             >
               Create Lead
             </button>
@@ -1208,24 +1212,24 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
       <Modal isOpen={isFollowupModalOpen} onClose={() => setIsFollowupModalOpen(false)} title={`Schedule Follow-up: ${selectedLead?.name}`}>
         <form onSubmit={handleCreateFollowup} className="space-y-3">
           <div>
-            <label className="block text-xs font-bold text-[#344054] mb-1">Action Title *</label>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Action Title *</label>
             <input
               type="text"
               required
               placeholder="e.g. Discuss Scope & Quotation"
               value={followupForm.title}
               onChange={e => setFollowupForm({ ...followupForm, title: e.target.value })}
-              className="w-full px-3 py-2 text-xs border border-[#D0D5DD] rounded-xl"
+              className="cockpit-input text-xs"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-[#344054] mb-1">Contact Method</label>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Contact Method</label>
               <select
                 value={followupForm.contact_method}
                 onChange={e => setFollowupForm({ ...followupForm, contact_method: e.target.value })}
-                className="w-full px-3 py-2 text-xs border border-[#D0D5DD] rounded-xl"
+                className="cockpit-input text-xs"
               >
                 <option value="call">Phone Call</option>
                 <option value="whatsapp">WhatsApp Message</option>
@@ -1234,24 +1238,24 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-bold text-[#344054] mb-1">Scheduled Date & Time *</label>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Scheduled Date & Time *</label>
               <input
                 type="datetime-local"
                 required
                 value={followupForm.scheduled_at}
                 onChange={e => setFollowupForm({ ...followupForm, scheduled_at: e.target.value })}
-                className="w-full px-3 py-2 text-xs border border-[#D0D5DD] rounded-xl"
+                className="cockpit-input text-xs"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-[#344054] mb-1">Notes / Agenda</label>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Notes / Agenda</label>
             <textarea
               rows={3}
               value={followupForm.notes}
               onChange={e => setFollowupForm({ ...followupForm, notes: e.target.value })}
-              className="w-full px-3 py-2 text-xs border border-[#D0D5DD] rounded-xl"
+              className="cockpit-input text-xs"
             />
           </div>
 
@@ -1259,13 +1263,13 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
             <button
               type="button"
               onClick={() => setIsFollowupModalOpen(false)}
-              className="px-4 py-2 text-xs font-bold text-[#344054] border border-[#D0D5DD] rounded-xl"
+              className="px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-xs font-bold text-white bg-[#D62839] hover:bg-[#B91C1C] rounded-xl"
+              className="cockpit-btn-primary"
             >
               Confirm Follow-up
             </button>
@@ -1278,11 +1282,11 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
         <form onSubmit={handleLogActivity} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-[#344054] mb-1">Activity Type</label>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Activity Type</label>
               <select
                 value={activityForm.activity_type}
                 onChange={e => setActivityForm({ ...activityForm, activity_type: e.target.value })}
-                className="w-full px-3 py-2 text-xs border border-[#D0D5DD] rounded-xl"
+                className="cockpit-input text-xs"
               >
                 <option value="call">Phone Call</option>
                 <option value="meeting">Meeting Held</option>
@@ -1292,25 +1296,25 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-bold text-[#344054] mb-1">Subject / Summary *</label>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Subject / Summary *</label>
               <input
                 type="text"
                 required
                 placeholder="e.g. Client requested revised timeline"
                 value={activityForm.title}
                 onChange={e => setActivityForm({ ...activityForm, title: e.target.value })}
-                className="w-full px-3 py-2 text-xs border border-[#D0D5DD] rounded-xl"
+                className="cockpit-input text-xs"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-[#344054] mb-1">Detailed Outcome</label>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Detailed Outcome</label>
             <textarea
               rows={3}
               value={activityForm.description}
               onChange={e => setActivityForm({ ...activityForm, description: e.target.value })}
-              className="w-full px-3 py-2 text-xs border border-[#D0D5DD] rounded-xl"
+              className="cockpit-input text-xs"
             />
           </div>
 
@@ -1318,13 +1322,13 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
             <button
               type="button"
               onClick={() => setIsActivityModalOpen(false)}
-              className="px-4 py-2 text-xs font-bold text-[#344054] border border-[#D0D5DD] rounded-xl"
+              className="px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-xs font-bold text-white bg-[#059669] hover:bg-[#047857] rounded-xl"
+              className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl cursor-pointer shadow-xs"
             >
               Save Activity
             </button>
@@ -1336,11 +1340,11 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
       <Modal isOpen={isImportModalOpen} onClose={() => setIsImportModalOpen(false)} title="Import CSV Batch Leads">
         <form onSubmit={handleImportCsv} className="space-y-3">
           <div>
-            <label className="block text-xs font-bold text-[#344054] mb-1">Target Lead Source</label>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Target Lead Source</label>
             <select
               value={importSource}
               onChange={e => setImportSource(e.target.value)}
-              className="w-full px-3 py-2 text-xs border border-[#D0D5DD] rounded-xl"
+              className="cockpit-input text-xs"
             >
               <option value="BNI">BNI Connect Export</option>
               <option value="KVV">KVV Member Export</option>
@@ -1351,14 +1355,14 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-[#344054] mb-1">Paste CSV Content (with headers: name, company, phone, email, service)</label>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Paste CSV Content (with headers: name, company, phone, email, service)</label>
             <textarea
               rows={7}
               required
               placeholder="Name,Company,Phone,Email,Service&#10;Dr. Anand,Apex Healthcare,9825012345,anand@apex.com,Hospital ERP&#10;Vikram Patel,Surat Textiles,9825099887,vikram@surattex.in,Inventory Setup"
               value={csvContent}
               onChange={e => setCsvContent(e.target.value)}
-              className="w-full px-3 py-2 text-xs font-mono border border-[#D0D5DD] rounded-xl"
+              className="cockpit-input text-xs font-mono"
             />
           </div>
 
@@ -1366,13 +1370,13 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
             <button
               type="button"
               onClick={() => setIsImportModalOpen(false)}
-              className="px-4 py-2 text-xs font-bold text-[#344054] border border-[#D0D5DD] rounded-xl"
+              className="px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-xs font-bold text-white bg-[#D62839] hover:bg-[#B91C1C] rounded-xl"
+              className="cockpit-btn-primary"
             >
               Import Leads
             </button>
@@ -1380,36 +1384,36 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
         </form>
       </Modal>
 
-      {/* External Sync Confirmation Modal (Audit Requirement: Explicit User Confirmation) */}
+      {/* External Sync Confirmation Modal */}
       <Modal
         isOpen={confirmExternalSyncOpen}
         onClose={() => setConfirmExternalSyncOpen(false)}
         title={`Synchronize Changes to ${selectedLead?.source_platform?.toUpperCase() || 'External Platform'}`}
       >
         <div className="space-y-4">
-          <div className="p-3 bg-[#EFF8FF] rounded-xl border border-[#B2DDFF] text-xs text-[#1E40AF] flex items-start gap-2.5">
-            <Info className="w-4 h-4 shrink-0 mt-0.5" />
+          <div className="p-3 bg-blue-50 dark:bg-blue-950/40 rounded-xl border border-blue-200 dark:border-blue-900/60 text-xs text-blue-800 dark:text-blue-300 flex items-start gap-2.5">
+            <Info className="w-4 h-4 shrink-0 mt-0.5 text-blue-600 dark:text-blue-400" />
             <div>
               <strong>Audit Safety Check:</strong> This action will synchronize your current Cockpit updates (status, notes, priority) back to the original platform ({selectedLead?.source_platform?.toUpperCase()}) using your authorized member web session.
             </div>
           </div>
 
-          <div className="p-3 bg-[#F9FAFB] rounded-xl border border-[#EAECF0] text-xs space-y-1.5">
+          <div className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-white/[0.06] text-xs space-y-1.5">
             <div className="flex justify-between">
-              <span className="text-[#64748B]">External Lead / Slip:</span>
-              <strong className="font-mono text-[#0F172A]">{selectedLead?.source_lead_id}</strong>
+              <span className="text-slate-500">External Lead / Slip:</span>
+              <strong className="font-mono text-slate-900 dark:text-white">{selectedLead?.source_lead_id}</strong>
             </div>
             <div className="flex justify-between">
-              <span className="text-[#64748B]">Proposed Pipeline Status:</span>
+              <span className="text-slate-500">Proposed Pipeline Status:</span>
               <strong className="text-[#D62839] capitalize">{selectedLead?.status}</strong>
             </div>
             <div className="flex justify-between">
-              <span className="text-[#64748B]">Contact Person:</span>
-              <span className="text-[#0F172A]">{selectedLead?.name}</span>
+              <span className="text-slate-500">Contact Person:</span>
+              <span className="text-slate-900 dark:text-white">{selectedLead?.name}</span>
             </div>
           </div>
 
-          <p className="text-[11px] text-[#64748B]">
+          <p className="text-[11px] text-slate-500">
             Remote values will be verified immediately after write. No external system code or database is modified.
           </p>
 
@@ -1417,7 +1421,7 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
             <button
               type="button"
               onClick={() => setConfirmExternalSyncOpen(false)}
-              className="px-4 py-2 text-xs font-bold text-[#344054] border border-[#D0D5DD] rounded-xl"
+              className="px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer"
             >
               Cancel
             </button>
@@ -1425,45 +1429,45 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
               type="button"
               disabled={syncingExternal}
               onClick={() => selectedLead && handleSyncToExternalPlatform(selectedLead)}
-              className="px-4 py-2 text-xs font-bold text-white bg-[#0284C7] hover:bg-[#0369A1] rounded-xl flex items-center gap-1.5"
+              className="px-4 py-2 text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-xs"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${syncingExternal ? 'animate-spin' : ''}`} />
-              Confirm & Synchronize
+              <span>Confirm & Synchronize</span>
             </button>
           </div>
         </div>
       </Modal>
 
-      {/* Conflict Resolution Modal (Side-by-Side Comparison) */}
+      {/* Conflict Resolution Modal */}
       <Modal
         isOpen={conflictModalOpen}
         onClose={() => setConflictModalOpen(false)}
         title="Resolve External Platform Conflict"
       >
         <div className="space-y-4">
-          <div className="p-3 bg-[#FFF7ED] rounded-xl border border-[#FDBA74] text-xs text-[#9A3412] flex items-start gap-2.5">
-            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-[#C2410C]" />
+          <div className="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-900/60 text-xs text-amber-900 dark:text-amber-300 flex items-start gap-2.5">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
             <div>
               <strong>Remote Modification Detected:</strong> The external platform record was modified outside Cockpit. Choose which version to keep to maintain data integrity.
             </div>
           </div>
 
           {conflictData?.differences && (
-            <div className="border border-[#EAECF0] rounded-xl overflow-hidden">
+            <div className="border border-slate-200 dark:border-white/[0.08] rounded-xl overflow-hidden">
               <table className="w-full text-xs text-left">
-                <thead className="bg-[#F8FAFC] text-[10px] font-bold text-[#64748B] uppercase">
+                <thead className="bg-slate-50 dark:bg-slate-900 text-[10px] font-bold text-slate-500 uppercase">
                   <tr>
                     <th className="p-2.5">Field</th>
-                    <th className="p-2.5 text-[#0F172A]">External Portal Value</th>
+                    <th className="p-2.5 text-slate-900 dark:text-white">External Portal Value</th>
                     <th className="p-2.5 text-[#D62839]">Local Cockpit Value</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#EAECF0]">
+                <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
                   {Object.entries(conflictData.differences).map(([field, diff]: [string, any]) => (
-                    <tr key={field} className="hover:bg-[#F9FAFB]">
-                      <td className="p-2.5 font-bold uppercase text-[10px] text-[#64748B]">{field}</td>
-                      <td className="p-2.5 font-semibold text-[#0F172A] bg-blue-50/40">{diff.remote_now || '—'}</td>
-                      <td className="p-2.5 font-semibold text-[#D62839] bg-red-50/40">{diff.proposed_local || '—'}</td>
+                    <tr key={field} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                      <td className="p-2.5 font-bold uppercase text-[10px] text-slate-500">{field}</td>
+                      <td className="p-2.5 font-semibold text-slate-900 dark:text-white bg-blue-50/40 dark:bg-blue-950/20">{diff.remote_now || '—'}</td>
+                      <td className="p-2.5 font-semibold text-[#D62839] bg-rose-50/40 dark:bg-rose-950/20">{diff.proposed_local || '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1476,7 +1480,7 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
               type="button"
               disabled={syncingExternal}
               onClick={() => handleResolveConflict('keep_external')}
-              className="px-3.5 py-2 text-xs font-bold text-[#1E40AF] bg-[#EFF8FF] hover:bg-[#DBEAFE] border border-[#BFDBFE] rounded-xl transition"
+              className="px-3.5 py-2 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-900 rounded-xl transition cursor-pointer"
             >
               Keep External Platform Values
             </button>
@@ -1484,13 +1488,14 @@ export const Leads: React.FC<LeadsProps> = ({ onNavigateToIntegrations }) => {
               type="button"
               disabled={syncingExternal}
               onClick={() => handleResolveConflict('keep_cockpit')}
-              className="px-3.5 py-2 text-xs font-bold text-white bg-[#D62839] hover:bg-[#B91C1C] rounded-xl transition"
+              className="cockpit-btn-primary"
             >
-              Keep Cockpit Changes (Overwrite External)
+              Keep Cockpit Changes
             </button>
           </div>
         </div>
       </Modal>
+
     </div>
   );
 };

@@ -33,6 +33,7 @@ import {
 import { api } from '../services/api';
 import { Badge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
+import { EmptyState } from '../components/common/EmptyState';
 import type { ConnectedApp } from '../types';
 
 interface ConnectedAppsProps {
@@ -408,8 +409,8 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-[#20242C] tracking-tight">Connected Applications Hub</h2>
-          <p className="text-sm text-[#667085] mt-0.5">
+          <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">Connected Applications Hub</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
             Unified launchpad and master lead integration console for EAF Connect, BNI Connect, KVV, and enterprise cloud tools
           </p>
         </div>
@@ -424,23 +425,24 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
       </div>
 
       {/* Controls & Filter Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-[#E9EAEE] shadow-xs">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white dark:bg-[#0D111A] p-3.5 rounded-2xl border border-slate-200/90 dark:border-white/[0.08] shadow-xs">
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 text-xs font-semibold">
           {categories.map((cat) => {
             const count = getCategoryCount(cat.id);
+            const isActive = activeCategory === cat.id;
             return (
               <button
                 key={cat.id}
                 onClick={() => setActiveCategory(cat.id)}
-                className={`px-3 py-1.5 rounded-lg transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
-                  activeCategory === cat.id
-                    ? 'bg-[#D62839] text-white shadow-xs font-bold'
-                    : 'text-[#667085] hover:text-[#20242C] hover:bg-[#FFF1F2]'
+                className={`px-3 py-1.5 rounded-xl transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 border ${
+                  isActive
+                    ? 'bg-[#D62839] text-white border-[#D62839] shadow-xs font-bold'
+                    : 'bg-white dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 border-slate-200/90 dark:border-white/[0.08] hover:border-slate-300 dark:hover:border-white/[0.15] hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 <span>{cat.label}</span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                  activeCategory === cat.id ? 'bg-white/20 text-white' : 'bg-[#F8F9FB] text-[#667085]'
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold border ${
+                  isActive ? 'bg-white/20 text-white border-white/30' : 'bg-slate-100 dark:bg-white/[0.08] text-slate-600 dark:text-slate-400 border-transparent'
                 }`}>
                   {count}
                 </span>
@@ -465,30 +467,30 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
-            <div key={n} className="p-5 rounded-2xl bg-white border border-[#E9EAEE] min-h-[265px] animate-pulse flex flex-col justify-between shadow-xs">
+            <div key={n} className="p-5 rounded-2xl bg-white dark:bg-[#0D111A] border border-slate-200/90 dark:border-white/[0.08] min-h-[265px] animate-pulse flex flex-col justify-between shadow-xs">
               <div>
                 <div className="flex items-start justify-between mb-3.5">
-                  <div className="w-12 h-12 rounded-xl bg-slate-100" />
-                  <div className="w-5 h-5 rounded bg-slate-100" />
+                  <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-white/[0.05]" />
+                  <div className="w-5 h-5 rounded bg-slate-100 dark:bg-white/[0.05]" />
                 </div>
-                <div className="h-4 bg-slate-100 rounded w-3/4 mb-2" />
-                <div className="h-3 bg-slate-100 rounded w-1/2 mb-3" />
-                <div className="h-5 bg-slate-100 rounded w-1/3" />
+                <div className="h-4 bg-slate-100 dark:bg-white/[0.05] rounded w-3/4 mb-2" />
+                <div className="h-3 bg-slate-100 dark:bg-white/[0.05] rounded w-1/2 mb-3" />
+                <div className="h-5 bg-slate-100 dark:bg-white/[0.05] rounded w-1/3" />
               </div>
-              <div className="h-10 bg-slate-100 rounded-xl" />
+              <div className="h-10 bg-slate-100 dark:bg-white/[0.05] rounded-xl" />
             </div>
           ))}
         </div>
       ) : error ? (
-        <div className="p-10 text-center rounded-2xl bg-white border border-[#FECDD3] shadow-xs">
-          <div className="w-12 h-12 mx-auto rounded-full bg-[#FEF2F2] text-[#DC2626] border border-[#FECDD3] flex items-center justify-center mb-3">
+        <div className="p-10 text-center rounded-2xl bg-white dark:bg-[#0D111A] border border-rose-200 dark:border-rose-900/50 shadow-xs">
+          <div className="w-12 h-12 mx-auto rounded-2xl bg-rose-50 dark:bg-rose-950/40 text-[#DC2626] border border-rose-200 dark:border-rose-900/50 flex items-center justify-center mb-3">
             <AlertCircle className="w-6 h-6" />
           </div>
-          <h4 className="text-base font-semibold text-[#20242C]">Unable to load applications</h4>
-          <p className="text-sm text-[#667085] mt-1 max-w-sm mx-auto">{error}</p>
+          <h4 className="text-base font-bold text-slate-900 dark:text-white">Unable to load applications</h4>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">{error}</p>
           <button
             onClick={fetchApps}
-            className="mt-4 px-4 py-2 rounded-xl bg-[#D62839] hover:bg-[#B91C1C] text-white text-xs font-semibold shadow-xs cursor-pointer inline-flex items-center gap-1.5"
+            className="mt-4 cockpit-btn-primary inline-flex items-center gap-1.5"
           >
             <RefreshCw className="w-3.5 h-3.5" />
             <span>Retry Connection</span>
@@ -505,18 +507,18 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
               return (
                 <div 
                   key={app.id}
-                  className={`p-5 rounded-2xl bg-white border transition-all flex flex-col justify-between h-full min-h-[265px] group shadow-xs ${
+                  className={`p-5 rounded-2xl bg-white dark:bg-[#0D111A] border transition-all flex flex-col justify-between h-full min-h-[265px] group shadow-xs ${
                     isPortal 
-                      ? 'border-[#FECDD3] hover:border-[#D62839] hover:shadow-md ring-1 ring-[#FFF1F2]' 
-                      : 'border-[#E9EAEE] hover:border-[#FECDD3] hover:shadow-md'
+                      ? 'border-rose-200 dark:border-rose-900/40 hover:border-[#D62839] hover:shadow-md' 
+                      : 'border-slate-200/90 dark:border-white/[0.08] hover:border-slate-300 dark:hover:border-white/[0.15] hover:shadow-md'
                   }`}
                 >
                   <div>
                     <div className="flex items-start justify-between mb-3.5">
                       <div className={`w-12 h-12 rounded-xl border flex items-center justify-center group-hover:scale-105 transition-transform ${
                         isPortal 
-                          ? 'bg-[#FFF1F2] text-[#D62839] border-[#FECDD3]' 
-                          : 'bg-[#F8F9FB] text-[#20242C] border-[#E9EAEE]'
+                          ? 'bg-rose-50 dark:bg-rose-950/40 text-[#D62839] dark:text-rose-400 border-rose-200 dark:border-rose-900/50' 
+                          : 'bg-slate-50 dark:bg-white/[0.05] text-slate-900 dark:text-white border-slate-200/90 dark:border-white/[0.08]'
                       }`}>
                         <Icon className="w-6 h-6" />
                       </div>
@@ -524,7 +526,7 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
                         <button
                           onClick={() => handleTogglePin(app.id)}
                           className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                            isPinned ? 'text-[#D62839] bg-[#FFF1F2]' : 'text-[#94A3B8] hover:text-[#20242C]'
+                            isPinned ? 'text-[#D62839] dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40' : 'text-[#94A3B8] hover:text-slate-900 dark:hover:text-white'
                           }`}
                           title={isPinned ? 'Unpin Application' : 'Pin to Top'}
                         >
@@ -543,20 +545,20 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <h3 className="text-base font-bold text-[#20242C] tracking-tight">{app.name}</h3>
+                      <h3 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">{app.name}</h3>
                       {isPortal && (
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#FFF1F2] text-[#D62839] border border-[#FECDD3] uppercase tracking-wider">
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-50 dark:bg-rose-950/50 text-[#D62839] dark:text-rose-400 border border-rose-200 dark:border-rose-900/50 uppercase tracking-wider">
                           Master CRM
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-[#667085] font-mono truncate mt-0.5 max-w-[240px]">{app.app_url}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate mt-0.5 max-w-[240px]">{app.app_url}</p>
 
                     <div className="mt-3 flex items-center justify-between gap-2">
                       <div className="shrink-0">
                         <Badge status={app.connection_status} />
                       </div>
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold text-[#667085] bg-[#F8F9FB] border border-[#E9EAEE] uppercase tracking-wider">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-white/[0.05] border border-slate-200/90 dark:border-white/[0.08] uppercase tracking-wider">
                         {app.category}
                       </span>
                     </div>
@@ -564,52 +566,52 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
 
                   {/* Card Footer Actions */}
                   {isPortal ? (
-                    <div className="mt-4 pt-3 border-t border-[#E9EAEE] space-y-2.5">
+                    <div className="mt-4 pt-3 border-t border-slate-200/90 dark:border-white/[0.08] space-y-2.5">
                       {/* Structured Portal Lifecycle Fields */}
-                      <div className="bg-[#F8F9FB] p-3 rounded-xl border border-[#E9EAEE] space-y-2 text-xs">
+                      <div className="bg-slate-50/80 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-200/80 dark:border-white/[0.06] space-y-2 text-xs">
                         {/* 1. Authentication Status */}
                         <div className="flex items-center justify-between gap-1">
-                          <span className="text-[#667085] font-medium">Auth Status:</span>
+                          <span className="text-slate-500 dark:text-slate-400 font-medium">Auth Status:</span>
                           <Badge status={app.auth_status || app.connection_status} />
                         </div>
 
                         {/* 2. Integration Capability */}
                         <div className="flex items-center justify-between gap-1">
-                          <span className="text-[#667085] font-medium">Capability:</span>
-                          <span className="font-semibold text-[#20242C] text-right truncate max-w-[160px]" title={app.integration_capability}>
+                          <span className="text-slate-500 dark:text-slate-400 font-medium">Capability:</span>
+                          <span className="font-semibold text-slate-900 dark:text-white text-right truncate max-w-[160px]" title={app.integration_capability}>
                             {app.integration_capability || 'Manual CSV Import Only'}
                           </span>
                         </div>
 
                         {/* 3. Synchronization Status */}
                         <div className="flex items-center justify-between gap-1">
-                          <span className="text-[#667085] font-medium">Sync Status:</span>
+                          <span className="text-slate-500 dark:text-slate-400 font-medium">Sync Status:</span>
                           <Badge status={app.sync_status || 'sync_never_run'} />
                         </div>
 
                         {/* 4. Last Successful Sync */}
                         <div className="flex items-center justify-between gap-1">
-                          <span className="text-[#667085] font-medium flex items-center gap-1">
+                          <span className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1">
                             <Clock className="w-3 h-3 text-[#94A3B8]" /> Last Sync:
                           </span>
-                          <span className="font-semibold text-[#20242C]">
+                          <span className="font-semibold text-slate-900 dark:text-white">
                             {app.last_sync_display || (app.last_synced_at ? new Date(app.last_synced_at).toLocaleString() : 'Never')}
                           </span>
                         </div>
 
                         {/* 4b. Latest Sync Metrics */}
                         {app.latest_sync_log && (
-                          <div className="flex items-center justify-between gap-1 text-[11px] pt-1 border-t border-[#E9EAEE]/60">
-                            <span className="text-[#667085]">Metrics:</span>
-                            <span className="font-semibold text-[#20242C]">
-                              Fetched: <span className="text-[#D62839] font-bold">{app.latest_sync_log.leads_fetched}</span> | New: <span className="text-[#059669] font-bold">{app.latest_sync_log.leads_created}</span> | Upd: {app.latest_sync_log.leads_updated}
+                          <div className="flex items-center justify-between gap-1 text-[11px] pt-1 border-t border-slate-200/60 dark:border-white/[0.04]">
+                            <span className="text-slate-500 dark:text-slate-400">Metrics:</span>
+                            <span className="font-semibold text-slate-900 dark:text-white">
+                              Fetched: <span className="text-[#D62839] dark:text-rose-400 font-bold">{app.latest_sync_log.leads_fetched}</span> | New: <span className="text-emerald-600 dark:text-emerald-400 font-bold">{app.latest_sync_log.leads_created}</span> | Upd: {app.latest_sync_log.leads_updated}
                             </span>
                           </div>
                         )}
 
                         {/* 5. Last Error (if present) */}
                         {app.last_error && (
-                          <div className="p-2 rounded-lg bg-[#FEF2F2] border border-[#FECDD3] text-[10px] text-[#DC2626] leading-tight" title={app.last_error}>
+                          <div className="p-2 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 text-[10px] text-rose-600 dark:text-rose-400 leading-tight" title={app.last_error}>
                             <span className="font-bold">Notice: </span>
                             {app.last_error}
                           </div>
@@ -622,7 +624,7 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
                           <>
                             <button
                               onClick={() => onNavigateToGmail ? onNavigateToGmail() : (window.location.href = '/?tab=gmail')}
-                              className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-[#FFF1F2] hover:bg-[#D62839] text-[#D62839] hover:text-white border border-[#FECDD3] text-xs font-semibold transition-all shadow-xs cursor-pointer"
+                              className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 hover:bg-[#D62839] text-[#D62839] dark:text-rose-400 hover:text-white border border-rose-200 dark:border-rose-900/50 text-xs font-semibold transition-all shadow-xs cursor-pointer"
                               title="Open Gmail Workspace"
                             >
                               <Mail className="w-3.5 h-3.5" />
@@ -631,14 +633,14 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
                             <button
                               onClick={() => handleCardSyncNow(app)}
                               disabled={syncingAppId === app.id}
-                              className="p-2 rounded-xl bg-[#ECFDF5] hover:bg-[#059669] text-[#059669] hover:text-white border border-[#A7F3D0] transition-all cursor-pointer"
+                              className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 hover:bg-[#059669] text-[#059669] dark:text-emerald-400 hover:text-white border border-emerald-200 dark:border-emerald-900/50 transition-all cursor-pointer"
                               title="Sync Emails Now"
                             >
                               <RefreshCw className={`w-3.5 h-3.5 ${syncingAppId === app.id ? 'animate-spin' : ''}`} />
                             </button>
                             <button
                               onClick={() => handleOpenConnectModal(app)}
-                              className="p-2 rounded-xl bg-[#F8F9FB] hover:bg-[#E9EAEE] text-[#667085] border border-[#E9EAEE] transition-all cursor-pointer"
+                              className="p-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/90 dark:border-white/[0.08] transition-all cursor-pointer"
                               title="Manage Google OAuth Connection"
                             >
                               <Link2 className="w-3.5 h-3.5" />
@@ -649,7 +651,7 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
                             <button
                               onClick={() => handleCardSyncNow(app)}
                               disabled={syncingAppId === app.id}
-                              className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-[#ECFDF5] hover:bg-[#059669] text-[#059669] hover:text-white border border-[#A7F3D0] text-xs font-semibold transition-all shadow-xs cursor-pointer"
+                              className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 hover:bg-[#059669] text-[#059669] dark:text-emerald-400 hover:text-white border border-emerald-200 dark:border-emerald-900/50 text-xs font-semibold transition-all shadow-xs cursor-pointer"
                               title="Run live referral sync from portal"
                             >
                               <RefreshCw className={`w-3.5 h-3.5 ${syncingAppId === app.id ? 'animate-spin' : ''}`} />
@@ -657,7 +659,7 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
                             </button>
                             <button
                               onClick={() => handleOpenConnectModal(app)}
-                              className="p-2 rounded-xl bg-[#F8F9FB] hover:bg-[#E9EAEE] text-[#667085] border border-[#E9EAEE] transition-all cursor-pointer"
+                              className="p-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/90 dark:border-white/[0.08] transition-all cursor-pointer"
                               title="Manage Connection Credentials"
                             >
                               <Link2 className="w-3.5 h-3.5" />
@@ -666,7 +668,7 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
                         ) : (
                           <button
                             onClick={() => handleOpenConnectModal(app)}
-                            className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-[#F8F9FB] hover:bg-[#D62839] text-[#667085] hover:text-white border border-[#E9EAEE] text-xs font-semibold transition-all shadow-xs cursor-pointer"
+                            className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 hover:bg-[#D62839] text-slate-700 dark:text-slate-300 hover:text-white border border-slate-200/90 dark:border-white/[0.08] text-xs font-semibold transition-all shadow-xs cursor-pointer"
                           >
                             <Link2 className="w-3.5 h-3.5" />
                             <span>{app.source_key === 'gmail' ? 'Connect Google OAuth' : (app.next_action || 'Connect Portal')}</span>
@@ -675,7 +677,7 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
 
                         <button
                           onClick={() => handleLaunch(app.app_url)}
-                          className="p-2 rounded-xl bg-[#F8F9FB] hover:bg-[#FFF1F2] text-[#667085] hover:text-[#D62839] border border-[#E9EAEE] transition-all cursor-pointer"
+                          className="p-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-600 dark:text-slate-300 hover:text-[#D62839] border border-slate-200/90 dark:border-white/[0.08] transition-all cursor-pointer"
                           title={`Visit ${app.name} in new browser tab`}
                         >
                           <ExternalLink className="w-3.5 h-3.5" />
@@ -683,10 +685,10 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
                       </div>
                     </div>
                   ) : (
-                    <div className="mt-5 pt-3 border-t border-[#E9EAEE] flex items-center gap-2">
+                    <div className="mt-5 pt-3 border-t border-slate-200/90 dark:border-white/[0.08] flex items-center gap-2">
                       <button
                         onClick={() => handleLaunch(app.app_url)}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-[#FFF1F2] hover:bg-[#D62839] text-[#D62839] hover:text-white text-xs font-semibold transition-all shadow-xs cursor-pointer"
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 hover:bg-[#D62839] text-[#D62839] dark:text-rose-400 hover:text-white text-xs font-semibold transition-all shadow-xs cursor-pointer border border-rose-200 dark:border-rose-900/50"
                       >
                         <span>Launch Portal</span>
                         <ExternalLink className="w-3.5 h-3.5" />
@@ -699,25 +701,28 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
           </div>
 
           {filtered.length === 0 && (
-            <div className="p-16 text-center rounded-2xl bg-white border border-[#E9EAEE] shadow-xs">
-              <div className="w-12 h-12 mx-auto rounded-full bg-[#FFF1F2] text-[#D62839] border border-[#FECDD3] flex items-center justify-center mb-3">
-                <Globe className="w-6 h-6" />
-              </div>
-              <h4 className="text-base font-semibold text-[#20242C]">No applications found</h4>
-              <p className="text-sm text-[#667085] mt-1 max-w-sm mx-auto">
-                No applications match this filter or search query. Switch categories or add a new application shortcut.
-              </p>
+            <div className="py-8">
+              <EmptyState
+                icon={Globe}
+                title="No applications found"
+                description="No connected applications or shortcuts match this filter or search query. Switch categories or add a new application shortcut."
+                primaryAction={{
+                  label: "Add Application",
+                  onClick: () => setIsAddModalOpen(true),
+                  icon: Plus
+                }}
+              />
             </div>
           )}
         </>
       )}
 
       {/* Security notice regarding external logins */}
-      <div className="p-4 rounded-2xl bg-white border border-[#E9EAEE] shadow-xs flex items-start gap-3 text-xs text-[#667085]">
-        <ShieldCheck className="w-5 h-5 text-[#059669] shrink-0 mt-0.5" />
+      <div className="p-4 rounded-2xl bg-white dark:bg-[#0D111A] border border-slate-200/90 dark:border-white/[0.08] shadow-xs flex items-start gap-3 text-xs text-slate-500 dark:text-slate-400">
+        <ShieldCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
         <div>
-          <p className="font-semibold text-[#20242C]">Enterprise Cryptographic Security & AES-256-GCM Isolation</p>
-          <p className="mt-0.5 leading-relaxed text-[#667085]">
+          <p className="font-bold text-slate-900 dark:text-white">Enterprise Cryptographic Security & AES-256-GCM Isolation</p>
+          <p className="mt-0.5 leading-relaxed text-slate-500 dark:text-slate-400">
             Portal credentials are encrypted using AEAD AES-256-GCM on the server before storage. Raw passwords, session tokens, and cookies are never stored in browser memory, localStorage, or sent to unauthenticated clients.
           </p>
         </div>
@@ -732,13 +737,13 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
         {selectedPortalApp && (
           <div className="space-y-4">
             {/* Status and metadata overview */}
-            <div className="bg-[#F8F9FB] border border-[#E9EAEE] rounded-xl p-3.5 flex items-center justify-between">
+            <div className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200/90 dark:border-white/[0.08] rounded-xl p-3.5 flex items-center justify-between">
               <div>
-                <p className="text-xs text-[#667085] font-medium">Portal Target</p>
-                <p className="text-xs font-mono font-bold text-[#20242C] mt-0.5">{selectedPortalApp.app_url}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Portal Target</p>
+                <p className="text-xs font-mono font-bold text-slate-900 dark:text-white mt-0.5">{selectedPortalApp.app_url}</p>
               </div>
               <div className="text-right">
-                <p className="text-xs text-[#667085] font-medium">Status</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Status</p>
                 <div className="mt-0.5">
                   <Badge status={selectedPortalApp.connection_status} />
                 </div>
@@ -749,48 +754,48 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
             {selectedPortalApp.source_key === 'gmail' ? (
               <div className="space-y-4">
                 {/* Platform Guidance Callout */}
-                <div className="p-3.5 bg-[#FFF1F2] border border-[#FECDD3] rounded-xl flex items-start gap-2.5 text-xs text-[#20242C]">
-                  <Mail className="w-4 h-4 text-[#D62839] shrink-0 mt-0.5" />
+                <div className="p-3.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 rounded-xl flex items-start gap-2.5 text-xs text-slate-900 dark:text-slate-200">
+                  <Mail className="w-4 h-4 text-[#D62839] dark:text-rose-400 shrink-0 mt-0.5" />
                   <div className="space-y-1.5 leading-relaxed">
-                    <p className="font-bold text-[#D62839]">
+                    <p className="font-bold text-[#D62839] dark:text-rose-400">
                       Official Google Workspace & Gmail Integration (OAuth 2.0 + PKCE)
                     </p>
-                    <p className="text-[#667085]">
+                    <p className="text-slate-600 dark:text-slate-400">
                       Connects directly using Google's official authorization code flow with PKCE. Access and refresh tokens are encrypted using AEAD AES-256-GCM. <strong>Passwords are never requested or stored.</strong>
                     </p>
                     <div className="pt-1">
-                      <span className="font-semibold text-[#20242C]">Approved Minimal Scopes:</span>
-                      <ul className="list-disc list-inside mt-0.5 text-[11px] text-[#667085] space-y-0.5">
-                        <li><code className="text-[#D62839] font-mono">gmail.readonly</code> – Read emails, threads & search inbox</li>
-                        <li><code className="text-[#D62839] font-mono">gmail.send</code> – Send emails & replies directly from Cockpit</li>
-                        <li><code className="text-[#D62839] font-mono">gmail.compose</code> – Compose and update draft emails</li>
-                        <li><code className="text-[#D62839] font-mono">gmail.modify</code> – Star, label, archive & trash emails</li>
-                        <li><code className="text-[#D62839] font-mono">openid, email</code> – Authenticated user profile identity</li>
+                      <span className="font-semibold text-slate-900 dark:text-white">Approved Minimal Scopes:</span>
+                      <ul className="list-disc list-inside mt-0.5 text-[11px] text-slate-600 dark:text-slate-400 space-y-0.5">
+                        <li><code className="text-[#D62839] dark:text-rose-400 font-mono">gmail.readonly</code> – Read emails, threads & search inbox</li>
+                        <li><code className="text-[#D62839] dark:text-rose-400 font-mono">gmail.send</code> – Send emails & replies directly from Cockpit</li>
+                        <li><code className="text-[#D62839] dark:text-rose-400 font-mono">gmail.compose</code> – Compose and update draft emails</li>
+                        <li><code className="text-[#D62839] dark:text-rose-400 font-mono">gmail.modify</code> – Star, label, archive & trash emails</li>
+                        <li><code className="text-[#D62839] dark:text-rose-400 font-mono">openid, email</code> – Authenticated user profile identity</li>
                       </ul>
                     </div>
-                    <div className="p-2 rounded bg-white border border-[#FECDD3] text-[10.5px] text-[#B91C1C]">
+                    <div className="p-2 rounded bg-white dark:bg-black/30 border border-rose-200 dark:border-rose-900/50 text-[10.5px] text-rose-700 dark:text-rose-300">
                       <strong>Google Cloud Testing Mode Note:</strong> In Google Cloud "Testing" mode, OAuth refresh tokens expire after 7 days, and only designated Test Users can authorize.
                     </div>
                   </div>
                 </div>
 
                 {/* Canonical Redirect URI Callout */}
-                <div className="p-3 bg-[#F8F9FB] border border-[#E9EAEE] rounded-xl text-xs space-y-1">
-                  <span className="text-[#667085] font-medium block">Canonical Backend OAuth Callback URI:</span>
+                <div className="p-3 bg-slate-50 dark:bg-slate-900/60 border border-slate-200/90 dark:border-white/[0.08] rounded-xl text-xs space-y-1">
+                  <span className="text-slate-500 dark:text-slate-400 font-medium block">Canonical Backend OAuth Callback URI:</span>
                   <div className="flex items-center gap-2">
-                    <code className="flex-1 bg-white border border-[#E9EAEE] px-2.5 py-1.5 rounded-lg font-mono text-[11px] text-[#20242C] select-all truncate">
+                    <code className="flex-1 bg-white dark:bg-black/30 border border-slate-200/90 dark:border-white/[0.08] px-2.5 py-1.5 rounded-lg font-mono text-[11px] text-slate-900 dark:text-slate-100 select-all truncate">
                       {displayedCallbackUri}
                     </code>
                     <button
                       type="button"
                       onClick={copyCallbackUri}
-                      className="px-2.5 py-1.5 rounded-lg border border-[#E9EAEE] bg-white hover:bg-[#F8F9FB] text-xs font-semibold text-[#20242C] flex items-center gap-1 cursor-pointer shrink-0"
+                      className="px-2.5 py-1.5 rounded-lg border border-slate-200/90 dark:border-white/[0.08] bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1 cursor-pointer shrink-0"
                     >
-                      {copiedCallback ? <Check className="w-3.5 h-3.5 text-[#059669]" /> : <Copy className="w-3.5 h-3.5 text-[#667085]" />}
+                      {copiedCallback ? <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
                       <span>{copiedCallback ? 'Copied' : 'Copy'}</span>
                     </button>
                   </div>
-                  <p className="text-[10px] text-[#94A3B8]">
+                  <p className="text-[10px] text-slate-400">
                     This exact URI must be registered in your Google Cloud Console under "Authorized redirect URIs".
                   </p>
                 </div>
@@ -799,10 +804,10 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
                 {modalFeedback && (
                   <div className={`p-3 rounded-xl border flex items-start gap-2.5 text-xs ${
                     modalFeedback.type === 'success'
-                      ? 'bg-[#ECFDF5] border-[#A7F3D0] text-[#059669]'
+                      ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900/50 text-[#059669] dark:text-emerald-400'
                       : modalFeedback.type === 'error'
-                      ? 'bg-[#FEF2F2] border-[#FECDD3] text-[#DC2626]'
-                      : 'bg-[#EFF8FF] border-[#B2DDFF] text-[#175CD3]'
+                      ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900/50 text-[#DC2626] dark:text-rose-400'
+                      : 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900/50 text-[#175CD3] dark:text-blue-400'
                   }`}>
                     {modalFeedback.type === 'success' ? (
                       <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
@@ -988,7 +993,7 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
                     </div>
                   </div>
                 ) : (
-                  <div className="p-3 bg-[#FFF1F2] border border-[#FECDD3] rounded-xl flex items-start gap-2.5 text-xs text-[#D62839]">
+                  <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 rounded-xl flex items-start gap-2.5 text-xs text-[#D62839] dark:text-rose-400">
                     <Lock className="w-4 h-4 shrink-0 mt-0.5" />
                     <div>
                       <span className="font-bold">Two-Way Web Automation & AES-256-GCM: </span>
@@ -1001,10 +1006,10 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
                 {modalFeedback && (
                   <div className={`p-3 rounded-xl border flex items-start gap-2.5 text-xs ${
                     modalFeedback.type === 'success'
-                      ? 'bg-[#ECFDF5] border-[#A7F3D0] text-[#059669]'
+                      ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900/50 text-[#059669] dark:text-emerald-400'
                       : modalFeedback.type === 'error'
-                      ? 'bg-[#FEF2F2] border-[#FECDD3] text-[#DC2626]'
-                      : 'bg-[#EFF8FF] border-[#B2DDFF] text-[#175CD3]'
+                      ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900/50 text-[#DC2626] dark:text-rose-400'
+                      : 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900/50 text-[#175CD3] dark:text-blue-400'
                   }`}>
                     {modalFeedback.type === 'success' ? (
                       <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />

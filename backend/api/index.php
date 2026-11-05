@@ -227,7 +227,7 @@ try {
     if (preg_match('#^/crm/automation/session/([a-zA-Z0-9_-]+)$#', $path, $matches) && $method === 'GET') {
         LeadController::getPlatformSession($currentUser, $matches[1]);
     }
-    if ($path === '/crm/lead-sources' && $method === 'GET') {
+    if (($path === '/crm/lead-sources' || $path === '/crm/leads/sources') && $method === 'GET') {
         LeadController::listSources($currentUser);
     }
     if ($path === '/crm/lead-sources/sync-logs' && $method === 'GET') {

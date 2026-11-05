@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Users, Shield, Link as LinkIcon, Sparkles, Plus, Check, Copy } from 'lucide-react';
+import { Settings as SettingsIcon, Users, Shield, Link as LinkIcon, Sparkles, Plus, Check, Copy, KeyRound, Globe, UserCheck } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Badge } from '../components/common/Badge';
@@ -61,8 +61,8 @@ export const SettingsPage: React.FC = () => {
   };
 
   const personalUrl = user?.tenant_slug 
-    ? `http://localhost:5173/${user.tenant_slug}`
-    : `http://localhost:5173/admin`;
+    ? (typeof window !== 'undefined' ? `${window.location.origin}/${user.tenant_slug}` : `/${user.tenant_slug}`)
+    : (typeof window !== 'undefined' ? `${window.location.origin}/admin` : `/admin`);
 
   const handleCopyUrl = () => {
     navigator.clipboard.writeText(personalUrl);
@@ -73,71 +73,137 @@ export const SettingsPage: React.FC = () => {
   return (
     <div className="space-y-6 max-w-4xl">
       {/* Workspace Profile Card */}
-      <div className="p-6 rounded-2xl bg-white border border-[#E9EAEE] shadow-xs">
-        <h3 className="text-base font-bold text-[#20242C] tracking-tight mb-4 flex items-center gap-2">
-          <SettingsIcon className="w-4 h-4 text-[#D62839]" />
+      <div className="p-6 rounded-3xl bg-white dark:bg-[#0D111A] border border-slate-200/90 dark:border-white/[0.08] shadow-xs">
+        <h3 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight mb-4 flex items-center gap-2">
+          <SettingsIcon className="w-4 h-4 text-[#D62839] dark:text-rose-400" />
           <span>Organization & Personal Workspace Profile</span>
         </h3>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
           <div>
-            <span className="text-xs font-semibold text-[#667085] uppercase tracking-wider block mb-1">Company / Organization Name</span>
-            <p className="font-bold text-[#20242C] text-base">{tenant?.name || 'My Cockpit Organization'}</p>
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">Company / Organization Name</span>
+            <p className="font-extrabold text-slate-900 dark:text-white text-base">{tenant?.name || 'My Cockpit Organization'}</p>
           </div>
           <div>
-            <span className="text-xs font-semibold text-[#667085] uppercase tracking-wider block mb-1">Subscription Tier</span>
-            <span className="px-2.5 py-1 rounded-full text-xs font-semibold uppercase bg-[#FFF1F2] text-[#D62839] border border-[#FECDD3]">
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">Subscription Tier</span>
+            <span className="px-2.5 py-1 rounded-full text-xs font-bold uppercase bg-rose-50 dark:bg-rose-950/40 text-[#D62839] dark:text-rose-400 border border-rose-200 dark:border-rose-900/50">
               {tenant?.plan || 'Enterprise'} Tier
             </span>
           </div>
-          <div className="sm:col-span-2 pt-4 border-t border-[#E9EAEE]">
-            <span className="text-xs font-semibold text-[#667085] uppercase tracking-wider block mb-1.5">Personal Client Vanity URL</span>
-            <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-[#F8FAFC] border border-[#E9EAEE] font-mono text-xs text-[#D62839]">
+          <div className="sm:col-span-2 pt-4 border-t border-slate-200/80 dark:border-white/[0.06]">
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5">Personal Client Vanity URL</span>
+            <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/90 dark:border-white/[0.08] font-mono text-xs text-[#D62839] dark:text-rose-400">
               <div className="flex items-center gap-2 truncate">
-                <LinkIcon className="w-4 h-4 text-[#D62839] shrink-0" />
-                <span className="font-semibold truncate">{personalUrl}</span>
+                <LinkIcon className="w-4 h-4 text-[#D62839] dark:text-rose-400 shrink-0" />
+                <span className="font-bold truncate">{personalUrl}</span>
               </div>
               <button
                 onClick={handleCopyUrl}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-[#E9EAEE] text-[#667085] hover:text-[#D62839] hover:bg-[#FFF1F2] font-sans text-xs transition-colors shrink-0 shadow-2xs cursor-pointer"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200/90 dark:border-white/[0.08] text-slate-600 dark:text-slate-300 hover:text-[#D62839] dark:hover:text-rose-400 font-sans text-xs transition-colors shrink-0 shadow-xs cursor-pointer"
               >
-                {copiedUrl ? <Check className="w-3.5 h-3.5 text-[#059669]" /> : <Copy className="w-3.5 h-3.5" />}
+                {copiedUrl ? <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                 <span>{copiedUrl ? 'Copied' : 'Copy'}</span>
               </button>
             </div>
-            <p className="text-xs text-[#667085] mt-1.5">
-              Production alias: <span className="text-[#20242C] font-mono font-medium">akiradigital.com/{user?.tenant_slug || 'client'}</span>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
+              Production alias: <span className="text-slate-900 dark:text-white font-mono font-bold">akiradigital.in/{user?.tenant_slug || 'client'}</span>
             </p>
           </div>
         </div>
       </div>
 
+      {/* Internationalization & Currency Preferences */}
+      <div className="p-6 rounded-3xl bg-white dark:bg-[#0D111A] border border-slate-200/90 dark:border-white/[0.08] shadow-xs space-y-4">
+        <h3 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
+          <Globe className="w-4 h-4 text-[#D62839] dark:text-rose-400" />
+          <span>Internationalization & Currency Standards</span>
+        </h3>
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          Configure how numbers, financial figures, and timestamps render across invoices, CRM proposals, and executive command centers.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs pt-1">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
+              Base Operating Currency
+            </label>
+            <select
+              defaultValue={localStorage.getItem('mycockpit_currency') || 'INR'}
+              onChange={(e) => {
+                localStorage.setItem('mycockpit_currency', e.target.value);
+              }}
+              className="cockpit-input w-full cursor-pointer bg-white dark:bg-[#07090E]"
+            >
+              <option value="INR">INR (₹) — Indian Rupee</option>
+              <option value="USD">USD ($) — United States Dollar</option>
+              <option value="EUR">EUR (€) — Euro</option>
+              <option value="GBP">GBP (£) — British Pound</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
+              Date Representation
+            </label>
+            <select
+              defaultValue={localStorage.getItem('mycockpit_date_format') || 'DD/MM/YYYY'}
+              onChange={(e) => {
+                localStorage.setItem('mycockpit_date_format', e.target.value);
+              }}
+              className="cockpit-input w-full cursor-pointer bg-white dark:bg-[#07090E]"
+            >
+              <option value="DD/MM/YYYY">DD/MM/YYYY (e.g. 15/01/2026)</option>
+              <option value="MM/DD/YYYY">MM/DD/YYYY (e.g. 01/15/2026)</option>
+              <option value="YYYY-MM-DD">YYYY-MM-DD (ISO 8601)</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
+              Number Grouping
+            </label>
+            <select
+              defaultValue="lakh_crore"
+              className="cockpit-input w-full cursor-pointer bg-white dark:bg-[#07090E]"
+            >
+              <option value="lakh_crore">Indian Lakhs / Crores (₹1,50,000)</option>
+              <option value="western">Western Standard ($150,000.00)</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/80 dark:border-white/[0.04] flex items-center justify-between text-xs">
+          <span className="text-slate-500 dark:text-slate-400">Live Formatting Preview:</span>
+          <span className="font-mono font-bold text-slate-900 dark:text-white">₹1,50,000 • 15 Jan 2026 • 2:30 PM IST</span>
+        </div>
+      </div>
+
       {/* Team & RBAC Management */}
-      <div className="p-6 rounded-2xl bg-white border border-[#E9EAEE] shadow-xs">
+      <div className="p-6 rounded-3xl bg-white dark:bg-[#0D111A] border border-slate-200/90 dark:border-white/[0.08] shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
-            <h3 className="text-base font-bold text-[#20242C] tracking-tight flex items-center gap-2">
-              <Users className="w-4 h-4 text-[#D62839]" />
+            <h3 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
+              <Users className="w-4 h-4 text-[#D62839] dark:text-rose-400" />
               <span>Role-Based Access Control (RBAC)</span>
             </h3>
-            <p className="text-xs text-[#667085] mt-0.5">Manage team members authorized to access this workspace</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Manage team members authorized to access this workspace</p>
           </div>
 
           <button
             onClick={() => setIsAddUserOpen(true)}
             className="cockpit-btn-primary"
           >
-            <Plus className="w-3.5 h-3.5" />
+            <Plus className="w-4 h-4" />
             <span>Invite Member</span>
           </button>
         </div>
 
-        <div className="divide-y divide-[#E9EAEE]">
+        <div className="divide-y divide-slate-200/80 dark:divide-white/[0.06]">
           {teamMembers.map((m) => (
             <div key={m.id} className="py-3.5 flex items-center justify-between text-sm">
               <div>
-                <p className="font-semibold text-[#20242C]">{m.name}</p>
-                <p className="text-xs text-[#667085]">{m.email}</p>
+                <p className="font-bold text-slate-900 dark:text-white">{m.name}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">{m.email}</p>
               </div>
               <div className="flex items-center gap-2">
                 <Badge status={m.role} />
@@ -146,24 +212,24 @@ export const SettingsPage: React.FC = () => {
             </div>
           ))}
           {teamMembers.length === 0 && (
-            <p className="py-6 text-center text-xs text-[#667085]">No additional team members added.</p>
+            <p className="py-6 text-center text-xs text-slate-500 dark:text-slate-400">No additional team members added.</p>
           )}
         </div>
       </div>
 
       {/* AI Engine Configuration */}
-      <div className="p-6 rounded-2xl bg-white border border-[#E9EAEE] shadow-xs">
-        <h3 className="text-base font-bold text-[#20242C] tracking-tight mb-1 flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-[#D62839]" />
+      <div className="p-6 rounded-3xl bg-white dark:bg-[#0D111A] border border-slate-200/90 dark:border-white/[0.08] shadow-xs">
+        <h3 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight mb-1 flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-[#D62839] dark:text-rose-400" />
           <span>Personal AI Engine Settings</span>
         </h3>
-        <p className="text-xs text-[#667085] mb-4">
+        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
           Connect an external generative AI provider (Google Gemini or OpenAI) or use the autonomous local MySQL business reasoning engine.
         </p>
 
         <form onSubmit={handleSaveAiConfig} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-[#667085] mb-1.5">
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
               AI Reasoning Provider
             </label>
             <select
@@ -178,7 +244,7 @@ export const SettingsPage: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-[#667085] mb-1.5">
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
               API Secret Key (Optional for External Generative Models)
             </label>
             <input
@@ -188,7 +254,7 @@ export const SettingsPage: React.FC = () => {
               placeholder="AIzaSy..."
               className="cockpit-input font-mono"
             />
-            <p className="text-xs text-[#667085] mt-1.5">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
               Credentials are never exposed in client network inspection; proxy requests route securely via backend PHP controllers.
             </p>
           </div>
@@ -201,7 +267,7 @@ export const SettingsPage: React.FC = () => {
               Save AI Settings
             </button>
             {savedAi && (
-              <span className="text-xs text-[#059669] flex items-center gap-1.5 font-semibold">
+              <span className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 font-bold">
                 <Check className="w-4 h-4" />
                 <span>Configuration Saved</span>
               </span>
@@ -218,7 +284,7 @@ export const SettingsPage: React.FC = () => {
       >
         <form onSubmit={handleAddUser} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-[#667085] mb-1.5">
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
               Member Full Name
             </label>
             <input
@@ -231,7 +297,7 @@ export const SettingsPage: React.FC = () => {
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-[#667085] mb-1.5">
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
               Work Email
             </label>
             <input
@@ -244,7 +310,7 @@ export const SettingsPage: React.FC = () => {
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-[#667085] mb-1.5">
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
               Tenant Role Permission
             </label>
             <select
@@ -258,7 +324,7 @@ export const SettingsPage: React.FC = () => {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-[#667085] mb-1.5">
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
               Initial Password
             </label>
             <input
@@ -270,7 +336,7 @@ export const SettingsPage: React.FC = () => {
             />
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-[#E9EAEE]">
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-200/90 dark:border-white/[0.08]">
             <button
               type="button"
               onClick={() => setIsAddUserOpen(false)}

@@ -23,6 +23,7 @@ yarn-error.log*
 
 # Temporary scratch files
 scratch/
+frontend/*.mjs
 
 .DS_Store
 Thumbs.db

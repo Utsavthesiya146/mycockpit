@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   PhoneCall, 
   Plus, 
@@ -14,11 +14,17 @@ import {
   RefreshCw, 
   ChevronRight,
   Check,
-  Search
+  Search,
+  Zap,
+  TrendingUp,
+  Flame
 } from 'lucide-react';
 import { api } from '../services/api';
 import { Badge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
+import { EmptyState } from '../components/common/EmptyState';
+import { Cockpit3DLoader } from '../components/common/Cockpit3DLoader';
+import { createWhatsAppUrl, formatDate, formatRelativeTime } from '../utils/formatters';
 import type { Followup, Customer, Lead, Employee } from '../types';
 
 export const Followups: React.FC = () => {
@@ -151,35 +157,67 @@ export const Followups: React.FC = () => {
     }
   };
 
+  // Telemetry KPIs
+  const kpis = useMemo(() => {
+    const todayStr = new Date().toDateString();
+    const now = new Date();
+
+    const todayCount = followups.filter(f => 
+      f.status !== 'completed' && 
+      (f.calculated_status === 'today' || new Date(f.scheduled_at).toDateString() === todayStr)
+    ).length;
+
+    const overdueCount = followups.filter(f => 
+      f.status !== 'completed' && 
+      (f.calculated_status === 'overdue' || new Date(f.scheduled_at) < now)
+    ).length;
+
+    const pendingCount = followups.filter(f => 
+      f.status !== 'completed' && new Date(f.scheduled_at) >= now
+    ).length;
+
+    const completedCount = followups.filter(f => f.status === 'completed').length;
+
+    return {
+      todayCount,
+      overdueCount,
+      pendingCount,
+      completedCount,
+      totalCount: followups.length
+    };
+  }, [followups]);
+
   // Filtered Follow-ups
-  const filtered = followups.filter((f) => {
-    const isDone = f.status === 'completed';
-    const isOverdue = f.calculated_status === 'overdue' && !isDone;
-    const isToday = (f.calculated_status === 'today' || new Date(f.scheduled_at).toDateString() === new Date().toDateString()) && !isDone;
-    const isPending = !isDone && !isOverdue && !isToday;
+  const filtered = useMemo(() => {
+    return followups.filter((f) => {
+      const isDone = f.status === 'completed';
+      const isOverdue = f.calculated_status === 'overdue' && !isDone;
+      const isToday = (f.calculated_status === 'today' || new Date(f.scheduled_at).toDateString() === new Date().toDateString()) && !isDone;
+      const isPending = !isDone && !isOverdue && !isToday;
 
-    // Status Filter
-    if (statusFilter === 'completed' && !isDone) return false;
-    if (statusFilter === 'overdue' && !isOverdue) return false;
-    if (statusFilter === 'today' && !isToday) return false;
-    if (statusFilter === 'pending' && !isPending && !isToday) return false;
+      // Status Filter
+      if (statusFilter === 'completed' && !isDone) return false;
+      if (statusFilter === 'overdue' && !isOverdue) return false;
+      if (statusFilter === 'today' && !isToday) return false;
+      if (statusFilter === 'pending' && !isPending && !isToday) return false;
 
-    // Method Filter
-    if (methodFilter !== 'all' && f.contact_method !== methodFilter) return false;
+      // Method Filter
+      if (methodFilter !== 'all' && f.contact_method !== methodFilter) return false;
 
-    // Search
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      const matchTitle = f.title.toLowerCase().includes(q);
-      const matchNotes = (f.notes || '').toLowerCase().includes(q);
-      const matchLead = (f.lead_name || '').toLowerCase().includes(q);
-      const matchCust = (f.customer_name || '').toLowerCase().includes(q);
-      const matchComp = (f.lead_company || '').toLowerCase().includes(q);
-      if (!matchTitle && !matchNotes && !matchLead && !matchCust && !matchComp) return false;
-    }
+      // Search
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        const matchTitle = f.title.toLowerCase().includes(q);
+        const matchNotes = (f.notes || '').toLowerCase().includes(q);
+        const matchLead = (f.lead_name || '').toLowerCase().includes(q);
+        const matchCust = (f.customer_name || '').toLowerCase().includes(q);
+        const matchComp = (f.lead_company || '').toLowerCase().includes(q);
+        if (!matchTitle && !matchNotes && !matchLead && !matchCust && !matchComp) return false;
+      }
 
-    return true;
-  });
+      return true;
+    });
+  }, [followups, statusFilter, methodFilter, search]);
 
   const getMethodIcon = (method?: string) => {
     switch (method) {
@@ -194,19 +232,99 @@ export const Followups: React.FC = () => {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Cockpit3DLoader 
+          variant="module"
+          size="lg"
+          text="Loading Client Touchpoints & Follow-ups..."
+          subtitle="Compiling live agendas, overdue reminders, and communication channels"
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Executive Telemetry Header Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Card 1: Today's Action Items */}
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#0D111A] border border-slate-200/90 dark:border-white/[0.08] shadow-xs hover:border-amber-500/30 transition-all">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">Due Today</span>
+            <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center text-amber-600 dark:text-amber-400">
+              <Flame className="w-4 h-4" />
+            </div>
+          </div>
+          <p className="text-2xl font-black font-mono text-slate-900 dark:text-white tracking-tight">
+            {kpis.todayCount}
+          </p>
+          <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+            <span>High-priority calls & scheduled meetings</span>
+          </div>
+        </div>
+
+        {/* Card 2: Overdue Attention Alerts */}
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#0D111A] border border-slate-200/90 dark:border-white/[0.08] shadow-xs hover:border-rose-500/30 transition-all">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">Overdue Alerts</span>
+            <div className="w-8 h-8 rounded-xl bg-rose-50 dark:bg-rose-950/40 flex items-center justify-center text-rose-600 dark:text-rose-400">
+              <AlertTriangle className="w-4 h-4" />
+            </div>
+          </div>
+          <p className="text-2xl font-black font-mono text-rose-600 dark:text-rose-400 tracking-tight">
+            {kpis.overdueCount}
+          </p>
+          <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+            <span>Critical touchpoints requiring immediate action</span>
+          </div>
+        </div>
+
+        {/* Card 3: Upcoming Future Pipeline */}
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#0D111A] border border-slate-200/90 dark:border-white/[0.08] shadow-xs hover:border-blue-500/30 transition-all">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">Scheduled Ahead</span>
+            <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center text-blue-600 dark:text-blue-400">
+              <Clock className="w-4 h-4" />
+            </div>
+          </div>
+          <p className="text-2xl font-black font-mono text-slate-900 dark:text-white tracking-tight">
+            {kpis.pendingCount}
+          </p>
+          <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+            <span>Upcoming client reviews & syncs</span>
+          </div>
+        </div>
+
+        {/* Card 4: Resolved / Closed */}
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#0D111A] border border-slate-200/90 dark:border-white/[0.08] shadow-xs hover:border-emerald-500/30 transition-all">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Completed Interactions</span>
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+              <CheckCircle2 className="w-4 h-4" />
+            </div>
+          </div>
+          <p className="text-2xl font-black font-mono text-emerald-600 dark:text-emerald-400 tracking-tight">
+            {kpis.completedCount}
+          </p>
+          <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+            <span>Successfully executed touchpoints</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-[#FFF1F2] border border-[#FECDD3] text-[#D62839] text-xs font-semibold mb-2">
+          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 text-[#D62839] dark:text-rose-400 text-xs font-semibold mb-2">
             <span className="w-2 h-2 rounded-full bg-[#D62839] animate-pulse" />
             <span>High Priority Lead & Account Touchpoints</span>
           </div>
-          <h2 className="text-2xl font-extrabold text-[#20242C] tracking-tight">
+          <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
             Follow-up Reminders & Interaction Tracker
           </h2>
-          <p className="text-sm text-[#667085] mt-0.5">
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
             Never let a lead silently slip away. Track calls, WhatsApp conversations, meetings, and automated reminder alerts.
           </p>
         </div>
@@ -215,7 +333,7 @@ export const Followups: React.FC = () => {
           <button
             onClick={handleRefresh}
             disabled={refreshing}
-            className="p-2.5 rounded-xl bg-white hover:bg-[#FFF1F2] text-[#667085] hover:text-[#D62839] border border-[#E9EAEE] hover:border-[#FECDD3] transition-all shadow-2xs cursor-pointer"
+            className="p-2.5 rounded-xl bg-white dark:bg-[#0D111A] hover:bg-slate-50 dark:hover:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200/90 dark:border-white/[0.08] transition-all shadow-xs cursor-pointer"
             title="Refresh Live Data"
           >
             <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
@@ -232,14 +350,14 @@ export const Followups: React.FC = () => {
       </div>
 
       {/* Filter Horizontal Strip */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 bg-white rounded-2xl border border-[#E9EAEE] shadow-2xs">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 bg-white dark:bg-[#0D111A] rounded-2xl border border-slate-200/90 dark:border-white/[0.08] shadow-xs">
         <div className="flex items-center gap-1.5 overflow-x-auto text-xs font-medium no-scrollbar">
           {[
             { id: 'all', label: 'All Follow-ups', count: followups.length },
-            { id: 'today', label: 'Today\'s Scheduled', count: followups.filter(f => f.status === 'pending' && (f.calculated_status === 'today' || new Date(f.scheduled_at).toDateString() === new Date().toDateString())).length, badgeColor: 'bg-[#FEF3C7] text-[#D97706]' },
-            { id: 'overdue', label: 'Overdue Alerts', count: followups.filter(f => f.status === 'pending' && (f.calculated_status === 'overdue' || new Date(f.scheduled_at) < new Date())).length, badgeColor: 'bg-[#FEF2F2] text-[#DC2626]' },
-            { id: 'pending', label: 'Upcoming Future', count: followups.filter(f => f.status === 'pending' && new Date(f.scheduled_at) > new Date()).length },
-            { id: 'completed', label: 'Completed Touchpoints', count: followups.filter(f => f.status === 'completed').length, badgeColor: 'bg-[#ECFDF5] text-[#059669]' },
+            { id: 'today', label: 'Today\'s Scheduled', count: kpis.todayCount, badgeColor: 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300' },
+            { id: 'overdue', label: 'Overdue Alerts', count: kpis.overdueCount, badgeColor: 'bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300' },
+            { id: 'pending', label: 'Upcoming Future', count: kpis.pendingCount },
+            { id: 'completed', label: 'Completed Touchpoints', count: kpis.completedCount, badgeColor: 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300' },
           ].map((tab) => {
             const isActive = statusFilter === tab.id;
             return (
@@ -248,13 +366,13 @@ export const Followups: React.FC = () => {
                 onClick={() => setStatusFilter(tab.id as any)}
                 className={`px-3 py-1.5 rounded-xl border whitespace-nowrap transition-all duration-180 flex items-center gap-1.5 cursor-pointer ${
                   isActive
-                    ? 'bg-[#FFF1F2] text-[#D62839] border-[#FECDD3] font-bold shadow-2xs'
-                    : 'bg-white text-[#667085] border-[#E9EAEE] hover:border-[#FECDD3] hover:text-[#20242C]'
+                    ? 'bg-[#D62839] text-white border-[#D62839] font-bold shadow-xs'
+                    : 'bg-white dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 border-slate-200/90 dark:border-white/[0.08] hover:border-slate-300 dark:hover:border-white/[0.15] hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 <span>{tab.label}</span>
                 <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full border ${
-                  tab.badgeColor || (isActive ? 'bg-[#D62839] text-white border-[#D62839]' : 'bg-[#F8F9FB] text-[#667085] border-[#E9EAEE]')
+                  tab.badgeColor || (isActive ? 'bg-white/20 text-white border-white/30' : 'bg-slate-100 dark:bg-white/[0.08] text-slate-600 dark:text-slate-400 border-transparent')
                 }`}>
                   {tab.count}
                 </span>
@@ -279,7 +397,7 @@ export const Followups: React.FC = () => {
             <select
               value={methodFilter}
               onChange={(e) => setMethodFilter(e.target.value)}
-              className="cockpit-input py-1.5 text-xs w-full cursor-pointer bg-white"
+              className="cockpit-input py-1.5 text-xs w-full cursor-pointer bg-white dark:bg-slate-900"
             >
               <option value="all">All Methods</option>
               <option value="call">Phone Calls</option>
@@ -307,12 +425,12 @@ export const Followups: React.FC = () => {
               key={f.id}
               className={`p-5 rounded-2xl border transition-all duration-200 flex flex-col justify-between ${
                 isDone 
-                  ? 'bg-[#F8FAFC]/75 border-[#E9EAEE] opacity-80' 
+                  ? 'bg-slate-50/70 dark:bg-slate-900/30 border-slate-200 dark:border-white/[0.06] opacity-75' 
                   : isOverdue 
-                    ? 'bg-[#FEF2F2]/60 border-[#FECDD3] shadow-xs hover:border-[#DC2626]' 
+                    ? 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/40 shadow-xs hover:border-rose-400 dark:hover:border-rose-800' 
                     : isToday 
-                      ? 'bg-[#FFFBEB]/60 border-[#FDE68A] shadow-xs' 
-                      : 'bg-white border-[#E9EAEE] shadow-xs hover:border-[#FECDD3]'
+                      ? 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/40 shadow-xs' 
+                      : 'bg-white dark:bg-[#0D111A] border-slate-200/90 dark:border-white/[0.08] shadow-xs hover:border-slate-300 dark:hover:border-white/[0.15]'
               }`}
             >
               <div>
@@ -321,18 +439,18 @@ export const Followups: React.FC = () => {
                   <div className="flex items-center gap-2.5">
                     <div className={`p-2.5 rounded-xl border ${
                       isOverdue 
-                        ? 'bg-[#FEF2F2] border-[#FECDD3] text-[#DC2626]' 
+                        ? 'bg-rose-100 dark:bg-rose-950/60 border-rose-200 dark:border-rose-900/60 text-rose-600 dark:text-rose-400' 
                         : isToday 
-                          ? 'bg-[#FEF3C7] border-[#FDE68A] text-[#D97706]' 
-                          : 'bg-[#FFF1F2] border-[#FECDD3] text-[#D62839]'
+                          ? 'bg-amber-100 dark:bg-amber-950/60 border-amber-200 dark:border-amber-900/60 text-amber-600 dark:text-amber-400' 
+                          : 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900/50 text-[#D62839] dark:text-rose-400'
                     }`}>
                       {getMethodIcon(f.contact_method)}
                     </div>
                     <div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#D62839] font-mono">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#D62839] dark:text-rose-400 font-mono">
                         {f.contact_method || 'Call'} Follow-up
                       </span>
-                      <h3 className={`text-base font-extrabold tracking-tight ${isDone ? 'line-through text-[#94A3B8]' : 'text-[#20242C]'}`}>
+                      <h3 className={`text-base font-extrabold tracking-tight ${isDone ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-900 dark:text-white'}`}>
                         {f.title}
                       </h3>
                     </div>
@@ -342,40 +460,40 @@ export const Followups: React.FC = () => {
                 </div>
 
                 {/* Contact and context */}
-                <div className="p-3 rounded-xl bg-white/80 border border-[#E9EAEE] space-y-1 text-xs mb-3">
+                <div className="p-3 rounded-xl bg-slate-50/80 dark:bg-slate-900/50 border border-slate-200/80 dark:border-white/[0.06] space-y-1 text-xs mb-3">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-[#20242C]">{contactName}</span>
+                    <span className="font-bold text-slate-900 dark:text-white">{contactName}</span>
                     {f.lead_source && (
-                      <span className="text-[10px] font-semibold text-[#D62839] px-2 py-0.5 rounded-md bg-[#FFF1F2]">
+                      <span className="text-[10px] font-semibold text-[#D62839] dark:text-rose-400 px-2 py-0.5 rounded-md bg-rose-50 dark:bg-rose-950/50">
                         Source: {f.lead_source}
                       </span>
                     )}
                   </div>
                   {companyName && (
-                    <p className="text-[#667085] flex items-center gap-1">
+                    <p className="text-slate-500 dark:text-slate-400 flex items-center gap-1">
                       <Building2 className="w-3 h-3 text-[#94A3B8]" />
                       <span>{companyName}</span>
                     </p>
                   )}
                   {f.notes && (
-                    <p className="text-[#667085] pt-1 leading-relaxed border-t border-[#E9EAEE] mt-1">
+                    <p className="text-slate-500 dark:text-slate-400 pt-1 leading-relaxed border-t border-slate-200/80 dark:border-white/[0.06] mt-1">
                       {f.notes}
                     </p>
                   )}
                 </div>
 
                 {/* Timing */}
-                <div className="flex items-center justify-between text-xs font-semibold text-[#667085]">
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400">
                   <span className="flex items-center gap-1.5">
-                    <Clock className={`w-3.5 h-3.5 ${isOverdue ? 'text-[#DC2626]' : 'text-[#D62839]'}`} />
+                    <Clock className={`w-3.5 h-3.5 ${isOverdue ? 'text-rose-600 dark:text-rose-400' : 'text-[#D62839] dark:text-rose-400'}`} />
                     <span>
-                      {isOverdue && <strong className="text-[#DC2626]">Overdue: </strong>}
+                      {isOverdue && <strong className="text-rose-600 dark:text-rose-400">Overdue: </strong>}
                       {new Date(f.scheduled_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })} at {new Date(f.scheduled_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </span>
 
                   {f.assigned_user_name && (
-                    <span className="text-[11px] text-[#94A3B8]">
+                    <span className="text-[11px] text-slate-400 dark:text-slate-500">
                       Assigned: {f.assigned_user_name}
                     </span>
                   )}
@@ -383,12 +501,12 @@ export const Followups: React.FC = () => {
               </div>
 
               {/* Bottom One-Click Communication Action Strip */}
-              <div className="mt-4 pt-3.5 border-t border-[#E9EAEE] flex items-center justify-between gap-2">
+              <div className="mt-4 pt-3.5 border-t border-slate-200/80 dark:border-white/[0.06] flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5">
                   {contactPhone && (
                     <a
                       href={`tel:${contactPhone}`}
-                      className="p-2 rounded-xl bg-white hover:bg-[#FFF1F2] text-[#059669] border border-[#E9EAEE] hover:border-[#FECDD3] transition-all cursor-pointer shadow-2xs"
+                      className="p-2 rounded-xl bg-white dark:bg-slate-900 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-[#059669] dark:text-emerald-400 border border-slate-200/90 dark:border-white/[0.08] transition-all cursor-pointer shadow-xs"
                       title={`Call ${contactPhone}`}
                     >
                       <PhoneCall className="w-3.5 h-3.5" />
@@ -400,7 +518,7 @@ export const Followups: React.FC = () => {
                       href={`https://wa.me/${contactPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hello ${contactName}, following up regarding ${f.title}.`)}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-2 rounded-xl bg-white hover:bg-[#FFF1F2] text-[#25D366] border border-[#E9EAEE] hover:border-[#FECDD3] transition-all cursor-pointer shadow-2xs"
+                      className="p-2 rounded-xl bg-white dark:bg-slate-900 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-[#25D366] border border-slate-200/90 dark:border-white/[0.08] transition-all cursor-pointer shadow-xs"
                       title="Open WhatsApp Chat"
                     >
                       <MessageSquare className="w-3.5 h-3.5" />
@@ -410,7 +528,7 @@ export const Followups: React.FC = () => {
                   {contactEmail && (
                     <a
                       href={`mailto:${contactEmail}?subject=${encodeURIComponent(`Follow-up: ${f.title}`)}`}
-                      className="p-2 rounded-xl bg-white hover:bg-[#FFF1F2] text-[#3B82F6] border border-[#E9EAEE] hover:border-[#FECDD3] transition-all cursor-pointer shadow-2xs"
+                      className="p-2 rounded-xl bg-white dark:bg-slate-900 hover:bg-blue-50 dark:hover:bg-blue-950/40 text-[#3B82F6] dark:text-blue-400 border border-slate-200/90 dark:border-white/[0.08] transition-all cursor-pointer shadow-xs"
                       title={`Email ${contactEmail}`}
                     >
                       <Mail className="w-3.5 h-3.5" />
@@ -422,15 +540,15 @@ export const Followups: React.FC = () => {
                   {!isDone ? (
                     <button
                       onClick={() => handleOpenCompleteModal(f)}
-                      className="px-3 py-1.5 rounded-xl bg-[#D62839] hover:bg-[#B91C2C] text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                      className="px-3 py-1.5 rounded-xl bg-[#D62839] hover:bg-[#B91C2C] text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
                     >
                       <Check className="w-3.5 h-3.5" />
-                      <span>Complete Follow-up</span>
+                      <span>Complete</span>
                     </button>
                   ) : (
                     <button
                       onClick={() => handleToggle(f)}
-                      className="px-3 py-1.5 rounded-xl bg-white text-[#667085] hover:text-[#20242C] border border-[#E9EAEE] text-xs font-bold transition-all cursor-pointer"
+                      className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white border border-slate-200/90 dark:border-white/[0.08] text-xs font-bold transition-all cursor-pointer"
                     >
                       Reopen
                     </button>
@@ -442,20 +560,17 @@ export const Followups: React.FC = () => {
         })}
 
         {filtered.length === 0 && (
-          <div className="col-span-full py-16 text-center bg-white rounded-2xl border border-dashed border-[#E9EAEE] p-6 space-y-3">
-            <div className="w-12 h-12 rounded-2xl bg-[#FFF1F2] text-[#D62839] flex items-center justify-center mx-auto">
-              <CheckCircle2 className="w-6 h-6" />
-            </div>
-            <h4 className="text-base font-bold text-[#20242C]">No follow-ups in this filter</h4>
-            <p className="text-xs text-[#667085] max-w-sm mx-auto">
-              You are all caught up! Click below to schedule a new touchpoint with an active lead or customer.
-            </p>
-            <button
-              onClick={() => setIsCreateModalOpen(true)}
-              className="cockpit-btn-primary inline-flex"
-            >
-              Schedule New Follow-up
-            </button>
+          <div className="col-span-full py-8">
+            <EmptyState
+              icon={PhoneCall}
+              title="All client interactions are up to date"
+              description="No follow-up reminders match the active filter criteria. Click below to schedule a new touchpoint with a qualified lead."
+              primaryAction={{
+                label: "Schedule Follow-up",
+                onClick: () => setIsCreateModalOpen(true),
+                icon: Plus
+              }}
+            />
           </div>
         )}
       </div>
@@ -470,12 +585,12 @@ export const Followups: React.FC = () => {
         maxWidth="max-w-lg"
       >
         <form onSubmit={handleCreateFollowup} className="space-y-4">
-          <div className="flex items-center gap-2 p-1 bg-[#F8F9FB] border border-[#E9EAEE] rounded-xl text-xs font-bold">
+          <div className="flex items-center gap-2 p-1 bg-slate-50 dark:bg-slate-900/60 border border-slate-200/90 dark:border-white/[0.08] rounded-xl text-xs font-bold">
             <button
               type="button"
               onClick={() => setTargetType('lead')}
               className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer ${
-                targetType === 'lead' ? 'bg-[#D62839] text-white shadow-2xs' : 'text-[#667085]'
+                targetType === 'lead' ? 'bg-[#D62839] text-white shadow-xs' : 'text-slate-600 dark:text-slate-400'
               }`}
             >
               Sales Lead ({leads.length})
@@ -484,7 +599,7 @@ export const Followups: React.FC = () => {
               type="button"
               onClick={() => setTargetType('customer')}
               className={`flex-1 py-1.5 rounded-lg transition-all cursor-pointer ${
-                targetType === 'customer' ? 'bg-[#D62839] text-white shadow-2xs' : 'text-[#667085]'
+                targetType === 'customer' ? 'bg-[#D62839] text-white shadow-xs' : 'text-slate-600 dark:text-slate-400'
               }`}
             >
               Existing Customer ({customers.length})
@@ -494,12 +609,12 @@ export const Followups: React.FC = () => {
           <div className="space-y-3 text-xs">
             {targetType === 'lead' ? (
               <div>
-                <label className="block text-xs font-bold text-[#20242C] mb-1">Select Lead *</label>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Select Lead *</label>
                 <select
                   required
                   value={selectedLeadId}
                   onChange={(e) => setSelectedLeadId(Number(e.target.value))}
-                  className="cockpit-input w-full bg-white cursor-pointer"
+                  className="cockpit-input w-full bg-white dark:bg-slate-900 cursor-pointer"
                 >
                   <option value="">Select a lead...</option>
                   {leads.map((l) => (
@@ -511,12 +626,12 @@ export const Followups: React.FC = () => {
               </div>
             ) : (
               <div>
-                <label className="block text-xs font-bold text-[#20242C] mb-1">Select Customer *</label>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Select Customer *</label>
                 <select
                   required
                   value={selectedCustomerId}
                   onChange={(e) => setSelectedCustomerId(Number(e.target.value))}
-                  className="cockpit-input w-full bg-white cursor-pointer"
+                  className="cockpit-input w-full bg-white dark:bg-slate-900 cursor-pointer"
                 >
                   <option value="">Select a customer organization...</option>
                   {customers.map((c) => (
@@ -529,7 +644,7 @@ export const Followups: React.FC = () => {
             )}
 
             <div>
-              <label className="block text-xs font-bold text-[#20242C] mb-1">Follow-up Objective / Title *</label>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Follow-up Objective / Title *</label>
               <input
                 type="text"
                 required
@@ -542,11 +657,11 @@ export const Followups: React.FC = () => {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-bold text-[#20242C] mb-1">Contact Method</label>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Contact Method</label>
                 <select
                   value={contactMethod}
                   onChange={(e) => setContactMethod(e.target.value as any)}
-                  className="cockpit-input w-full bg-white cursor-pointer"
+                  className="cockpit-input w-full bg-white dark:bg-slate-900 cursor-pointer"
                 >
                   <option value="call">Phone Call</option>
                   <option value="whatsapp">WhatsApp Message</option>
@@ -557,7 +672,7 @@ export const Followups: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[#20242C] mb-1">Scheduled Date & Time *</label>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Scheduled Date & Time *</label>
                 <input
                   type="datetime-local"
                   required
@@ -569,11 +684,11 @@ export const Followups: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-[#20242C] mb-1">Assigned Employee</label>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Assigned Employee</label>
               <select
                 value={assignedTo}
                 onChange={(e) => setAssignedTo(e.target.value)}
-                className="cockpit-input w-full bg-white cursor-pointer"
+                className="cockpit-input w-full bg-white dark:bg-slate-900 cursor-pointer"
               >
                 <option value="">Current User / Self</option>
                 {employees.map((emp) => (
@@ -585,7 +700,7 @@ export const Followups: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-[#20242C] mb-1">Notes & Context</label>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Notes & Context</label>
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
@@ -596,11 +711,11 @@ export const Followups: React.FC = () => {
             </div>
           </div>
 
-          <div className="pt-3 border-t border-[#E9EAEE] flex items-center justify-end gap-2.5">
+          <div className="pt-3 border-t border-slate-200/90 dark:border-white/[0.08] flex items-center justify-end gap-2.5">
             <button
               type="button"
               onClick={() => setIsCreateModalOpen(false)}
-              className="px-4 py-2 rounded-xl border border-[#E9EAEE] text-xs font-bold text-[#667085] hover:bg-[#F8F9FB] cursor-pointer"
+              className="cockpit-btn-secondary"
             >
               Cancel
             </button>
@@ -624,13 +739,13 @@ export const Followups: React.FC = () => {
         maxWidth="max-w-md"
       >
         <form onSubmit={handleCompleteSubmit} className="space-y-4">
-          <p className="text-xs text-[#667085]">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
             Mark <strong>"{activeFollowup?.title}"</strong> as resolved and log the interaction result to the lead timeline.
           </p>
 
           <div className="space-y-3 text-xs">
             <div>
-              <label className="block text-xs font-bold text-[#20242C] mb-1">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                 Outcome Summary *
               </label>
               <input
@@ -644,7 +759,7 @@ export const Followups: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-[#20242C] mb-1">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                 Additional Touchpoint Notes
               </label>
               <textarea
@@ -656,8 +771,8 @@ export const Followups: React.FC = () => {
               />
             </div>
 
-            <div className="pt-2 border-t border-[#E9EAEE]">
-              <label className="flex items-center gap-2 cursor-pointer font-bold text-[#20242C]">
+            <div className="pt-2 border-t border-slate-200/90 dark:border-white/[0.08]">
+              <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 dark:text-slate-300">
                 <input
                   type="checkbox"
                   checked={scheduleNext}
@@ -669,9 +784,9 @@ export const Followups: React.FC = () => {
             </div>
 
             {scheduleNext && (
-              <div className="p-3.5 rounded-xl bg-[#FFF1F2]/60 border border-[#FECDD3] space-y-3">
+              <div className="p-3.5 rounded-xl bg-rose-50/60 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40 space-y-3">
                 <div>
-                  <label className="block text-[11px] font-bold text-[#20242C] mb-1">Next Action Title</label>
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Next Action Title</label>
                   <input
                     type="text"
                     value={nextTitle}
@@ -682,11 +797,11 @@ export const Followups: React.FC = () => {
 
                 <div className="grid grid-cols-2 gap-2.5">
                   <div>
-                    <label className="block text-[11px] font-bold text-[#20242C] mb-1">Contact Method</label>
+                    <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Contact Method</label>
                     <select
                       value={nextMethod}
                       onChange={(e) => setNextMethod(e.target.value as any)}
-                      className="cockpit-input w-full text-xs bg-white cursor-pointer"
+                      className="cockpit-input w-full text-xs bg-white dark:bg-slate-900 cursor-pointer"
                     >
                       <option value="call">Phone Call</option>
                       <option value="whatsapp">WhatsApp</option>
@@ -695,7 +810,7 @@ export const Followups: React.FC = () => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[11px] font-bold text-[#20242C] mb-1">Next Scheduled Date</label>
+                    <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Next Scheduled Date</label>
                     <input
                       type="datetime-local"
                       required={scheduleNext}
@@ -709,11 +824,11 @@ export const Followups: React.FC = () => {
             )}
           </div>
 
-          <div className="pt-3 border-t border-[#E9EAEE] flex items-center justify-end gap-2.5">
+          <div className="pt-3 border-t border-slate-200/90 dark:border-white/[0.08] flex items-center justify-end gap-2.5">
             <button
               type="button"
               onClick={() => setIsCompleteModalOpen(false)}
-              className="px-4 py-2 rounded-xl border border-[#E9EAEE] text-xs font-bold text-[#667085] hover:bg-[#F8F9FB] cursor-pointer"
+              className="cockpit-btn-secondary"
             >
               Cancel
             </button>

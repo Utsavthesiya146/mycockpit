@@ -50,20 +50,20 @@ export const Badge: React.FC<BadgeProps> = ({ status, variant, dot, className, c
     if (variant) {
       switch (variant) {
         case 'green':
-          return 'bg-[#ECFDF5] text-[#059669] border-[#A7F3D0]';
+          return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800/60';
         case 'red':
-          return 'bg-[#FEF2F2] text-[#DC2626] border-[#FECDD3] font-bold';
+          return 'bg-rose-50 text-[#D62839] border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800/60 font-bold';
         case 'amber':
-          return 'bg-[#FEF3C7] text-[#D97706] border-[#FDE68A]';
+          return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800/60 font-semibold';
         case 'blue':
-          return 'bg-[#EFF8FF] text-[#175CD3] border-[#B2DDFF]';
+          return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800/60';
         case 'purple':
-          return 'bg-[#F9F5FF] text-[#6941C6] border-[#E9D7FE]';
+          return 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-400 dark:border-purple-800/60';
         case 'indigo':
-          return 'bg-[#EEF4FF] text-[#3538CD] border-[#C7D7FE]';
+          return 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-400 dark:border-indigo-800/60';
         case 'gray':
         default:
-          return 'bg-[#F8F9FB] text-[#667085] border-[#E9EAEE]';
+          return 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800/80 dark:text-slate-300 dark:border-slate-700';
       }
     }
 
@@ -77,18 +77,18 @@ export const Badge: React.FC<BadgeProps> = ({ status, variant, dot, className, c
       case 'connected syncing':
       case 'webhook configured':
       case 'sync successful':
-        return 'bg-[#ECFDF5] text-[#059669] border-[#A7F3D0]';
+        return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800/60 font-semibold';
 
       case 'sync successful no new leads':
       case 'sync successful - no new leads':
       case 'sync_successful_no_leads':
-        return 'bg-[#EFF8FF] text-[#175CD3] border-[#B2DDFF]';
+        return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800/60 font-semibold';
       
       case 'partially paid':
       case 'in progress':
       case 'qualified':
       case 'proposal':
-        return 'bg-[#FFF1F2] text-[#D62839] border-[#FECDD3] font-bold';
+        return 'bg-rose-50 text-[#D62839] border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800/60 font-bold';
 
       case 'pending':
       case 'sent':
@@ -96,7 +96,7 @@ export const Badge: React.FC<BadgeProps> = ({ status, variant, dot, className, c
       case 'new':
       case 'contacted':
       case 'launcher only':
-        return 'bg-[#FFF8F1] text-[#D97706] border-[#FDE68A]';
+        return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800/60 font-semibold';
 
       case 'overdue':
       case 'urgent':
@@ -107,7 +107,7 @@ export const Badge: React.FC<BadgeProps> = ({ status, variant, dot, className, c
       case 'expired':
       case 'error':
       case 'sync failed':
-        return 'bg-[#FEF2F2] text-[#DC2626] border-[#FECDD3] font-bold';
+        return 'bg-rose-50 text-[#D62839] border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800/60 font-bold';
 
       case 'high':
       case 'auth required':
@@ -118,10 +118,10 @@ export const Badge: React.FC<BadgeProps> = ({ status, variant, dot, className, c
       case 'on leave':
       case 'referral access restricted':
       case 'referral_access_restricted':
-        return 'bg-[#FEF3C7] text-[#D97706] border-[#FDE68A] font-bold';
+        return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800/60 font-bold';
 
       case 'api access required':
-        return 'bg-[#EFF8FF] text-[#175CD3] border-[#B2DDFF] font-bold';
+        return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800/60 font-bold';
 
       case 'draft':
       case 'medium':
@@ -132,14 +132,14 @@ export const Badge: React.FC<BadgeProps> = ({ status, variant, dot, className, c
       case 'unsupported':
       case 'inactive':
       default:
-        return 'bg-[#F8F9FB] text-[#667085] border-[#E9EAEE]';
+        return 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800/80 dark:text-slate-300 dark:border-slate-700';
     }
   };
 
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wider border shadow-2xs ${getStyle()} ${className || ''}`}>
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold tracking-wider border shadow-2xs ${getStyle()} ${className || ''}`}>
       {dot && <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />}
-      {children || formatLabel(normalize)}
+      <span>{children || formatLabel(normalize)}</span>
     </span>
   );
 };

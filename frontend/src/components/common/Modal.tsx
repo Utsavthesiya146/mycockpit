@@ -7,9 +7,17 @@ interface ModalProps {
   title: string;
   children: React.ReactNode;
   maxWidth?: string;
+  subtitle?: string;
 }
 
-export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, maxWidth = 'max-w-xl' }) => {
+export const Modal: React.FC<ModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  title, 
+  children, 
+  maxWidth = 'max-w-xl',
+  subtitle
+}) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -30,26 +38,35 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 overflow-y-auto">
       {/* Backdrop */}
       <div 
-        className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity duration-200"
+        className="fixed inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm transition-opacity duration-200"
         onClick={onClose}
       />
 
-      {/* Modal Dialog (Native Bottom Sheet on Mobile, Centered Dialog on Desktop) */}
-      <div className={`relative w-full ${maxWidth} bg-white border border-[#E9EAEE] rounded-t-2xl sm:rounded-2xl shadow-xl overflow-hidden z-10 transition-all duration-200 max-h-[90vh] flex flex-col`}>
+      {/* Modal Dialog */}
+      <div className={`relative w-full ${maxWidth} bg-white dark:bg-[#0D111A] border border-slate-200/90 dark:border-white/[0.1] rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden z-10 transition-all duration-200 max-h-[92vh] flex flex-col`}>
         {/* Mobile Pull Handle Indicator */}
-        <div className="sm:hidden flex justify-center pt-2 pb-1 bg-[#F8F9FB]">
-          <div className="w-10 h-1 bg-[#D8DCE3] rounded-full" />
+        <div className="sm:hidden flex justify-center pt-2.5 pb-1 bg-slate-50 dark:bg-slate-900/50">
+          <div className="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full" />
         </div>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 sm:py-4 border-b border-[#E9EAEE] bg-[#F8F9FB] shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-2 h-5 bg-[#D62839] rounded-full" />
-            <h2 className="text-base font-bold text-[#20242C] tracking-tight">{title}</h2>
+        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-100 dark:border-white/[0.06] bg-slate-50/70 dark:bg-slate-900/40 shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-2.5 h-6 bg-[#D62839] rounded-full shrink-0" />
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white tracking-tight truncate">
+                {title}
+              </h2>
+              {subtitle && (
+                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                  {subtitle}
+                </p>
+              )}
+            </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-[#667085] hover:text-[#D62839] hover:bg-[#FFF1F2] transition-colors cursor-pointer"
+            className="p-2 rounded-xl text-slate-400 hover:text-[#D62839] hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer shrink-0"
             aria-label="Close dialog"
           >
             <X className="w-4 h-4" />
@@ -57,7 +74,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
         </div>
 
         {/* Content Body */}
-        <div className="p-5 sm:p-6 overflow-y-auto flex-1 safe-area-bottom">
+        <div className="p-5 sm:p-6 overflow-y-auto flex-1 safe-area-bottom text-slate-800 dark:text-slate-200">
           {children}
         </div>
       </div>

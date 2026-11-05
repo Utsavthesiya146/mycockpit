@@ -31,6 +31,10 @@ import {
 import { api } from '../services/api';
 import { Badge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
+import { SlideOverDrawer } from '../components/common/SlideOverDrawer';
+import { EmptyState } from '../components/common/EmptyState';
+import { Cockpit3DLoader } from '../components/common/Cockpit3DLoader';
+import { formatCurrency, createWhatsAppUrl } from '../utils/formatters';
 import type { Customer, Lead, LeadActivity, LeadSourceConfig, Employee } from '../types';
 
 export const CRM: React.FC = () => {
@@ -325,13 +329,13 @@ export const CRM: React.FC = () => {
   // 9 Required Views from HK Sir
   const viewTabs = [
     { id: 'all', label: 'All Leads', count: leads.length },
-    { id: 'new', label: 'New Leads', count: leads.filter(l => l.status === 'new').length, badgeColor: 'bg-[#FFF1F2] text-[#D62839]' },
+    { id: 'new', label: 'New Leads', count: leads.filter(l => l.status === 'new').length, badgeColor: 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900/50' },
     { id: 'pending', label: 'Pending Follow-ups', count: leads.filter(l => l.calculated_followup_status === 'pending' || (l.next_followup_date && new Date(l.next_followup_date) >= new Date() && l.status !== 'won' && l.status !== 'lost')).length },
-    { id: 'today', label: 'Today\'s Follow-ups', count: leads.filter(l => l.calculated_followup_status === 'today' || (l.next_followup_date && new Date(l.next_followup_date).toDateString() === new Date().toDateString() && l.status !== 'won' && l.status !== 'lost')).length, badgeColor: 'bg-[#FEF3C7] text-[#D97706]' },
-    { id: 'overdue', label: 'Overdue Follow-ups', count: leads.filter(l => l.calculated_followup_status === 'overdue' || (l.next_followup_date && new Date(l.next_followup_date) < new Date() && l.status !== 'won' && l.status !== 'lost')).length, badgeColor: 'bg-[#FEF2F2] text-[#DC2626]' },
+    { id: 'today', label: 'Today\'s Follow-ups', count: leads.filter(l => l.calculated_followup_status === 'today' || (l.next_followup_date && new Date(l.next_followup_date).toDateString() === new Date().toDateString() && l.status !== 'won' && l.status !== 'lost')).length, badgeColor: 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900/50' },
+    { id: 'overdue', label: 'Overdue Follow-ups', count: leads.filter(l => l.calculated_followup_status === 'overdue' || (l.next_followup_date && new Date(l.next_followup_date) < new Date() && l.status !== 'won' && l.status !== 'lost')).length, badgeColor: 'bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-300 border-red-200 dark:border-red-900/50' },
     { id: 'completed', label: 'Completed Follow-ups', count: leads.filter(l => Boolean((l.activities_count && l.activities_count > 0) || l.status === 'contacted' || l.status === 'qualified' || l.status === 'proposal')).length },
-    { id: 'no_followup', label: 'Leads Without Follow-up', count: leads.filter(l => !l.next_followup_date && l.status !== 'won' && l.status !== 'lost').length, badgeColor: 'bg-[#F1F5F9] text-[#64748B]' },
-    { id: 'won', label: 'Converted Leads', count: leads.filter(l => l.status === 'won').length, badgeColor: 'bg-[#ECFDF5] text-[#059669]' },
+    { id: 'no_followup', label: 'Leads Without Follow-up', count: leads.filter(l => !l.next_followup_date && l.status !== 'won' && l.status !== 'lost').length, badgeColor: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700' },
+    { id: 'won', label: 'Converted Leads', count: leads.filter(l => l.status === 'won').length, badgeColor: 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900/50' },
     { id: 'lost', label: 'Lost Leads', count: leads.filter(l => l.status === 'lost').length }
   ];
 
@@ -408,19 +412,32 @@ export const CRM: React.FC = () => {
     { id: 'lost', label: 'Lost / Closed', headerColor: 'text-[#64748B]' }
   ];
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Cockpit3DLoader 
+          variant="module"
+          size="lg"
+          text="Loading Customer Relationship Intelligence..."
+          subtitle="Compiling customer records, sales pipeline, and touchpoint timelines"
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Top Header & Section Navigation */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-[#FFF1F2] border border-[#FECDD3] text-[#D62839] text-xs font-semibold mb-2">
+          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-[#D62839] dark:text-rose-400 text-xs font-semibold mb-2">
             <span className="w-2 h-2 rounded-full bg-[#D62839] animate-pulse" />
             <span>HK Sir's Centralized Lead Intelligence Hub</span>
           </div>
-          <h2 className="text-2xl font-extrabold text-[#20242C] tracking-tight">
+          <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
             Centralized Lead Management & Follow-ups
           </h2>
-          <p className="text-sm text-[#667085] mt-0.5">
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
             Unified intake for BNI, KVV, EAF Connect, SEO Website forms and manual sales touchpoints
           </p>
         </div>
@@ -429,7 +446,7 @@ export const CRM: React.FC = () => {
           <button
             onClick={handleRefresh}
             disabled={refreshing}
-            className="p-2.5 rounded-xl bg-white hover:bg-[#FFF1F2] text-[#667085] hover:text-[#D62839] border border-[#E9EAEE] hover:border-[#FECDD3] transition-all shadow-2xs cursor-pointer"
+            className="p-2.5 rounded-xl bg-white dark:bg-[#0D111A] hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-500 dark:text-slate-400 hover:text-[#D62839] border border-slate-200/90 dark:border-white/[0.08] hover:border-rose-200 dark:border-rose-900/60 transition-all shadow-2xs cursor-pointer"
             title="Refresh Live Data"
           >
             <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
@@ -437,7 +454,7 @@ export const CRM: React.FC = () => {
 
           <button
             onClick={() => setIsImportModalOpen(true)}
-            className="px-3.5 py-2 rounded-xl bg-white text-[#20242C] hover:text-[#D62839] border border-[#E9EAEE] hover:border-[#FECDD3] text-xs font-bold transition-all shadow-2xs flex items-center gap-2 cursor-pointer"
+            className="px-3.5 py-2 rounded-xl bg-white dark:bg-[#0D111A] text-slate-900 dark:text-white hover:text-[#D62839] border border-slate-200/90 dark:border-white/[0.08] hover:border-rose-200 dark:border-rose-900/60 text-xs font-bold transition-all shadow-2xs flex items-center gap-2 cursor-pointer"
           >
             <Upload className="w-3.5 h-3.5 text-[#D62839]" />
             <span>Import Leads (CSV)</span>
@@ -457,14 +474,14 @@ export const CRM: React.FC = () => {
       </div>
 
       {/* Primary Module Tabs */}
-      <div className="flex items-center justify-between border-b border-[#E9EAEE] pb-1 gap-2 overflow-x-auto">
+      <div className="flex items-center justify-between border-b border-slate-200/90 dark:border-white/[0.08] pb-1 gap-2 overflow-x-auto">
         <div className="flex items-center gap-2">
           <button
             onClick={() => setActiveTab('leads')}
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'leads'
                 ? 'bg-[#D62839] text-white shadow-xs'
-                : 'bg-white text-[#667085] hover:text-[#20242C] hover:bg-[#FFF1F2]'
+                : 'bg-white dark:bg-[#0D111A] text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-white hover:bg-rose-50 dark:hover:bg-rose-950/40'
             }`}
           >
             <Layers className="w-4 h-4" />
@@ -476,7 +493,7 @@ export const CRM: React.FC = () => {
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'sources'
                 ? 'bg-[#D62839] text-white shadow-xs'
-                : 'bg-white text-[#667085] hover:text-[#20242C] hover:bg-[#FFF1F2]'
+                : 'bg-white dark:bg-[#0D111A] text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-white hover:bg-rose-50 dark:hover:bg-rose-950/40'
             }`}
           >
             <Globe className="w-4 h-4" />
@@ -488,7 +505,7 @@ export const CRM: React.FC = () => {
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
               activeTab === 'customers'
                 ? 'bg-[#D62839] text-white shadow-xs'
-                : 'bg-white text-[#667085] hover:text-[#20242C] hover:bg-[#FFF1F2]'
+                : 'bg-white dark:bg-[#0D111A] text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-white hover:bg-rose-50 dark:hover:bg-rose-950/40'
             }`}
           >
             <Building2 className="w-4 h-4" />
@@ -497,11 +514,11 @@ export const CRM: React.FC = () => {
         </div>
 
         {activeTab === 'leads' && (
-          <div className="hidden sm:flex items-center bg-white border border-[#E9EAEE] p-1 rounded-xl shadow-2xs">
+          <div className="hidden sm:flex items-center bg-white dark:bg-[#0D111A] border border-slate-200/90 dark:border-white/[0.08] p-1 rounded-xl shadow-2xs">
             <button
               onClick={() => setDisplayMode('cards')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all ${
-                displayMode === 'cards' ? 'bg-[#FFF1F2] text-[#D62839] font-bold' : 'text-[#667085]'
+                displayMode === 'cards' ? 'bg-rose-50 dark:bg-rose-950/50 text-[#D62839] dark:text-rose-400 font-bold' : 'text-slate-500 dark:text-slate-400'
               }`}
             >
               List Cards
@@ -509,7 +526,7 @@ export const CRM: React.FC = () => {
             <button
               onClick={() => setDisplayMode('pipeline')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all ${
-                displayMode === 'pipeline' ? 'bg-[#FFF1F2] text-[#D62839] font-bold' : 'text-[#667085]'
+                displayMode === 'pipeline' ? 'bg-rose-50 dark:bg-rose-950/50 text-[#D62839] dark:text-rose-400 font-bold' : 'text-slate-500 dark:text-slate-400'
               }`}
             >
               Pipeline Kanban
@@ -533,13 +550,13 @@ export const CRM: React.FC = () => {
                   onClick={() => setActiveView(tab.id)}
                   className={`px-3 py-1.5 rounded-xl border whitespace-nowrap transition-all duration-180 flex items-center gap-1.5 cursor-pointer ${
                     isActive
-                      ? 'bg-[#FFF1F2] text-[#D62839] border-[#FECDD3] font-bold shadow-2xs'
-                      : 'bg-white text-[#667085] border-[#E9EAEE] hover:border-[#FECDD3] hover:text-[#20242C]'
+                      ? 'bg-rose-50 dark:bg-rose-950/50 text-[#D62839] dark:text-rose-400 border-rose-200 dark:border-rose-900/60 font-bold shadow-2xs'
+                      : 'bg-white dark:bg-[#0D111A] text-slate-500 dark:text-slate-400 border-slate-200/90 dark:border-white/[0.08] hover:border-rose-200 dark:border-rose-900/60 hover:text-slate-900 dark:text-white'
                   }`}
                 >
                   <span>{tab.label}</span>
                   <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full border ${
-                    tab.badgeColor || (isActive ? 'bg-[#D62839] text-white border-[#D62839]' : 'bg-[#F8F9FB] text-[#667085] border-[#E9EAEE]')
+                    tab.badgeColor || (isActive ? 'bg-[#D62839] text-white border-[#D62839]' : 'bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 border-slate-200/90 dark:border-white/[0.08]')
                   }`}>
                     {tab.count}
                   </span>
@@ -549,7 +566,7 @@ export const CRM: React.FC = () => {
           </div>
 
           {/* Search & Source Filter Controls */}
-          <div className="p-4 bg-white rounded-2xl border border-[#E9EAEE] shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="p-4 bg-white dark:bg-[#0D111A] rounded-2xl border border-slate-200/90 dark:border-white/[0.08] shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div className="flex-1 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
               <div className="relative flex-1">
                 <Search className="w-4 h-4 absolute left-3 top-2.5 text-[#94A3B8]" />
@@ -567,7 +584,7 @@ export const CRM: React.FC = () => {
                 <select
                   value={sourceFilter}
                   onChange={(e) => setSourceFilter(e.target.value)}
-                  className="cockpit-input py-2 text-xs w-full cursor-pointer bg-white"
+                  className="cockpit-input py-2 text-xs w-full cursor-pointer bg-white dark:bg-[#0D111A]"
                 >
                   {sourceOptions.map((opt) => (
                     <option key={opt} value={opt}>{opt}</option>
@@ -580,7 +597,7 @@ export const CRM: React.FC = () => {
                 <select
                   value={priorityFilter}
                   onChange={(e) => setPriorityFilter(e.target.value)}
-                  className="cockpit-input py-2 text-xs w-full cursor-pointer bg-white"
+                  className="cockpit-input py-2 text-xs w-full cursor-pointer bg-white dark:bg-[#0D111A]"
                 >
                   <option value="all">All Priorities</option>
                   <option value="urgent">Urgent</option>
@@ -591,7 +608,7 @@ export const CRM: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center justify-between sm:justify-end gap-3 text-xs text-[#667085] font-semibold">
+            <div className="flex items-center justify-between sm:justify-end gap-3 text-xs text-slate-500 dark:text-slate-400 font-semibold">
               <span>Showing {filteredLeads.length} of {leads.length} leads</span>
               {(sourceFilter !== 'all' || activeView !== 'all' || priorityFilter !== 'all' || search) && (
                 <button
@@ -624,18 +641,18 @@ export const CRM: React.FC = () => {
                     key={lead.id}
                     className={`rounded-2xl border p-5 transition-all duration-200 flex flex-col justify-between shadow-xs hover:shadow-md ${
                       isOverdue 
-                        ? 'bg-[#FEF2F2]/60 border-[#FECDD3]' 
+                        ? 'bg-[#FEF2F2]/60 border-rose-200 dark:border-rose-900/60' 
                         : isToday 
                           ? 'bg-[#FFFBEB]/60 border-[#FDE68A]' 
                           : hasNoFollowup 
                             ? 'bg-[#F8FAFC] border-[#E2E8F0]' 
-                            : 'bg-white border-[#E9EAEE] hover:border-[#FECDD3]'
+                            : 'bg-white dark:bg-[#0D111A] border-slate-200/90 dark:border-white/[0.08] hover:border-rose-200 dark:border-rose-900/60'
                     }`}
                   >
                     <div>
                       {/* Top Bar: Source Badge & Priority */}
                       <div className="flex items-center justify-between gap-2 mb-3">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#FFF1F2] text-[#D62839] border border-[#FECDD3]">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 dark:bg-rose-950/40 text-[#D62839] dark:text-rose-400 border border-rose-200 dark:border-rose-900/60">
                           <Globe className="w-3 h-3" />
                           <span>{lead.source || 'General'}</span>
                         </span>
@@ -645,7 +662,7 @@ export const CRM: React.FC = () => {
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#DC2626] text-white">URGENT</span>
                           )}
                           {lead.priority === 'high' && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FEF2F2] text-[#DC2626] border border-[#FECDD3]">HIGH</span>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FEF2F2] text-[#DC2626] border border-rose-200 dark:border-rose-900/60">HIGH</span>
                           )}
                           <span className="text-[11px] font-mono text-[#94A3B8]">#{lead.id}</span>
                         </div>
@@ -653,17 +670,17 @@ export const CRM: React.FC = () => {
 
                       {/* Lead Contact Info */}
                       <div className="cursor-pointer" onClick={() => handleOpenDetail(lead)}>
-                        <h3 className="text-base font-extrabold text-[#20242C] tracking-tight hover:text-[#D62839] transition-colors">
+                        <h3 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight hover:text-[#D62839] transition-colors">
                           {lead.name}
                         </h3>
                         {lead.company && (
-                          <p className="text-xs font-semibold text-[#667085] flex items-center gap-1.5 mt-0.5">
+                          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mt-0.5">
                             <Building2 className="w-3.5 h-3.5 text-[#D62839]" />
                             <span>{lead.company}</span>
                           </p>
                         )}
                         {lead.service_requirement && (
-                          <div className="mt-2.5 p-2 rounded-xl bg-white border border-[#E9EAEE] text-xs text-[#20242C]">
+                          <div className="mt-2.5 p-2 rounded-xl bg-white dark:bg-[#0D111A] border border-slate-200/90 dark:border-white/[0.08] text-xs text-slate-900 dark:text-white">
                             <span className="font-bold text-[#D62839]">Requirement: </span>
                             <span>{lead.service_requirement}</span>
                           </div>
@@ -671,7 +688,7 @@ export const CRM: React.FC = () => {
                       </div>
 
                       {/* Follow-up Status Strip */}
-                      <div className="mt-3.5 pt-3 border-t border-[#E9EAEE] space-y-1.5 text-xs">
+                      <div className="mt-3.5 pt-3 border-t border-slate-200/90 dark:border-white/[0.08] space-y-1.5 text-xs">
                         {isOverdue && (
                           <div className="flex items-center gap-1.5 text-[#DC2626] font-bold">
                             <AlertTriangle className="w-3.5 h-3.5" />
@@ -685,7 +702,7 @@ export const CRM: React.FC = () => {
                           </div>
                         )}
                         {!isOverdue && !isToday && lead.next_followup_date && !isWon && !isLost && (
-                          <div className="flex items-center gap-1.5 text-[#667085]">
+                          <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
                             <Calendar className="w-3.5 h-3.5 text-[#D62839]" />
                             <span>Next: {new Date(lead.next_followup_date).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
                           </div>
@@ -706,12 +723,12 @@ export const CRM: React.FC = () => {
                     </div>
 
                     {/* Bottom Action Footer */}
-                    <div className="mt-4 pt-3.5 border-t border-[#E9EAEE] flex items-center justify-between gap-2">
+                    <div className="mt-4 pt-3.5 border-t border-slate-200/90 dark:border-white/[0.08] flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1">
                         {lead.phone && (
                           <a
                             href={`tel:${lead.phone}`}
-                            className="p-2 rounded-xl bg-white hover:bg-[#FFF1F2] text-[#667085] hover:text-[#D62839] border border-[#E9EAEE] hover:border-[#FECDD3] transition-all cursor-pointer shadow-2xs"
+                            className="p-2 rounded-xl bg-white dark:bg-[#0D111A] hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-500 dark:text-slate-400 hover:text-[#D62839] border border-slate-200/90 dark:border-white/[0.08] hover:border-rose-200 dark:border-rose-900/60 transition-all cursor-pointer shadow-2xs"
                             title={`Call ${lead.name} (${lead.phone})`}
                           >
                             <PhoneCall className="w-3.5 h-3.5 text-[#059669]" />
@@ -722,7 +739,7 @@ export const CRM: React.FC = () => {
                             href={`https://wa.me/${lead.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hello ${lead.name}, connecting with you from My Cockpit regarding your requirement for ${lead.service_requirement || 'our solutions'}.`)}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="p-2 rounded-xl bg-white hover:bg-[#FFF1F2] text-[#667085] hover:text-[#D62839] border border-[#E9EAEE] hover:border-[#FECDD3] transition-all cursor-pointer shadow-2xs"
+                            className="p-2 rounded-xl bg-white dark:bg-[#0D111A] hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-500 dark:text-slate-400 hover:text-[#D62839] border border-slate-200/90 dark:border-white/[0.08] hover:border-rose-200 dark:border-rose-900/60 transition-all cursor-pointer shadow-2xs"
                             title="Chat on WhatsApp"
                           >
                             <MessageSquare className="w-3.5 h-3.5 text-[#25D366]" />
@@ -731,7 +748,7 @@ export const CRM: React.FC = () => {
                         {lead.email && (
                           <a
                             href={`mailto:${lead.email}?subject=${encodeURIComponent(`Inquiry Follow-up: ${lead.service_requirement || 'My Cockpit'}`)}`}
-                            className="p-2 rounded-xl bg-white hover:bg-[#FFF1F2] text-[#667085] hover:text-[#D62839] border border-[#E9EAEE] hover:border-[#FECDD3] transition-all cursor-pointer shadow-2xs"
+                            className="p-2 rounded-xl bg-white dark:bg-[#0D111A] hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-500 dark:text-slate-400 hover:text-[#D62839] border border-slate-200/90 dark:border-white/[0.08] hover:border-rose-200 dark:border-rose-900/60 transition-all cursor-pointer shadow-2xs"
                             title={`Email ${lead.email}`}
                           >
                             <Mail className="w-3.5 h-3.5 text-[#3B82F6]" />
@@ -742,13 +759,13 @@ export const CRM: React.FC = () => {
                       <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => handleOpenActivityModal(lead)}
-                          className="px-2.5 py-1.5 rounded-lg bg-[#FFF1F2] hover:bg-[#D62839] text-[#D62839] hover:text-white border border-[#FECDD3] text-[11px] font-bold transition-all cursor-pointer"
+                          className="px-2.5 py-1.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 hover:bg-[#D62839] text-[#D62839] dark:text-rose-400 hover:text-white border border-rose-200 dark:border-rose-900/60 text-[11px] font-bold transition-all cursor-pointer"
                         >
                           Log Activity
                         </button>
                         <button
                           onClick={() => handleOpenDetail(lead)}
-                          className="p-1.5 rounded-lg text-[#667085] hover:text-[#D62839] hover:bg-[#FFF1F2] transition-all cursor-pointer"
+                          className="p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-[#D62839] hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-all cursor-pointer"
                           title="View Full Details"
                         >
                           <ChevronRight className="w-4 h-4" />
@@ -760,12 +777,12 @@ export const CRM: React.FC = () => {
               })}
 
               {filteredLeads.length === 0 && (
-                <div className="col-span-full py-16 text-center bg-white rounded-2xl border border-dashed border-[#E9EAEE] p-6 space-y-3">
-                  <div className="w-12 h-12 rounded-2xl bg-[#FFF1F2] text-[#D62839] flex items-center justify-center mx-auto">
+                <div className="col-span-full py-16 text-center bg-white dark:bg-[#0D111A] rounded-2xl border border-dashed border-slate-200/90 dark:border-white/[0.08] p-6 space-y-3">
+                  <div className="w-12 h-12 rounded-2xl bg-rose-50 dark:bg-rose-950/40 text-[#D62839] dark:text-rose-400 flex items-center justify-center mx-auto">
                     <Filter className="w-6 h-6" />
                   </div>
-                  <h4 className="text-base font-bold text-[#20242C]">No leads match your current filter view</h4>
-                  <p className="text-xs text-[#667085] max-w-sm mx-auto">
+                  <h4 className="text-base font-bold text-slate-900 dark:text-white">No leads match your current filter view</h4>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
                     Try switching tabs above, clearing search terms, or add a new lead from BNI, KVV, EAF, or manual entry.
                   </p>
                   <button
@@ -791,13 +808,13 @@ export const CRM: React.FC = () => {
                 const stageTotal = stageLeads.reduce((sum, l) => sum + Number(l.value), 0);
 
                 return (
-                  <div key={stage.id} className="min-w-[240px] bg-white rounded-2xl border border-[#E9EAEE] p-3.5 flex flex-col shadow-xs">
-                    <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-[#E9EAEE]">
+                  <div key={stage.id} className="min-w-[240px] bg-white dark:bg-[#0D111A] rounded-2xl border border-slate-200/90 dark:border-white/[0.08] p-3.5 flex flex-col shadow-xs">
+                    <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-slate-200/90 dark:border-white/[0.08]">
                       <div>
                         <h4 className={`text-xs font-bold uppercase tracking-wider ${stage.headerColor}`}>{stage.label}</h4>
-                        <p className="text-[11px] font-mono text-[#20242C] font-bold mt-0.5">{formatCurrency(stageTotal)}</p>
+                        <p className="text-[11px] font-mono text-slate-900 dark:text-white font-bold mt-0.5">{formatCurrency(stageTotal)}</p>
                       </div>
-                      <span className="w-5 h-5 rounded-full bg-[#FFF1F2] text-[10px] font-bold text-[#D62839] border border-[#FECDD3] flex items-center justify-center">
+                      <span className="w-5 h-5 rounded-full bg-rose-50 dark:bg-rose-950/40 text-[10px] font-bold text-[#D62839] dark:text-rose-400 border border-rose-200 dark:border-rose-900/60 flex items-center justify-center">
                         {stageLeads.length}
                       </span>
                     </div>
@@ -806,23 +823,23 @@ export const CRM: React.FC = () => {
                       {stageLeads.map((lead) => (
                         <div 
                           key={lead.id} 
-                          className="p-3 rounded-xl bg-[#F8F9FB] border border-[#E9EAEE] hover:border-[#FECDD3] hover:shadow-xs transition-all cursor-pointer"
+                          className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/90 dark:border-white/[0.08] hover:border-rose-200 dark:border-rose-900/60 hover:shadow-xs transition-all cursor-pointer"
                           onClick={() => handleOpenDetail(lead)}
                         >
                           <div className="flex items-center justify-between text-[10px] font-semibold text-[#D62839] mb-1">
                             <span>{lead.source}</span>
                             <span className="font-mono text-[#94A3B8]">#{lead.id}</span>
                           </div>
-                          <h5 className="text-xs font-bold text-[#20242C] tracking-tight">{lead.name}</h5>
-                          {lead.company && <p className="text-[11px] text-[#667085] truncate">{lead.company}</p>}
+                          <h5 className="text-xs font-bold text-slate-900 dark:text-white tracking-tight">{lead.name}</h5>
+                          {lead.company && <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{lead.company}</p>}
                           
-                          <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-[#E9EAEE] text-[11px]">
+                          <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-slate-200/90 dark:border-white/[0.08] text-[11px]">
                             <span className="font-mono font-bold text-[#059669]">{formatCurrency(Number(lead.value))}</span>
                             <select
                               value={lead.status}
                               onClick={(e) => e.stopPropagation()}
                               onChange={(e) => handleLeadStatusChange(lead.id, e.target.value)}
-                              className="bg-white text-[10px] text-[#20242C] border border-[#E9EAEE] rounded-md px-1.5 py-0.5 focus:outline-none focus:border-[#D62839] cursor-pointer"
+                              className="bg-white dark:bg-[#0D111A] text-[10px] text-slate-900 dark:text-white border border-slate-200/90 dark:border-white/[0.08] rounded-md px-1.5 py-0.5 focus:outline-none focus:border-[#D62839] cursor-pointer"
                             >
                               <option value="new">New</option>
                               <option value="contacted">Contacted</option>
@@ -835,7 +852,7 @@ export const CRM: React.FC = () => {
                         </div>
                       ))}
                       {stageLeads.length === 0 && (
-                        <div className="text-center py-6 text-[10px] text-[#94A3B8] border border-dashed border-[#E9EAEE] rounded-xl bg-[#FAFAFA]">
+                        <div className="text-center py-6 text-[10px] text-[#94A3B8] border border-dashed border-slate-200/90 dark:border-white/[0.08] rounded-xl bg-slate-50 dark:bg-slate-900/40">
                           No leads in this stage
                         </div>
                       )}
@@ -853,11 +870,11 @@ export const CRM: React.FC = () => {
       {/* ============================================================== */}
       {activeTab === 'sources' && (
         <div className="space-y-6">
-          <div className="p-6 rounded-2xl bg-white border border-[#E9EAEE] shadow-xs">
-            <h3 className="text-lg font-extrabold text-[#20242C] tracking-tight">
+          <div className="p-6 rounded-2xl bg-white dark:bg-[#0D111A] border border-slate-200/90 dark:border-white/[0.08] shadow-xs">
+            <h3 className="text-lg font-extrabold text-slate-900 dark:text-white tracking-tight">
               External Lead Sources & Integration Architecture
             </h3>
-            <p className="text-xs text-[#667085] mt-1 max-w-2xl leading-relaxed">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-2xl leading-relaxed">
               In accordance with enterprise CRM security guidelines, each lead channel provides authorized integration methods: direct webhook intake, batch CSV importer with duplicate detection, and instant launchpads.
             </p>
           </div>
@@ -868,47 +885,47 @@ export const CRM: React.FC = () => {
               const isCsv = src.status === 'csv_import_available';
 
               return (
-                <div key={src.id} className="p-5 rounded-2xl bg-white border border-[#E9EAEE] shadow-xs hover:border-[#FECDD3] transition-all flex flex-col justify-between">
+                <div key={src.id} className="p-5 rounded-2xl bg-white dark:bg-[#0D111A] border border-slate-200/90 dark:border-white/[0.08] shadow-xs hover:border-rose-200 dark:border-rose-900/60 transition-all flex flex-col justify-between">
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <div className="w-10 h-10 rounded-xl bg-[#FFF1F2] text-[#D62839] flex items-center justify-center font-bold">
+                      <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-[#D62839] dark:text-rose-400 flex items-center justify-center font-bold">
                         <Globe className="w-5 h-5" />
                       </div>
                       <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${
                         isConnected 
-                          ? 'bg-[#ECFDF5] text-[#059669] border-[#A7F3D0]' 
-                          : 'bg-[#FFF1F2] text-[#D62839] border-[#FECDD3]'
+                          ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900/50' 
+                          : 'bg-rose-50 dark:bg-rose-950/40 text-[#D62839] dark:text-rose-400 border-rose-200 dark:border-rose-900/60'
                       }`}>
                         {isConnected ? 'Connected & Active' : 'CSV Import Ready'}
                       </span>
                     </div>
 
                     <div>
-                      <h4 className="text-base font-extrabold text-[#20242C]">{src.name}</h4>
-                      <p className="text-xs text-[#667085] mt-0.5">Category: {src.category}</p>
+                      <h4 className="text-base font-extrabold text-slate-900 dark:text-white">{src.name}</h4>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Category: {src.category}</p>
                     </div>
 
-                    <div className="p-3 rounded-xl bg-[#F8F9FB] border border-[#E9EAEE] space-y-1 text-xs">
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/90 dark:border-white/[0.08] space-y-1 text-xs">
                       <div className="flex items-center justify-between">
-                        <span className="text-[#667085]">Total Leads Captured:</span>
-                        <span className="font-mono font-bold text-[#20242C]">{src.total_leads_count || 0}</span>
+                        <span className="text-slate-500 dark:text-slate-400">Total Leads Captured:</span>
+                        <span className="font-mono font-bold text-slate-900 dark:text-white">{src.total_leads_count || 0}</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-[#667085]">Converted to Won:</span>
+                        <span className="text-slate-500 dark:text-slate-400">Converted to Won:</span>
                         <span className="font-mono font-bold text-[#059669]">{src.converted_leads_count || 0}</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-[#667085]">Sync Count:</span>
-                        <span className="font-mono text-[#667085]">{src.sync_count || 0} batches</span>
+                        <span className="text-slate-500 dark:text-slate-400">Sync Count:</span>
+                        <span className="font-mono text-slate-500 dark:text-slate-400">{src.sync_count || 0} batches</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-[#E9EAEE] space-y-2">
+                  <div className="mt-4 pt-3 border-t border-slate-200/90 dark:border-white/[0.08] space-y-2">
                     {src.source_key === 'website_seo' ? (
                       <button
                         onClick={() => handleCopyWebhookUrl(src.webhook_secret || '')}
-                        className="w-full py-2 px-3 rounded-xl bg-[#FFF1F2] text-[#D62839] hover:bg-[#D62839] hover:text-white border border-[#FECDD3] text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                        className="w-full py-2 px-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-[#D62839] dark:text-rose-400 hover:bg-[#D62839] hover:text-white border border-rose-200 dark:border-rose-900/60 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                       >
                         <Copy className="w-3.5 h-3.5" />
                         <span>{copiedToken ? 'Webhook URL Copied!' : 'Copy Form Webhook URL'}</span>
@@ -919,7 +936,7 @@ export const CRM: React.FC = () => {
                           setImportSourceKey(src.source_key);
                           setIsImportModalOpen(true);
                         }}
-                        className="w-full py-2 px-3 rounded-xl bg-[#FFF1F2] text-[#D62839] hover:bg-[#D62839] hover:text-white border border-[#FECDD3] text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                        className="w-full py-2 px-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-[#D62839] dark:text-rose-400 hover:bg-[#D62839] hover:text-white border border-rose-200 dark:border-rose-900/60 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                       >
                         <Upload className="w-3.5 h-3.5" />
                         <span>Import {src.name} Leads</span>
@@ -937,9 +954,9 @@ export const CRM: React.FC = () => {
       {/* TAB 3: CUSTOMERS DIRECTORY */}
       {/* ============================================================== */}
       {activeTab === 'customers' && (
-        <div className="rounded-2xl bg-white border border-[#E9EAEE] overflow-hidden shadow-xs">
-          <div className="p-4 border-b border-[#E9EAEE] flex items-center justify-between">
-            <h3 className="text-base font-extrabold text-[#20242C]">Client Organization Directory</h3>
+        <div className="rounded-2xl bg-white dark:bg-[#0D111A] border border-slate-200/90 dark:border-white/[0.08] overflow-hidden shadow-xs">
+          <div className="p-4 border-b border-slate-200/90 dark:border-white/[0.08] flex items-center justify-between">
+            <h3 className="text-base font-extrabold text-slate-900 dark:text-white">Client Organization Directory</h3>
             <button
               onClick={() => setIsCustomerModalOpen(true)}
               className="cockpit-btn-primary"
@@ -952,7 +969,7 @@ export const CRM: React.FC = () => {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="bg-[#F8F9FB] border-b border-[#E9EAEE] text-[#667085] font-bold">
+                <tr className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200/90 dark:border-white/[0.08] text-slate-500 dark:text-slate-400 font-bold">
                   <th className="py-3 px-4">Customer / Organization</th>
                   <th className="py-3 px-4">Contact Details</th>
                   <th className="py-3 px-4">City / Region</th>
@@ -963,17 +980,17 @@ export const CRM: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-[#E9EAEE]">
                 {customers.map((c) => (
-                  <tr key={c.id} className="hover:bg-[#FFF1F2]/20 transition-colors">
+                  <tr key={c.id} className="hover:bg-rose-50 dark:hover:bg-rose-950/40/20 transition-colors">
                     <td className="py-3.5 px-4">
-                      <div className="font-bold text-[#20242C] text-sm">{c.name}</div>
-                      {c.company && <div className="text-[#667085] text-[11px]">{c.company}</div>}
+                      <div className="font-bold text-slate-900 dark:text-white text-sm">{c.name}</div>
+                      {c.company && <div className="text-slate-500 dark:text-slate-400 text-[11px]">{c.company}</div>}
                     </td>
                     <td className="py-3.5 px-4 space-y-0.5">
-                      {c.phone && <div className="font-mono text-[#20242C]">{c.phone}</div>}
-                      {c.email && <div className="text-[#667085]">{c.email}</div>}
+                      {c.phone && <div className="font-mono text-slate-900 dark:text-white">{c.phone}</div>}
+                      {c.email && <div className="text-slate-500 dark:text-slate-400">{c.email}</div>}
                     </td>
-                    <td className="py-3.5 px-4 text-[#667085]">{c.city || 'India'}</td>
-                    <td className="py-3.5 px-4 font-mono font-bold text-[#20242C]">
+                    <td className="py-3.5 px-4 text-slate-500 dark:text-slate-400">{c.city || 'India'}</td>
+                    <td className="py-3.5 px-4 font-mono font-bold text-slate-900 dark:text-white">
                       {formatCurrency(Number(c.total_invoiced || 0))}
                     </td>
                     <td className="py-3.5 px-4 font-mono font-bold text-[#DC2626]">
@@ -1001,13 +1018,13 @@ export const CRM: React.FC = () => {
       >
         <form onSubmit={handleCreateLead} className="space-y-4">
           {duplicateWarning && (
-            <div className="p-3.5 rounded-xl bg-[#FEF2F2] border border-[#FECDD3] text-[#DC2626] text-xs space-y-2">
+            <div className="p-3.5 rounded-xl bg-[#FEF2F2] border border-rose-200 dark:border-rose-900/60 text-[#DC2626] text-xs space-y-2">
               <div className="flex items-center gap-2 font-bold">
                 <AlertTriangle className="w-4 h-4" />
                 <span>Duplicate Lead Detection Alert</span>
               </div>
               <p>{duplicateWarning}</p>
-              <label className="flex items-center gap-2 pt-1 font-semibold text-[#20242C] cursor-pointer">
+              <label className="flex items-center gap-2 pt-1 font-semibold text-slate-900 dark:text-white cursor-pointer">
                 <input
                   type="checkbox"
                   checked={forceDuplicate}
@@ -1021,7 +1038,7 @@ export const CRM: React.FC = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
-              <label className="block text-xs font-bold text-[#20242C] mb-1">
+              <label className="block text-xs font-bold text-slate-900 dark:text-white mb-1">
                 Full Name / Contact Person *
               </label>
               <input
@@ -1035,7 +1052,7 @@ export const CRM: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-[#20242C] mb-1">
+              <label className="block text-xs font-bold text-slate-900 dark:text-white mb-1">
                 Company / Organization
               </label>
               <input
@@ -1048,7 +1065,7 @@ export const CRM: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-[#20242C] mb-1">
+              <label className="block text-xs font-bold text-slate-900 dark:text-white mb-1">
                 Phone Number
               </label>
               <input
@@ -1061,7 +1078,7 @@ export const CRM: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-[#20242C] mb-1">
+              <label className="block text-xs font-bold text-slate-900 dark:text-white mb-1">
                 Email Address
               </label>
               <input
@@ -1074,13 +1091,13 @@ export const CRM: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-[#20242C] mb-1">
+              <label className="block text-xs font-bold text-slate-900 dark:text-white mb-1">
                 Lead Source *
               </label>
               <select
                 value={leadSource}
                 onChange={(e) => setLeadSource(e.target.value)}
-                className="cockpit-input w-full text-xs bg-white cursor-pointer"
+                className="cockpit-input w-full text-xs bg-white dark:bg-[#0D111A] cursor-pointer"
               >
                 <option value="BNI Connect">BNI Connect</option>
                 <option value="KVV Leads">KVV Leads</option>
@@ -1093,7 +1110,7 @@ export const CRM: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-[#20242C] mb-1">
+              <label className="block text-xs font-bold text-slate-900 dark:text-white mb-1">
                 Estimated Value (₹)
               </label>
               <input
@@ -1105,7 +1122,7 @@ export const CRM: React.FC = () => {
             </div>
 
             <div className="sm:col-span-2">
-              <label className="block text-xs font-bold text-[#20242C] mb-1">
+              <label className="block text-xs font-bold text-slate-900 dark:text-white mb-1">
                 Service / Requirement Details *
               </label>
               <input
@@ -1118,13 +1135,13 @@ export const CRM: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-[#20242C] mb-1">
+              <label className="block text-xs font-bold text-slate-900 dark:text-white mb-1">
                 Assigned Employee / Team Member
               </label>
               <select
                 value={leadAssignedTo}
                 onChange={(e) => setLeadAssignedTo(e.target.value)}
-                className="cockpit-input w-full text-xs bg-white cursor-pointer"
+                className="cockpit-input w-full text-xs bg-white dark:bg-[#0D111A] cursor-pointer"
               >
                 <option value="">Unassigned</option>
                 {employees.map((emp) => (
@@ -1136,13 +1153,13 @@ export const CRM: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-[#20242C] mb-1">
+              <label className="block text-xs font-bold text-slate-900 dark:text-white mb-1">
                 Priority
               </label>
               <select
                 value={leadPriority}
                 onChange={(e) => setLeadPriority(e.target.value as any)}
-                className="cockpit-input w-full text-xs bg-white cursor-pointer"
+                className="cockpit-input w-full text-xs bg-white dark:bg-[#0D111A] cursor-pointer"
               >
                 <option value="medium">Medium</option>
                 <option value="high">High</option>
@@ -1152,7 +1169,7 @@ export const CRM: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-[#20242C] mb-1">
+              <label className="block text-xs font-bold text-slate-900 dark:text-white mb-1">
                 Initial Follow-up Date & Time
               </label>
               <input
@@ -1164,13 +1181,13 @@ export const CRM: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-[#20242C] mb-1">
+              <label className="block text-xs font-bold text-slate-900 dark:text-white mb-1">
                 Follow-up Contact Method
               </label>
               <select
                 value={leadContactMethod}
                 onChange={(e) => setLeadContactMethod(e.target.value as any)}
-                className="cockpit-input w-full text-xs bg-white cursor-pointer"
+                className="cockpit-input w-full text-xs bg-white dark:bg-[#0D111A] cursor-pointer"
               >
                 <option value="call">Phone Call</option>
                 <option value="whatsapp">WhatsApp Message</option>
@@ -1180,7 +1197,7 @@ export const CRM: React.FC = () => {
             </div>
 
             <div className="sm:col-span-2">
-              <label className="block text-xs font-bold text-[#20242C] mb-1">
+              <label className="block text-xs font-bold text-slate-900 dark:text-white mb-1">
                 Notes & Background Information
               </label>
               <textarea
@@ -1193,11 +1210,11 @@ export const CRM: React.FC = () => {
             </div>
           </div>
 
-          <div className="pt-3 border-t border-[#E9EAEE] flex items-center justify-end gap-2.5">
+          <div className="pt-3 border-t border-slate-200/90 dark:border-white/[0.08] flex items-center justify-end gap-2.5">
             <button
               type="button"
               onClick={() => setIsLeadModalOpen(false)}
-              className="px-4 py-2 rounded-xl border border-[#E9EAEE] text-xs font-bold text-[#667085] hover:bg-[#F8F9FB] cursor-pointer"
+              className="px-4 py-2 rounded-xl border border-slate-200/90 dark:border-white/[0.08] text-xs font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:bg-slate-900/50 cursor-pointer"
             >
               Cancel
             </button>
@@ -1221,7 +1238,7 @@ export const CRM: React.FC = () => {
         maxWidth="max-w-2xl"
       >
         <div className="space-y-4">
-          <p className="text-xs text-[#667085]">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
             Import business leads from <strong>BNI Connect</strong>, <strong>KVV</strong>, <strong>EAF Connect</strong>, or Website exports. Duplicate detection prevents accidental double-entries.
           </p>
 
@@ -1229,7 +1246,7 @@ export const CRM: React.FC = () => {
             <div className={`p-3.5 rounded-xl text-xs font-semibold ${
               importStatusMsg.type === 'success' 
                 ? 'bg-[#ECFDF5] text-[#059669] border border-[#A7F3D0]' 
-                : 'bg-[#FEF2F2] text-[#DC2626] border border-[#FECDD3]'
+                : 'bg-[#FEF2F2] text-[#DC2626] border border-rose-200 dark:border-rose-900/60'
             }`}>
               {importStatusMsg.text}
             </div>
@@ -1237,13 +1254,13 @@ export const CRM: React.FC = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
-              <label className="block text-xs font-bold text-[#20242C] mb-1">
+              <label className="block text-xs font-bold text-slate-900 dark:text-white mb-1">
                 Lead Source Origin *
               </label>
               <select
                 value={importSourceKey}
                 onChange={(e) => setImportSourceKey(e.target.value)}
-                className="cockpit-input w-full text-xs bg-white cursor-pointer"
+                className="cockpit-input w-full text-xs bg-white dark:bg-[#0D111A] cursor-pointer"
               >
                 <option value="bni">BNI Connect Export</option>
                 <option value="kvv">KVV Leads Portal</option>
@@ -1254,13 +1271,13 @@ export const CRM: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-[#20242C] mb-1">
+              <label className="block text-xs font-bold text-slate-900 dark:text-white mb-1">
                 Duplicate Handling Strategy
               </label>
               <select
                 value={importDuplicateStrategy}
                 onChange={(e) => setImportDuplicateStrategy(e.target.value as any)}
-                className="cockpit-input w-full text-xs bg-white cursor-pointer"
+                className="cockpit-input w-full text-xs bg-white dark:bg-[#0D111A] cursor-pointer"
               >
                 <option value="skip">Skip duplicates (Safe & Recommended)</option>
                 <option value="update">Update existing matching records</option>
@@ -1270,7 +1287,7 @@ export const CRM: React.FC = () => {
 
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="block text-xs font-bold text-[#20242C]">
+              <label className="block text-xs font-bold text-slate-900 dark:text-white">
                 Paste CSV Data with Headers
               </label>
               <button
@@ -1296,11 +1313,11 @@ export const CRM: React.FC = () => {
             />
           </div>
 
-          <div className="pt-3 border-t border-[#E9EAEE] flex items-center justify-end gap-2.5">
+          <div className="pt-3 border-t border-slate-200/90 dark:border-white/[0.08] flex items-center justify-end gap-2.5">
             <button
               type="button"
               onClick={() => setIsImportModalOpen(false)}
-              className="px-4 py-2 rounded-xl border border-[#E9EAEE] text-xs font-bold text-[#667085] hover:bg-[#F8F9FB] cursor-pointer"
+              className="px-4 py-2 rounded-xl border border-slate-200/90 dark:border-white/[0.08] text-xs font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:bg-slate-900/50 cursor-pointer"
             >
               Close
             </button>
@@ -1328,7 +1345,7 @@ export const CRM: React.FC = () => {
         <form onSubmit={handleLogActivity} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
-              <label className="block text-xs font-bold text-[#20242C] mb-1">
+              <label className="block text-xs font-bold text-slate-900 dark:text-white mb-1">
                 Touchpoint Type *
               </label>
               <select
@@ -1338,7 +1355,7 @@ export const CRM: React.FC = () => {
                   setActType(val);
                   setActTitle(`${val.charAt(0).toUpperCase() + val.slice(1)} with ${selectedLead?.name || 'Lead'}`);
                 }}
-                className="cockpit-input w-full text-xs bg-white cursor-pointer"
+                className="cockpit-input w-full text-xs bg-white dark:bg-[#0D111A] cursor-pointer"
               >
                 <option value="call">Phone Call</option>
                 <option value="whatsapp">WhatsApp Message</option>
@@ -1349,7 +1366,7 @@ export const CRM: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-[#20242C] mb-1">
+              <label className="block text-xs font-bold text-slate-900 dark:text-white mb-1">
                 Activity Title *
               </label>
               <input
@@ -1362,7 +1379,7 @@ export const CRM: React.FC = () => {
             </div>
 
             <div className="sm:col-span-2">
-              <label className="block text-xs font-bold text-[#20242C] mb-1">
+              <label className="block text-xs font-bold text-slate-900 dark:text-white mb-1">
                 Outcome / Result of this Interaction *
               </label>
               <input
@@ -1376,7 +1393,7 @@ export const CRM: React.FC = () => {
             </div>
 
             <div className="sm:col-span-2">
-              <label className="block text-xs font-bold text-[#20242C] mb-1">
+              <label className="block text-xs font-bold text-slate-900 dark:text-white mb-1">
                 Detailed Discussion Notes
               </label>
               <textarea
@@ -1389,7 +1406,7 @@ export const CRM: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-[#20242C] mb-1">
+              <label className="block text-xs font-bold text-slate-900 dark:text-white mb-1">
                 Next Follow-up Date & Time
               </label>
               <input
@@ -1401,13 +1418,13 @@ export const CRM: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-[#20242C] mb-1">
+              <label className="block text-xs font-bold text-slate-900 dark:text-white mb-1">
                 Next Contact Method
               </label>
               <select
                 value={actNextMethod}
                 onChange={(e) => setActNextMethod(e.target.value as any)}
-                className="cockpit-input w-full text-xs bg-white cursor-pointer"
+                className="cockpit-input w-full text-xs bg-white dark:bg-[#0D111A] cursor-pointer"
               >
                 <option value="call">Phone Call</option>
                 <option value="whatsapp">WhatsApp Message</option>
@@ -1417,11 +1434,11 @@ export const CRM: React.FC = () => {
             </div>
           </div>
 
-          <div className="pt-3 border-t border-[#E9EAEE] flex items-center justify-end gap-2.5">
+          <div className="pt-3 border-t border-slate-200/90 dark:border-white/[0.08] flex items-center justify-end gap-2.5">
             <button
               type="button"
               onClick={() => setIsActivityModalOpen(false)}
-              className="px-4 py-2 rounded-xl border border-[#E9EAEE] text-xs font-bold text-[#667085] hover:bg-[#F8F9FB] cursor-pointer"
+              className="px-4 py-2 rounded-xl border border-slate-200/90 dark:border-white/[0.08] text-xs font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:bg-slate-900/50 cursor-pointer"
             >
               Cancel
             </button>
@@ -1436,27 +1453,44 @@ export const CRM: React.FC = () => {
       </Modal>
 
       {/* ============================================================== */}
-      {/* DRAWER / MODAL 4: DETAILED LEAD TIMELINE & AUDIT HISTORY */}
+      {/* DRAWER: DETAILED LEAD TIMELINE & AUDIT HISTORY */}
       {/* ============================================================== */}
       {selectedLead && (
-        <Modal
+        <SlideOverDrawer
           isOpen={isDetailDrawerOpen}
           onClose={() => setIsDetailDrawerOpen(false)}
-          title={`Lead Profile: ${selectedLead.name}`}
-          maxWidth="max-w-2xl"
+          title={selectedLead.name}
+          subtitle={selectedLead.company || 'Individual Account'}
+          badge={
+            <Badge variant="red" className="text-[10px]">
+              {selectedLead.source}
+            </Badge>
+          }
+          maxWidth="max-w-xl"
+          footer={
+            <div className="flex items-center justify-between w-full">
+              <span className="text-xs text-slate-500 font-mono">Deal Est: {formatCurrency(Number(selectedLead.value))}</span>
+              <button
+                onClick={() => setIsDetailDrawerOpen(false)}
+                className="cockpit-btn-secondary py-1.5 px-4 text-xs font-semibold"
+              >
+                Done
+              </button>
+            </div>
+          }
         >
           <div className="space-y-5">
             {/* Header Snapshot */}
-            <div className="p-4 rounded-2xl bg-[#F8F9FB] border border-[#E9EAEE] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/90 dark:border-white/[0.08] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 className="text-lg font-extrabold text-[#20242C]">{selectedLead.name}</h3>
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#FFF1F2] text-[#D62839] border border-[#FECDD3]">
+                  <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">{selectedLead.name}</h3>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 dark:bg-rose-950/40 text-[#D62839] dark:text-rose-400 border border-rose-200 dark:border-rose-900/60">
                     {selectedLead.source}
                   </span>
                 </div>
                 {selectedLead.company && (
-                  <p className="text-xs text-[#667085] font-semibold mt-0.5">{selectedLead.company}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold mt-0.5">{selectedLead.company}</p>
                 )}
               </div>
 
@@ -1464,7 +1498,7 @@ export const CRM: React.FC = () => {
                 {selectedLead.phone && (
                   <a
                     href={`tel:${selectedLead.phone}`}
-                    className="p-2 rounded-xl bg-white hover:bg-[#FFF1F2] text-[#059669] border border-[#E9EAEE] transition-all cursor-pointer shadow-2xs"
+                    className="p-2 rounded-xl bg-white dark:bg-[#0D111A] hover:bg-rose-50 dark:hover:bg-rose-950/40 text-[#059669] border border-slate-200/90 dark:border-white/[0.08] transition-all cursor-pointer shadow-2xs"
                     title="Call Contact"
                   >
                     <PhoneCall className="w-4 h-4" />
@@ -1472,10 +1506,10 @@ export const CRM: React.FC = () => {
                 )}
                 {selectedLead.phone && (
                   <a
-                    href={`https://wa.me/${selectedLead.phone.replace(/[^0-9]/g, '')}`}
+                    href={createWhatsAppUrl(selectedLead.phone, `Hello ${selectedLead.name}, connecting from My Cockpit regarding your project.`)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="p-2 rounded-xl bg-white hover:bg-[#FFF1F2] text-[#25D366] border border-[#E9EAEE] transition-all cursor-pointer shadow-2xs"
+                    className="p-2 rounded-xl bg-white dark:bg-[#0D111A] hover:bg-rose-50 dark:hover:bg-rose-950/40 text-[#25D366] border border-slate-200/90 dark:border-white/[0.08] transition-all cursor-pointer shadow-2xs"
                     title="Chat on WhatsApp"
                   >
                     <MessageSquare className="w-4 h-4" />
@@ -1484,7 +1518,7 @@ export const CRM: React.FC = () => {
                 {selectedLead.email && (
                   <a
                     href={`mailto:${selectedLead.email}`}
-                    className="p-2 rounded-xl bg-white hover:bg-[#FFF1F2] text-[#3B82F6] border border-[#E9EAEE] transition-all cursor-pointer shadow-2xs"
+                    className="p-2 rounded-xl bg-white dark:bg-[#0D111A] hover:bg-rose-50 dark:hover:bg-rose-950/40 text-[#3B82F6] border border-slate-200/90 dark:border-white/[0.08] transition-all cursor-pointer shadow-2xs"
                     title="Send Email"
                   >
                     <Mail className="w-4 h-4" />
@@ -1495,34 +1529,34 @@ export const CRM: React.FC = () => {
 
             {/* Core Details Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-              <div className="p-3 rounded-xl border border-[#E9EAEE] bg-white">
-                <span className="text-[#667085]">Value Estimate:</span>
+              <div className="p-3 rounded-xl border border-slate-200/90 dark:border-white/[0.08] bg-white dark:bg-[#0D111A]">
+                <span className="text-slate-500 dark:text-slate-400">Value Estimate:</span>
                 <p className="font-mono font-bold text-[#059669] text-sm mt-0.5">{formatCurrency(Number(selectedLead.value))}</p>
               </div>
 
-              <div className="p-3 rounded-xl border border-[#E9EAEE] bg-white">
-                <span className="text-[#667085]">Pipeline Status:</span>
-                <p className="font-bold text-[#20242C] uppercase text-xs mt-0.5">{selectedLead.status}</p>
+              <div className="p-3 rounded-xl border border-slate-200/90 dark:border-white/[0.08] bg-white dark:bg-[#0D111A]">
+                <span className="text-slate-500 dark:text-slate-400">Pipeline Status:</span>
+                <p className="font-bold text-slate-900 dark:text-white uppercase text-xs mt-0.5">{selectedLead.status}</p>
               </div>
 
-              <div className="p-3 rounded-xl border border-[#E9EAEE] bg-white">
-                <span className="text-[#667085]">Assigned Person:</span>
-                <p className="font-bold text-[#20242C] text-xs mt-0.5">{selectedLead.assigned_user_name || 'Unassigned'}</p>
+              <div className="p-3 rounded-xl border border-slate-200/90 dark:border-white/[0.08] bg-white dark:bg-[#0D111A]">
+                <span className="text-slate-500 dark:text-slate-400">Assigned Person:</span>
+                <p className="font-bold text-slate-900 dark:text-white text-xs mt-0.5">{selectedLead.assigned_user_name || 'Unassigned'}</p>
               </div>
 
-              <div className="p-3 rounded-xl border border-[#E9EAEE] bg-white sm:col-span-3">
-                <span className="text-[#667085]">Requirement Details:</span>
-                <p className="font-bold text-[#20242C] text-xs mt-0.5">{selectedLead.service_requirement || 'General Requirement'}</p>
+              <div className="p-3 rounded-xl border border-slate-200/90 dark:border-white/[0.08] bg-white dark:bg-[#0D111A] sm:col-span-3">
+                <span className="text-slate-500 dark:text-slate-400">Requirement Details:</span>
+                <p className="font-bold text-slate-900 dark:text-white text-xs mt-0.5">{selectedLead.service_requirement || 'General Requirement'}</p>
               </div>
             </div>
 
             {/* Follow-up Timeline & Activities Log */}
             <div>
               <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-extrabold text-[#20242C]">Activity & Follow-up History</h4>
+                <h4 className="text-sm font-extrabold text-slate-900 dark:text-white">Activity & Follow-up History</h4>
                 <button
                   onClick={() => handleOpenActivityModal(selectedLead)}
-                  className="px-3 py-1 rounded-lg bg-[#D62839] text-white text-xs font-bold hover:bg-[#B91C2C] transition-all cursor-pointer"
+                  className="px-3 py-1 rounded-lg bg-[#D62839] text-white text-xs font-bold hover:bg-[#B91C2C] transition-all cursor-pointer shadow-xs"
                 >
                   + Add Touchpoint
                 </button>
@@ -1530,10 +1564,10 @@ export const CRM: React.FC = () => {
 
               <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
                 {(selectedLead.activities || []).map((act: LeadActivity) => (
-                  <div key={act.id} className="p-3 rounded-xl bg-white border border-[#E9EAEE] text-xs space-y-1">
+                  <div key={act.id} className="p-3 rounded-xl bg-white dark:bg-[#0D111A] border border-slate-200/90 dark:border-white/[0.08] text-xs space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-[#20242C] flex items-center gap-1.5">
-                        <span className="px-1.5 py-0.5 rounded-md bg-[#FFF1F2] text-[#D62839] text-[10px] uppercase font-mono font-bold">
+                      <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <span className="px-1.5 py-0.5 rounded-md bg-rose-50 dark:bg-rose-950/40 text-[#D62839] dark:text-rose-400 text-[10px] uppercase font-mono font-bold">
                           {act.activity_type}
                         </span>
                         <span>{act.title}</span>
@@ -1543,7 +1577,7 @@ export const CRM: React.FC = () => {
                       </span>
                     </div>
                     {act.description && (
-                      <p className="text-[#667085] leading-relaxed pl-2 border-l-2 border-[#FECDD3] whitespace-pre-line">
+                      <p className="text-slate-500 dark:text-slate-400 leading-relaxed pl-2 border-l-2 border-rose-200 dark:border-rose-900/60 whitespace-pre-line">
                         {act.description}
                       </p>
                     )}
@@ -1551,14 +1585,14 @@ export const CRM: React.FC = () => {
                 ))}
 
                 {(!selectedLead.activities || selectedLead.activities.length === 0) && (
-                  <div className="text-center py-6 text-xs text-[#94A3B8] border border-dashed border-[#E9EAEE] rounded-xl">
+                  <div className="text-center py-6 text-xs text-[#94A3B8] border border-dashed border-slate-200/90 dark:border-white/[0.08] rounded-xl">
                     No touchpoints logged yet. Click "+ Add Touchpoint" above to record a call or WhatsApp discussion.
                   </div>
                 )}
               </div>
             </div>
           </div>
-        </Modal>
+        </SlideOverDrawer>
       )}
 
       {/* MODAL 5: ADD NEW CUSTOMER */}
@@ -1570,7 +1604,7 @@ export const CRM: React.FC = () => {
       >
         <form onSubmit={handleCreateCustomer} className="space-y-3.5">
           <div>
-            <label className="block text-xs font-bold text-[#20242C] mb-1">Organization / Client Name *</label>
+            <label className="block text-xs font-bold text-slate-900 dark:text-white mb-1">Organization / Client Name *</label>
             <input
               type="text"
               required
@@ -1581,7 +1615,7 @@ export const CRM: React.FC = () => {
             />
           </div>
           <div>
-            <label className="block text-xs font-bold text-[#20242C] mb-1">Brand Name / Group</label>
+            <label className="block text-xs font-bold text-slate-900 dark:text-white mb-1">Brand Name / Group</label>
             <input
               type="text"
               value={custCompany}
@@ -1591,7 +1625,7 @@ export const CRM: React.FC = () => {
             />
           </div>
           <div>
-            <label className="block text-xs font-bold text-[#20242C] mb-1">Email</label>
+            <label className="block text-xs font-bold text-slate-900 dark:text-white mb-1">Email</label>
             <input
               type="email"
               value={custEmail}
@@ -1601,7 +1635,7 @@ export const CRM: React.FC = () => {
             />
           </div>
           <div>
-            <label className="block text-xs font-bold text-[#20242C] mb-1">Phone</label>
+            <label className="block text-xs font-bold text-slate-900 dark:text-white mb-1">Phone</label>
             <input
               type="text"
               value={custPhone}
@@ -1611,7 +1645,7 @@ export const CRM: React.FC = () => {
             />
           </div>
           <div>
-            <label className="block text-xs font-bold text-[#20242C] mb-1">City</label>
+            <label className="block text-xs font-bold text-slate-900 dark:text-white mb-1">City</label>
             <input
               type="text"
               value={custCity}
@@ -1621,11 +1655,11 @@ export const CRM: React.FC = () => {
             />
           </div>
 
-          <div className="pt-3 border-t border-[#E9EAEE] flex items-center justify-end gap-2.5">
+          <div className="pt-3 border-t border-slate-200/90 dark:border-white/[0.08] flex items-center justify-end gap-2.5">
             <button
               type="button"
               onClick={() => setIsCustomerModalOpen(false)}
-              className="px-4 py-2 rounded-xl border border-[#E9EAEE] text-xs font-bold text-[#667085] hover:bg-[#F8F9FB] cursor-pointer"
+              className="px-4 py-2 rounded-xl border border-slate-200/90 dark:border-white/[0.08] text-xs font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:bg-slate-900/50 cursor-pointer"
             >
               Cancel
             </button>

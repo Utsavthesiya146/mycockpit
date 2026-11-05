@@ -4,6 +4,8 @@ import { ThemeProvider } from './context/ThemeContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { BottomNav } from './components/layout/BottomNav';
+import { CommandPalette } from './components/common/CommandPalette';
+import { Cockpit3DLoader } from './components/common/Cockpit3DLoader';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { Dashboard } from './pages/Dashboard';
@@ -42,7 +44,20 @@ const AppContent: React.FC = () => {
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [authView, setAuthView] = useState<'login' | 'register'>('login');
+
+  // Global Command Palette Shortcut (Ctrl+K or Cmd+K)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsCommandPaletteOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Check URL pathname on initial load for personal client URL routing
   useEffect(() => {
@@ -80,13 +95,12 @@ const AppContent: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#F8F9FA] dark:bg-[#090D16] flex items-center justify-center p-4">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-12 h-12 border-4 border-rose-200 dark:border-rose-900/60 border-t-[#D62839] rounded-full animate-spin" />
-          <p className="text-xs font-bold text-slate-900 dark:text-white tracking-tight">Initializing MY COCKPIT AI Platform...</p>
-          <p className="text-[11px] text-slate-500 dark:text-slate-400">Connecting secure workspace session</p>
-        </div>
-      </div>
+      <Cockpit3DLoader 
+        variant="fullscreen" 
+        size="lg" 
+        text="Initializing MY COCKPIT AI Platform..."
+        subtitle="Establishing encrypted multi-tenant telemetry and session security"
+      />
     );
   }
 
@@ -152,11 +166,19 @@ const AppContent: React.FC = () => {
           setIsSidebarOpen={setIsSidebarOpen}
           isSidebarCollapsed={isSidebarCollapsed}
           setIsSidebarCollapsed={setIsSidebarCollapsed}
+          onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
         />
 
         <main className="flex-1 p-3.5 sm:p-5 lg:p-7 max-w-7xl w-full mx-auto pb-24 lg:pb-10">
           {renderActiveView()}
         </main>
+
+        {/* Global Command Palette */}
+        <CommandPalette
+          isOpen={isCommandPaletteOpen}
+          onClose={() => setIsCommandPaletteOpen(false)}
+          setActiveTab={setActiveTab}
+        />
 
         {/* Mobile Native App Bottom Navigation */}
         <BottomNav

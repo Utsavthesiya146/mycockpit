@@ -34,6 +34,8 @@ import {
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { Cockpit3DLoader } from '../components/common/Cockpit3DLoader';
+import { formatCurrency, formatCompactCurrency } from '../utils/formatters';
 import type { NavTab } from '../components/layout/Sidebar';
 import type { Employee } from '../types';
 
@@ -84,14 +86,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
   const handleRefresh = () => {
     setRefreshing(true);
     fetchStats();
-  };
-
-  const formatCurrency = (num: number) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      maximumFractionDigits: 0
-    }).format(num || 0);
   };
 
   const handleAskAI = (promptText?: string) => {
@@ -242,19 +236,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[70vh]">
-        <div className="flex flex-col items-center gap-4">
-          <div className="relative">
-            <div className="w-14 h-14 border-3 border-rose-100 dark:border-rose-950/40 border-t-[#D62839] rounded-full animate-spin" />
-            <div className="absolute inset-0 flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-[#D62839] animate-pulse" />
-            </div>
-          </div>
-          <div className="text-center space-y-1">
-            <p className="text-sm font-extrabold text-slate-900 dark:text-white tracking-tight">Initializing AI Business Command Center...</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Synthesizing live pipeline, follow-ups, and financial telemetry</p>
-          </div>
-        </div>
+      <div className="flex items-center justify-center min-h-[65vh]">
+        <Cockpit3DLoader 
+          variant="module"
+          size="lg"
+          text="Initializing AI Business Command Center..."
+          subtitle="Synthesizing live pipeline, follow-ups, and financial telemetry"
+        />
       </div>
     );
   }
@@ -375,6 +363,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
           <select
             value={filterSource}
             onChange={(e) => setFilterSource(e.target.value)}
+            aria-label="Filter telemetry by lead source"
             className="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold cursor-pointer shadow-2xs focus:outline-none focus:border-[#D62839]"
           >
             <option value="all">All Lead Sources</option>
@@ -389,6 +378,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
           <select
             value={filterDateRange}
             onChange={(e) => setFilterDateRange(e.target.value)}
+            aria-label="Filter telemetry by date range"
             className="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold cursor-pointer shadow-2xs focus:outline-none focus:border-[#D62839]"
           >
             <option value="all">All Time Range</option>
@@ -401,6 +391,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
           <select
             value={filterAssigned}
             onChange={(e) => setFilterAssigned(e.target.value)}
+            aria-label="Filter telemetry by assignee"
             className="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold cursor-pointer shadow-2xs focus:outline-none focus:border-[#D62839]"
           >
             <option value="all">All Assignees ({employees.length})</option>
@@ -717,6 +708,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ setActiveTab }) => {
                 value={quickPrompt}
                 onChange={(e) => setQuickPrompt(e.target.value)}
                 placeholder="Ask Cockpit AI anything about your pipeline, leads, or financial status..."
+                aria-label="Quick AI prompt inquiry"
                 className="w-full py-3 pl-4 pr-24 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/[0.1] text-xs sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-[#D62839] shadow-inner"
               />
               <button
