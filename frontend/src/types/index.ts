@@ -326,6 +326,7 @@ export interface ConnectedApp {
   next_action?: string;
   next_action_key?: string;
   connected_email?: string;
+  connected_account_identifier?: string | null;
   redirect_uri?: string;
   sync_interval_minutes?: number | null;
   next_sync_at?: string | null;

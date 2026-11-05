@@ -50,6 +50,8 @@ export const Badge: React.FC<BadgeProps> = ({ status, variant, dot, className, c
       case 'captcha required':
       case 'challenge required':
         return 'CAPTCHA Challenge';
+      case 'disconnected':
+        return 'Disconnected';
       default:
         return val;
     }

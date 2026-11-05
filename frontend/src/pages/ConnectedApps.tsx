@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, 
   ExternalLink, 
@@ -28,12 +28,18 @@ import {
   AlertTriangle,
   Copy,
   Check,
-  Settings2
+  Settings2,
+  MoreVertical,
+  Sliders,
+  ChevronDown,
+  Info,
+  KeyRound
 } from 'lucide-react';
 import { api } from '../services/api';
 import { Badge } from '../components/common/Badge';
 import { Modal } from '../components/common/Modal';
 import { EmptyState } from '../components/common/EmptyState';
+import { Cockpit3DLoader } from '../components/common/Cockpit3DLoader';
 import type { ConnectedApp } from '../types';
 
 interface ConnectedAppsProps {
@@ -45,10 +51,13 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>('all');
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Add App Form State
+  // Three-dot Action Menu State (App ID currently showing dropdown)
+  const [activeMenuAppId, setActiveMenuAppId] = useState<number | null>(null);
+
+  // Add Application Modal State
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [name, setName] = useState('');
   const [appUrl, setAppUrl] = useState('');
   const [category, setCategory] = useState<ConnectedApp['category']>('business');
@@ -56,32 +65,74 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
   const [connectionStatus, setConnectionStatus] = useState<ConnectedApp['connection_status']>('launcher_only');
   const [isPinned, setIsPinned] = useState(false);
 
-  // Portal Connection Modal State
+  // Edit Application Modal State
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingApp, setEditingApp] = useState<ConnectedApp | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editAppUrl, setEditAppUrl] = useState('');
+  const [editCategory, setEditCategory] = useState<ConnectedApp['category']>('business');
+  const [editIconName, setEditIconName] = useState('Globe');
+  const [editSyncInterval, setEditSyncInterval] = useState<number>(15);
+  const [editNotes, setEditNotes] = useState('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editFeedback, setEditFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Reconnect / Change Account Modal State
+  const [isReconnectModalOpen, setIsReconnectModalOpen] = useState(false);
+  const [reconnectingApp, setReconnectingApp] = useState<ConnectedApp | null>(null);
+  const [reconnectUserId, setReconnectUserId] = useState('');
+  const [reconnectPassword, setReconnectPassword] = useState('');
+  const [showReconnectPassword, setShowReconnectPassword] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
+  const [reconnect3DLoading, setReconnect3DLoading] = useState(false);
+  const [reconnectFeedback, setReconnectFeedback] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+
+  // Delete Confirmation Modal State
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deletingApp, setDeletingApp] = useState<ConnectedApp | null>(null);
+  const [isDeletingApp, setIsDeletingApp] = useState(false);
+
+  // Disconnect Confirmation Modal State
+  const [isDisconnectModalOpen, setIsDisconnectModalOpen] = useState(false);
+  const [disconnectingApp, setDisconnectingApp] = useState<ConnectedApp | null>(null);
+  const [isDisconnectingApp, setIsDisconnectingApp] = useState(false);
+
+  // Legacy/Full Portal Connection Modal State (for full manage & test view)
   const [selectedPortalApp, setSelectedPortalApp] = useState<ConnectedApp | null>(null);
   const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
   const [portalUserId, setPortalUserId] = useState('');
   const [portalPassword, setPortalPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [isTesting, setIsTesting] = useState(false);
-  const [isDisconnecting, setIsDisconnecting] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [modalFeedback, setModalFeedback] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
 
-  // Gmail OAuth State
+  // Gmail Custom OAuth Keys State
+  const [showGoogleCredsConfig, setShowGoogleCredsConfig] = useState(false);
   const [googleClientId, setGoogleClientId] = useState('');
   const [googleClientSecret, setGoogleClientSecret] = useState('');
-  const [showGoogleCredsConfig, setShowGoogleCredsConfig] = useState(false);
   const [isSavingGoogleCreds, setIsSavingGoogleCreds] = useState(false);
   const [isGettingGoogleAuth, setIsGettingGoogleAuth] = useState(false);
   const [copiedCallback, setCopiedCallback] = useState(false);
 
+  // Sync state
+  const [syncingAppId, setSyncingAppId] = useState<number | null>(null);
+  const [isSyncingAll, setIsSyncingAll] = useState(false);
+  const [syncAllFeedback, setSyncAllFeedback] = useState<string | null>(null);
+
+  // -------------------------------------------------------------
+  // DATA FETCHING
+  // -------------------------------------------------------------
   const fetchApps = async () => {
-    setLoading(true);
-    setError(null);
     try {
-      const data: any = await api.get('/apps');
-      setApps(Array.isArray(data) ? data : []);
+      setError(null);
+      const res: any = await api.get('/apps');
+      if (res && Array.isArray(res.data)) {
+        setApps(res.data);
+      } else if (Array.isArray(res)) {
+        setApps(res);
+      } else {
+        setApps([]);
+      }
     } catch (err: any) {
       console.error('Failed to load connected apps', err);
       setError(err?.message || 'Failed to load connected applications. Please check your connection or session.');
@@ -101,10 +152,6 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
     setCopiedCallback(true);
     setTimeout(() => setCopiedCallback(false), 2000);
   };
-
-  // Auto-Sync & Sync All State
-  const [isSyncingAll, setIsSyncingAll] = useState(false);
-  const [syncAllFeedback, setSyncAllFeedback] = useState<string | null>(null);
 
   const handleSyncAll = async () => {
     setIsSyncingAll(true);
@@ -140,26 +187,199 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
     if (oauthError) {
       setError(`Google OAuth Authorization: ${decodeURIComponent(oauthError)}`);
     }
+
+    // Global click listener to close action menus when clicking outside
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.app-action-menu-container')) {
+        setActiveMenuAppId(null);
+      }
+    };
+    document.addEventListener('click', handleOutsideClick);
+    return () => document.removeEventListener('click', handleOutsideClick);
   }, []);
 
-  const handleCreateApp = async (e: React.FormEvent) => {
+  // -------------------------------------------------------------
+  // EDIT APPLICATION HANDLERS
+  // -------------------------------------------------------------
+  const handleOpenEditModal = (app: ConnectedApp) => {
+    setEditingApp(app);
+    setEditName(app.name || '');
+    setEditAppUrl(app.app_url || '');
+    setEditCategory(app.category || 'business');
+    setEditIconName(app.icon_name || 'Globe');
+    setEditSyncInterval(app.sync_interval_minutes || 15);
+    setEditNotes(app.settings_json?.notes || '');
+    setEditFeedback(null);
+    setIsEditModalOpen(true);
+    setActiveMenuAppId(null);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!editingApp) return;
+
+    setIsSavingEdit(true);
+    setEditFeedback(null);
+
     try {
-      await api.post('/apps', {
-        name,
-        app_url: appUrl,
-        category,
-        icon_name: iconName,
-        connection_status: connectionStatus,
-        is_pinned: isPinned ? 1 : 0
+      await api.put(`/apps/${editingApp.id}`, {
+        name: editName.trim(),
+        app_url: editAppUrl.trim(),
+        category: editCategory,
+        icon_name: editIconName,
+        sync_interval_minutes: editSyncInterval,
+        settings_json: {
+          notes: editNotes.trim(),
+          updated_at: new Date().toISOString()
+        }
       });
-      setIsAddModalOpen(false);
-      setName('');
-      setAppUrl('');
-      setIsPinned(false);
+
+      setEditFeedback({
+        type: 'success',
+        message: 'Application configuration saved successfully!'
+      });
+
+      fetchApps();
+
+      setTimeout(() => {
+        setIsEditModalOpen(false);
+        setEditingApp(null);
+      }, 900);
+    } catch (err: any) {
+      setEditFeedback({
+        type: 'error',
+        message: err?.message || 'Failed to save application configuration.'
+      });
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // RECONNECT / CHANGE ACCOUNT HANDLERS (WITH COCKPIT 3D LOADER)
+  // -------------------------------------------------------------
+  const handleOpenReconnectModal = (app: ConnectedApp) => {
+    setReconnectingApp(app);
+    setReconnectUserId('');
+    setReconnectPassword('');
+    setShowReconnectPassword(false);
+    setReconnectFeedback(null);
+    setShowGoogleCredsConfig(false);
+    setIsReconnectModalOpen(true);
+    setActiveMenuAppId(null);
+  };
+
+  const handleExecuteReconnect = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!reconnectingApp) return;
+
+    setReconnect3DLoading(true);
+    setIsReconnecting(true);
+    setReconnectFeedback(null);
+
+    try {
+      const payload: any = {};
+      if (reconnectUserId.trim()) payload.username = reconnectUserId.trim();
+      if (reconnectPassword) payload.password = reconnectPassword;
+
+      const res: any = await api.post(`/apps/${reconnectingApp.id}/reconnect`, payload);
+
+      // If Gmail OAuth returns an authorization URL, redirect to official Google consent flow
+      if (res?.data?.auth_url || res?.auth_url) {
+        window.location.href = res?.data?.auth_url || res?.auth_url;
+        return;
+      }
+
+      setReconnectFeedback({
+        type: 'success',
+        message: res?.message || `Successfully connected with ${reconnectingApp.name}!`
+      });
+
+      // Clear password from state immediately
+      setReconnectPassword('');
+      fetchApps();
+
+      setTimeout(() => {
+        setIsReconnectModalOpen(false);
+        setReconnectingApp(null);
+      }, 1400);
+    } catch (err: any) {
+      setReconnectFeedback({
+        type: 'error',
+        message: err?.message || `Reconnection failed. Please check your credentials for ${reconnectingApp.name}.`
+      });
+    } finally {
+      setIsReconnecting(false);
+      setReconnect3DLoading(false);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // DELETE APPLICATION HANDLERS
+  // -------------------------------------------------------------
+  const handleOpenDeleteModal = (app: ConnectedApp) => {
+    setDeletingApp(app);
+    setIsDeleteModalOpen(true);
+    setActiveMenuAppId(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingApp) return;
+    setIsDeletingApp(true);
+    try {
+      await api.delete(`/apps/${deletingApp.id}`);
+      setIsDeleteModalOpen(false);
+      setDeletingApp(null);
       fetchApps();
     } catch (err: any) {
-      alert(err.message || 'Error adding application');
+      alert(err?.message || 'Failed to delete application.');
+    } finally {
+      setIsDeletingApp(false);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // DISCONNECT PORTAL HANDLERS
+  // -------------------------------------------------------------
+  const handleOpenDisconnectModal = (app: ConnectedApp) => {
+    setDisconnectingApp(app);
+    setIsDisconnectModalOpen(true);
+    setActiveMenuAppId(null);
+  };
+
+  const handleConfirmDisconnect = async () => {
+    if (!disconnectingApp) return;
+    setIsDisconnectingApp(true);
+    try {
+      await api.post(`/apps/${disconnectingApp.id}/disconnect`);
+      setIsDisconnectModalOpen(false);
+      setDisconnectingApp(null);
+      fetchApps();
+    } catch (err: any) {
+      alert(err?.message || 'Failed to disconnect application.');
+    } finally {
+      setIsDisconnectingApp(false);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // SYNC & PORTAL MODAL HANDLERS
+  // -------------------------------------------------------------
+  const handleCardSyncNow = async (app: ConnectedApp) => {
+    setSyncingAppId(app.id);
+    setActiveMenuAppId(null);
+    try {
+      if (app.source_key) {
+        await api.post(`/apps/sync/${app.source_key}`);
+      } else {
+        await api.post(`/apps/${app.id}/sync-now`);
+      }
+      fetchApps();
+    } catch (err: any) {
+      alert(err?.message || 'Synchronization failed.');
+    } finally {
+      setSyncingAppId(null);
     }
   };
 
@@ -168,33 +388,13 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
       await api.post(`/apps/${id}/pin`);
       fetchApps();
     } catch (err: any) {
-      alert(err.message || 'Error toggling pin');
-    }
-  };
-
-  const handleDeleteApp = async (id: number) => {
-    if (!confirm('Are you sure you want to remove this application shortcut?')) return;
-    try {
-      await api.delete(`/apps/${id}`);
-      fetchApps();
-    } catch (err: any) {
-      alert(err.message || 'Error deleting app');
+      alert(err?.message || 'Error toggling pin');
     }
   };
 
   const handleLaunch = (url: string) => {
     window.open(url, '_blank', 'noopener,noreferrer');
-  };
-
-  // Portal Modal Handlers
-  const handleOpenConnectModal = (app: ConnectedApp) => {
-    setSelectedPortalApp(app);
-    setPortalUserId('');
-    setPortalPassword('');
-    setShowPassword(false);
-    setModalFeedback(null);
-    setShowGoogleCredsConfig(false);
-    setIsConnectModalOpen(true);
+    setActiveMenuAppId(null);
   };
 
   const handleConnectGoogle = async () => {
@@ -234,17 +434,19 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
       return;
     }
     setIsSavingGoogleCreds(true);
-    setModalFeedback(null);
     try {
-      await api.post('/gmail/configure', {
+      await api.post('/gmail/credentials', {
         client_id: googleClientId.trim(),
         client_secret: googleClientSecret.trim()
       });
+      setShowGoogleCredsConfig(false);
       setModalFeedback({
         type: 'success',
-        message: 'Google OAuth Client Credentials saved and encrypted securely. You can now click "Authorize with Google".'
+        message: 'Google OAuth Client ID and Secret saved securely (AES-256-GCM). Starting authorization...'
       });
-      setShowGoogleCredsConfig(false);
+      setTimeout(() => {
+        handleConnectGoogle();
+      }, 1000);
     } catch (err: any) {
       setModalFeedback({
         type: 'error',
@@ -255,131 +457,29 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
     }
   };
 
-  const handleConnectPortal = async (e: React.FormEvent) => {
+  const handleCreateApp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedPortalApp) return;
-
-    if (!portalUserId.trim() || !portalPassword) {
-      setModalFeedback({ type: 'error', message: 'User ID / Email and Password are required.' });
-      return;
-    }
-
-    setIsConnecting(true);
-    setModalFeedback(null);
-
     try {
-      const res: any = await api.post(`/apps/${selectedPortalApp.id}/connect`, {
-        userId: portalUserId.trim(),
-        password: portalPassword
+      await api.post('/apps', {
+        name,
+        app_url: appUrl,
+        category,
+        icon_name: iconName,
+        connection_status: connectionStatus,
+        is_pinned: isPinned ? 1 : 0
       });
-
-      // Secure cleanup: never keep password in memory or state
-      setPortalPassword('');
-      setModalFeedback({
-        type: 'success',
-        message: res.message || 'Credentials encrypted via AES-256-GCM and stored. Live production authentication will be validated in Phase 2.'
-      });
+      setIsAddModalOpen(false);
+      setName('');
+      setAppUrl('');
       fetchApps();
     } catch (err: any) {
-      setModalFeedback({
-        type: 'error',
-        message: err.message || 'Failed to save portal connection.'
-      });
-      fetchApps();
-    } finally {
-      setIsConnecting(false);
+      alert(err?.message || 'Error adding application');
     }
   };
 
-  const handleTestConnection = async () => {
-    if (!selectedPortalApp) return;
-    setIsTesting(true);
-    setModalFeedback(null);
-
-    try {
-      const res: any = await api.post(`/apps/${selectedPortalApp.id}/test-connection`);
-      setModalFeedback({
-        type: 'success',
-        message: res.message || 'Stored encrypted credentials validated.'
-      });
-      fetchApps();
-    } catch (err: any) {
-      setModalFeedback({
-        type: 'error',
-        message: err.message || 'Test connection check failed.'
-      });
-      fetchApps();
-    } finally {
-      setIsTesting(false);
-    }
-  };
-
-  const handleDisconnectPortal = async () => {
-    if (!selectedPortalApp) return;
-    if (!confirm(`Are you sure you want to disconnect ${selectedPortalApp.name} and purge all stored credentials?`)) return;
-
-    setIsDisconnecting(true);
-    setModalFeedback(null);
-
-    try {
-      const res: any = await api.post(`/apps/${selectedPortalApp.id}/disconnect`);
-      setModalFeedback({
-        type: 'info',
-        message: res.message || 'Portal disconnected and credentials removed.'
-      });
-      fetchApps();
-    } catch (err: any) {
-      setModalFeedback({
-        type: 'error',
-        message: err.message || 'Failed to disconnect portal.'
-      });
-    } finally {
-      setIsDisconnecting(false);
-    }
-  };
-
-  const [syncingAppId, setSyncingAppId] = useState<number | null>(null);
-
-  const handleCardSyncNow = async (app: ConnectedApp) => {
-    setSyncingAppId(app.id);
-    try {
-      if (app.source_key) {
-        await api.post(`/apps/sync/${app.source_key}`);
-      } else {
-        await api.post(`/apps/${app.id}/sync-now`);
-      }
-      fetchApps();
-    } catch (err: any) {
-      alert(err?.message || 'Synchronization failed.');
-    } finally {
-      setSyncingAppId(null);
-    }
-  };
-
-  const handleSyncPortalNow = async () => {
-    if (!selectedPortalApp) return;
-    setIsSyncing(true);
-    setModalFeedback(null);
-
-    try {
-      const res: any = await api.post(`/apps/${selectedPortalApp.id}/sync-now`);
-      setModalFeedback({
-        type: 'success',
-        message: res?.message || 'Portal synchronized successfully!'
-      });
-      fetchApps();
-    } catch (err: any) {
-      setModalFeedback({
-        type: 'error',
-        message: err?.message || 'Synchronization failed.'
-      });
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const getIcon = (iconName: string) => {
-    switch (iconName) {
+  // Helper icon lookup
+  const getIcon = (name: string) => {
+    switch (name) {
       case 'Calendar': return Calendar;
       case 'Mail': return Mail;
       case 'HardDrive': return HardDrive;
@@ -389,6 +489,7 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
       case 'BookOpen': return BookOpen;
       case 'Building2': return Building2;
       case 'Share2': return Share2;
+      case 'Link2': return Link2;
       default: return Globe;
     }
   };
@@ -402,45 +503,21 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
     { id: 'custom', label: 'Custom Portals' }
   ];
 
-  const matchesCategory = (app: ConnectedApp, catId: string): boolean => {
-    if (catId === 'all') return true;
-
-    const cat = (app.category || '').toLowerCase();
-    const name = (app.name || '').toLowerCase();
-    const isPortal = Boolean(app.is_portal) || ['eaf', 'bni', 'kvv'].includes(app.source_key || '');
-
-    if (catId === 'business') {
-      return cat === 'business' || isPortal;
-    }
-    if (catId === 'productivity') {
-      return cat === 'productivity' || cat === 'cloud' || name.includes('drive') || name.includes('calendar') || name.includes('notes') || name.includes('form');
-    }
-    if (catId === 'communication') {
-      return cat === 'communication' || name.includes('gmail') || name.includes('mail');
-    }
-    if (catId === 'cloud') {
-      return cat === 'cloud' || name.includes('drive');
-    }
-    if (catId === 'custom') {
-      return isPortal || cat === 'custom';
-    }
-    return cat === catId;
-  };
-
   const getCategoryCount = (catId: string) => {
-    return apps.filter((app) => matchesCategory(app, catId)).length;
+    if (catId === 'all') return apps.length;
+    return apps.filter(a => a.category === catId).length;
   };
 
-  const filtered = apps.filter((app) => {
-    const matchesCat = matchesCategory(app, activeCategory);
-    const matchesQuery = (app.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
-                         (app.app_url || '').toLowerCase().includes(searchQuery.toLowerCase());
+  const filtered = apps.filter(app => {
+    const matchesCat = activeCategory === 'all' || app.category === activeCategory;
+    const matchesQuery = app.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                         app.app_url.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCat && matchesQuery;
   });
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header with Title and Global Sync */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2.5">
@@ -450,25 +527,25 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
               Auto-Sync Active
             </span>
           </div>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Centralized background synchronization engine for BNI Connect, EAF Connect, KVV, and enterprise cloud tools
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            Enterprise integrations, Master CRM portals, and cloud application launchpad with live AES-256-GCM encryption.
           </p>
         </div>
-
+        
         <div className="flex items-center gap-2.5">
           <button
             onClick={handleSyncAll}
             disabled={isSyncingAll}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 shadow-sm transition-all cursor-pointer disabled:opacity-60"
-            title="Trigger immediate synchronization across all connected platforms"
+            className="cockpit-btn-secondary text-xs flex items-center gap-2 py-2 px-3.5 shadow-xs cursor-pointer"
+            title="Trigger automated synchronization across all configured platforms"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isSyncingAll ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 text-[#D62839] ${isSyncingAll ? 'animate-spin' : ''}`} />
             <span>{isSyncingAll ? 'Syncing All Portals...' : 'Sync All Portals'}</span>
           </button>
 
           <button
             onClick={() => setIsAddModalOpen(true)}
-            className="cockpit-btn-primary"
+            className="cockpit-btn-primary text-xs flex items-center gap-1.5 py-2 px-3.5 shadow-xs"
           >
             <Plus className="w-4 h-4" />
             <span>Add Shortcut</span>
@@ -476,38 +553,17 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
         </div>
       </div>
 
-      {/* Auto-Sync Policy Banner */}
-      <div className="bg-gradient-to-r from-slate-900/5 via-slate-900/10 to-slate-900/5 dark:from-white/[0.03] dark:via-white/[0.06] dark:to-white/[0.03] border border-slate-200/90 dark:border-white/[0.08] rounded-2xl p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-2.5 text-slate-700 dark:text-slate-300">
-          <div className="w-7 h-7 rounded-lg bg-[#D62839]/10 text-[#D62839] flex items-center justify-center shrink-0">
-            <RefreshCw className="w-3.5 h-3.5" />
-          </div>
-          <div>
-            <span className="font-bold text-slate-900 dark:text-white">Central Auto-Sync: </span>
-            <span className="text-slate-600 dark:text-slate-400">
-              Synchronizes automatically in the background on refresh with atomic lock protection and rate-limiting.
-            </span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-          <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-white/[0.08]">BNI: 15m</span>
-          <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-white/[0.08]">EAF: 15m</span>
-          <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-white/[0.08]">KVV: 15m</span>
-          <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-white/[0.08]">Gmail: 5m</span>
-        </div>
-      </div>
-
+      {/* Sync All Feedback Banner */}
       {syncAllFeedback && (
-        <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-400 text-xs font-semibold flex items-center gap-2.5 animate-fadeIn">
-          <CheckCircle2 className="w-4 h-4 shrink-0" />
-          <span>{syncAllFeedback}</span>
+        <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs flex items-center gap-2 shadow-xs animate-in fade-in slide-in-from-top-1">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+          <span className="font-semibold">{syncAllFeedback}</span>
         </div>
       )}
 
-      {/* Controls & Filter Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white dark:bg-[#0D111A] p-3.5 rounded-2xl border border-slate-200/90 dark:border-white/[0.08] shadow-xs">
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 text-xs font-semibold">
+      {/* Categories & Search */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-1">
+        <div className="flex flex-wrap items-center gap-1.5">
           {categories.map((cat) => {
             const count = getCategoryCount(cat.id);
             const isActive = activeCategory === cat.id;
@@ -515,15 +571,15 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
               <button
                 key={cat.id}
                 onClick={() => setActiveCategory(cat.id)}
-                className={`px-3 py-1.5 rounded-xl transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 border ${
-                  isActive
-                    ? 'bg-[#D62839] text-white border-[#D62839] shadow-xs font-bold'
-                    : 'bg-white dark:bg-slate-900/60 text-slate-600 dark:text-slate-400 border-slate-200/90 dark:border-white/[0.08] hover:border-slate-300 dark:hover:border-white/[0.15] hover:text-slate-900 dark:hover:text-white'
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                  isActive 
+                    ? 'bg-rose-50 text-[#D62839] border border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-900/60 shadow-2xs' 
+                    : 'bg-white dark:bg-[#0D111A] text-slate-600 dark:text-slate-400 border border-slate-200/90 dark:border-white/[0.08] hover:bg-slate-50 dark:hover:bg-slate-900/60'
                 }`}
               >
                 <span>{cat.label}</span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold border ${
-                  isActive ? 'bg-white/20 text-white border-white/30' : 'bg-slate-100 dark:bg-white/[0.08] text-slate-600 dark:text-slate-400 border-transparent'
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                  isActive ? 'bg-[#D62839] text-white' : 'bg-slate-100 dark:bg-white/[0.08] text-slate-500 dark:text-slate-400'
                 }`}>
                   {count}
                 </span>
@@ -532,8 +588,8 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
           })}
         </div>
 
-        <div className="relative min-w-[220px]">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8]" />
+        <div className="relative w-full md:w-64">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             placeholder="Search applications..."
@@ -548,11 +604,11 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
-            <div key={n} className="p-5 rounded-2xl bg-white dark:bg-[#0D111A] border border-slate-200/90 dark:border-white/[0.08] min-h-[265px] animate-pulse flex flex-col justify-between shadow-xs">
+            <div key={n} className="p-5 rounded-2xl bg-white dark:bg-[#0D111A] border border-slate-200/90 dark:border-white/[0.08] min-h-[280px] animate-pulse flex flex-col justify-between shadow-xs">
               <div>
                 <div className="flex items-start justify-between mb-3.5">
                   <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-white/[0.05]" />
-                  <div className="w-5 h-5 rounded bg-slate-100 dark:bg-white/[0.05]" />
+                  <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/[0.05]" />
                 </div>
                 <div className="h-4 bg-slate-100 dark:bg-white/[0.05] rounded w-3/4 mb-2" />
                 <div className="h-3 bg-slate-100 dark:bg-white/[0.05] rounded w-1/2 mb-3" />
@@ -584,17 +640,23 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
               const Icon = getIcon(app.icon_name);
               const isPinned = Number(app.is_pinned) === 1;
               const isPortal = Boolean(app.is_portal);
+              const isMenuOpen = activeMenuAppId === app.id;
+              const isSyncSupported = Boolean(app.source_key && ['bni', 'eaf', 'kvv', 'gmail'].includes(app.source_key));
+              const isConnected = app.connection_status === 'connected';
 
               return (
                 <div 
                   key={app.id}
-                  className={`p-5 rounded-2xl bg-white dark:bg-[#0D111A] border transition-all flex flex-col justify-between h-full min-h-[265px] group shadow-xs ${
+                  className={`p-5 rounded-2xl bg-white dark:bg-[#0D111A] border transition-all flex flex-col justify-between h-full min-h-[300px] group shadow-xs ${
+                    isMenuOpen ? 'z-40 relative ring-2 ring-[#D62839]/30' : 'relative'
+                  } ${
                     isPortal 
                       ? 'border-rose-200 dark:border-rose-900/40 hover:border-[#D62839] hover:shadow-md' 
                       : 'border-slate-200/90 dark:border-white/[0.08] hover:border-slate-300 dark:hover:border-white/[0.15] hover:shadow-md'
                   }`}
                 >
                   <div>
+                    {/* Top Row: Icon + Pin + Highly Visible Three-Dot Action Menu */}
                     <div className="flex items-start justify-between mb-3.5">
                       <div className={`w-12 h-12 rounded-xl border flex items-center justify-center group-hover:scale-105 transition-transform ${
                         isPortal 
@@ -603,28 +665,123 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
                       }`}>
                         <Icon className="w-6 h-6" />
                       </div>
-                      <div className="flex items-center gap-1">
+
+                      <div className="flex items-center gap-1.5 app-action-menu-container relative">
+                        {/* Pin Button */}
                         <button
                           onClick={() => handleTogglePin(app.id)}
-                          className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                            isPinned ? 'text-[#D62839] dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40' : 'text-[#94A3B8] hover:text-slate-900 dark:hover:text-white'
+                          className={`p-2 rounded-xl transition-all cursor-pointer border ${
+                            isPinned 
+                              ? 'text-[#D62839] dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900/50' 
+                              : 'text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 bg-slate-50 hover:bg-slate-100 dark:bg-white/[0.04] dark:hover:bg-white/[0.08] border-slate-200/80 dark:border-white/[0.08]'
                           }`}
                           title={isPinned ? 'Unpin Application' : 'Pin to Top'}
+                          aria-label="Pin application"
                         >
                           <Pin className="w-3.5 h-3.5" />
                         </button>
-                        {!isPortal && (
-                          <button
-                            onClick={() => handleDeleteApp(app.id)}
-                            className="p-1.5 rounded-lg text-[#94A3B8] hover:text-[#DC2626] transition-colors cursor-pointer"
-                            title="Delete Application"
+
+                        {/* Highly Visible Three-Dot Action Menu Button */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveMenuAppId(isMenuOpen ? null : app.id);
+                          }}
+                          className={`p-2 rounded-xl transition-all cursor-pointer flex items-center justify-center border shadow-xs ${
+                            isMenuOpen 
+                              ? 'text-white bg-[#D62839] border-[#D62839] ring-2 ring-rose-500/30 shadow-sm' 
+                              : 'text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border-slate-300 dark:border-white/[0.15]'
+                          }`}
+                          title="Application options & configuration"
+                          aria-label="Application options"
+                        >
+                          <MoreVertical className="w-4 h-4 stroke-[2.5]" />
+                        </button>
+
+                        {/* Dropdown Popover Menu */}
+                        {isMenuOpen && (
+                          <div 
+                            className="absolute right-0 top-11 z-50 w-60 bg-white dark:bg-[#121722] rounded-2xl shadow-2xl border border-slate-200 dark:border-white/[0.12] py-2 backdrop-blur-md text-xs animate-in fade-in zoom-in-95 duration-100 ring-1 ring-black/5"
+                            onClick={(e) => e.stopPropagation()}
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                            <div className="px-3.5 py-1.5 border-b border-slate-100 dark:border-white/[0.06] mb-1">
+                              <p className="font-extrabold text-slate-900 dark:text-white truncate">{app.name}</p>
+                              <p className="text-[10px] text-slate-400 font-mono truncate">{app.category}</p>
+                              {app.connected_account_identifier && (
+                                <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono font-medium truncate mt-0.5">
+                                  ✓ {app.connected_account_identifier}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* 1. Edit Configuration */}
+                            <button
+                              onClick={() => handleOpenEditModal(app)}
+                              className="w-full px-3.5 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/80 flex items-center gap-2.5 cursor-pointer font-medium transition-colors"
+                            >
+                              <Settings2 className="w-4 h-4 text-slate-500 shrink-0" />
+                              <span>{isPortal ? 'Edit Configuration' : 'Edit Application'}</span>
+                            </button>
+
+                            {/* 2. Reconnect / Change Account (for portals) */}
+                            {isPortal && (
+                              <button
+                                onClick={() => handleOpenReconnectModal(app)}
+                                className="w-full px-3.5 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/80 flex items-center gap-2.5 cursor-pointer font-medium transition-colors"
+                              >
+                                <RefreshCw className="w-4 h-4 text-[#D62839] shrink-0" />
+                                <span>{app.source_key === 'gmail' ? 'Reconnect / Change Google Account' : 'Reconnect / Change Account'}</span>
+                              </button>
+                            )}
+
+                            {/* 3. Sync Now (for sync-capable portals) */}
+                            {isSyncSupported && (
+                              <button
+                                onClick={() => handleCardSyncNow(app)}
+                                disabled={syncingAppId === app.id}
+                                className="w-full px-3.5 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/80 flex items-center gap-2.5 cursor-pointer font-medium transition-colors"
+                              >
+                                <RefreshCw className={`w-4 h-4 text-emerald-600 shrink-0 ${syncingAppId === app.id ? 'animate-spin' : ''}`} />
+                                <span>{syncingAppId === app.id ? 'Syncing...' : 'Sync Leads Now'}</span>
+                              </button>
+                            )}
+
+                            {/* 4. Launch Portal */}
+                            <button
+                              onClick={() => handleLaunch(app.app_url)}
+                              className="w-full px-3.5 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/80 flex items-center gap-2.5 cursor-pointer font-medium transition-colors"
+                            >
+                              <ExternalLink className="w-4 h-4 text-slate-500 shrink-0" />
+                              <span>Launch Portal</span>
+                            </button>
+
+                            <div className="my-1 border-t border-slate-100 dark:border-white/[0.06]" />
+
+                            {/* 5. Disconnect (for portals) */}
+                            {isPortal && (
+                              <button
+                                onClick={() => handleOpenDisconnectModal(app)}
+                                className="w-full px-3.5 py-2 text-left text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 flex items-center gap-2.5 cursor-pointer font-medium transition-colors"
+                              >
+                                <Unlink className="w-4 h-4 shrink-0" />
+                                <span>Disconnect</span>
+                              </button>
+                            )}
+
+                            {/* 6. Delete Application (for all) */}
+                            <button
+                              onClick={() => handleOpenDeleteModal(app)}
+                              className="w-full px-3.5 py-2 text-left text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center gap-2.5 cursor-pointer font-medium transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4 shrink-0" />
+                              <span>Delete Application</span>
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
 
+                    {/* App Title & Identity */}
                     <div className="flex items-center gap-2">
                       <h3 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">{app.name}</h3>
                       {isPortal && (
@@ -635,6 +792,7 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
                     </div>
                     <p className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate mt-0.5 max-w-[240px]">{app.app_url}</p>
 
+                    {/* Badges: Connection status + Category */}
                     <div className="mt-3 flex items-center justify-between gap-2">
                       <div className="shrink-0">
                         <Badge status={app.live_badge || app.connection_status} dot={app.is_syncing || app.live_badge === 'Syncing'} />
@@ -645,18 +803,29 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
                     </div>
                   </div>
 
-                  {/* Card Footer Actions */}
+                  {/* Card Body & Footer Actions */}
                   {isPortal ? (
                     <div className="mt-4 pt-3 border-t border-slate-200/90 dark:border-white/[0.08] space-y-2.5">
                       {/* Structured Portal Lifecycle Fields */}
                       <div className="bg-slate-50/80 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-200/80 dark:border-white/[0.06] space-y-2 text-xs">
-                        {/* 1. Sync & Authentication Status */}
+                        {/* 1. Connected Account Display */}
+                        <div className="flex items-center justify-between gap-1 py-1 px-1 bg-white/60 dark:bg-white/[0.02] rounded-lg border border-slate-200/50 dark:border-white/[0.04]">
+                          <span className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5 text-[11px]">
+                            <Users className="w-3.5 h-3.5 text-slate-400" />
+                            <span>{app.source_key === 'kvv' ? 'Registered Mobile:' : 'Connected Account:'}</span>
+                          </span>
+                          <span className="font-mono font-semibold text-xs text-slate-800 dark:text-slate-200 truncate max-w-[150px]">
+                            {app.connected_account_identifier || (app.source_key === 'gmail' && app.connected_email ? app.connected_email : 'Active Session')}
+                          </span>
+                        </div>
+
+                        {/* 2. Sync Status */}
                         <div className="flex items-center justify-between gap-1">
                           <span className="text-slate-500 dark:text-slate-400 font-medium">Sync Status:</span>
                           <Badge status={app.live_badge || app.connection_status} dot={app.is_syncing || app.live_badge === 'Syncing'} />
                         </div>
 
-                        {/* 2. Integration Cadence */}
+                        {/* 3. Integration Cadence */}
                         <div className="flex items-center justify-between gap-1">
                           <span className="text-slate-500 dark:text-slate-400 font-medium">Cadence:</span>
                           <span className="font-semibold text-slate-900 dark:text-white">
@@ -664,7 +833,7 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
                           </span>
                         </div>
 
-                        {/* 3. Last Successful Sync */}
+                        {/* 4. Last Successful Sync */}
                         <div className="flex items-center justify-between gap-1">
                           <span className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1">
                             <Clock className="w-3 h-3 text-[#94A3B8]" /> Last Synced:
@@ -674,7 +843,7 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
                           </span>
                         </div>
 
-                        {/* 4. Total Records Synchronized */}
+                        {/* 5. Total Records Synchronized */}
                         <div className="flex items-center justify-between gap-1">
                           <span className="text-slate-500 dark:text-slate-400 font-medium">Records Synced:</span>
                           <span className="font-bold text-slate-900 dark:text-white">
@@ -682,7 +851,7 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
                           </span>
                         </div>
 
-                        {/* 5. Next Auto-Sync Countdown */}
+                        {/* 6. Next Auto-Sync Countdown */}
                         {app.next_sync_at && (
                           <div className="flex items-center justify-between gap-1 text-[11px] pt-1 border-t border-slate-200/60 dark:border-white/[0.04]">
                             <span className="text-slate-500 dark:text-slate-400">Next Sync:</span>
@@ -694,7 +863,7 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
                           </div>
                         )}
 
-                        {/* 6. Last Error (if present) */}
+                        {/* 7. Last Error / Notice (if present) */}
                         {app.last_error && (
                           <div className="p-2 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 text-[10px] text-rose-600 dark:text-rose-400 leading-tight" title={app.last_error}>
                             <span className="font-bold">Notice: </span>
@@ -703,81 +872,114 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
                         )}
                       </div>
 
-                      {/* 6. Next Required Action Buttons */}
-                      <div className="flex items-center gap-2 pt-1">
-                        {app.source_key === 'gmail' && app.connection_status === 'connected' ? (
-                          <>
-                            <button
-                              onClick={() => onNavigateToGmail ? onNavigateToGmail() : (window.location.href = '/?tab=gmail')}
-                              className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 hover:bg-[#D62839] text-[#D62839] dark:text-rose-400 hover:text-white border border-rose-200 dark:border-rose-900/50 text-xs font-semibold transition-all shadow-xs cursor-pointer"
-                              title="Open Gmail Workspace"
-                            >
-                              <Mail className="w-3.5 h-3.5" />
-                              <span>Open Workspace</span>
-                            </button>
-                            <button
-                              onClick={() => handleCardSyncNow(app)}
-                              disabled={syncingAppId === app.id}
-                              className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 hover:bg-[#059669] text-[#059669] dark:text-emerald-400 hover:text-white border border-emerald-200 dark:border-emerald-900/50 transition-all cursor-pointer"
-                              title="Sync Emails Now"
-                            >
-                              <RefreshCw className={`w-3.5 h-3.5 ${syncingAppId === app.id ? 'animate-spin' : ''}`} />
-                            </button>
-                            <button
-                              onClick={() => handleOpenConnectModal(app)}
-                              className="p-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/90 dark:border-white/[0.08] transition-all cursor-pointer"
-                              title="Manage Google OAuth Connection"
-                            >
-                              <Link2 className="w-3.5 h-3.5" />
-                            </button>
-                          </>
-                        ) : app.next_action_key === 'sync_now' ? (
-                          <>
-                            <button
-                              onClick={() => handleCardSyncNow(app)}
-                              disabled={syncingAppId === app.id}
-                              className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 hover:bg-[#059669] text-[#059669] dark:text-emerald-400 hover:text-white border border-emerald-200 dark:border-emerald-900/50 text-xs font-semibold transition-all shadow-xs cursor-pointer"
-                              title="Run live referral sync from portal"
-                            >
-                              <RefreshCw className={`w-3.5 h-3.5 ${syncingAppId === app.id ? 'animate-spin' : ''}`} />
-                              <span>{syncingAppId === app.id ? 'Syncing...' : 'Sync Leads Now'}</span>
-                            </button>
-                            <button
-                              onClick={() => handleOpenConnectModal(app)}
-                              className="p-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/90 dark:border-white/[0.08] transition-all cursor-pointer"
-                              title="Manage Connection Credentials"
-                            >
-                              <Link2 className="w-3.5 h-3.5" />
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            onClick={() => handleOpenConnectModal(app)}
-                            className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 hover:bg-[#D62839] text-slate-700 dark:text-slate-300 hover:text-white border border-slate-200/90 dark:border-white/[0.08] text-xs font-semibold transition-all shadow-xs cursor-pointer"
-                          >
-                            <Link2 className="w-3.5 h-3.5" />
-                            <span>{app.source_key === 'gmail' ? 'Connect Google OAuth' : (app.next_action || 'Connect Portal')}</span>
-                          </button>
-                        )}
+                      {/* Primary & Secondary Action Buttons */}
+                      <div className="pt-1">
+                        {app.source_key === 'gmail' ? (
+                          /* GMAIL PROMINENT ACTION */
+                          <div className="flex flex-col gap-2 w-full">
+                            {/* Primary Button: Sync Leads Now (when connected) */}
+                            {app.connection_status === 'connected' && (
+                              <button
+                                onClick={() => handleCardSyncNow(app)}
+                                disabled={syncingAppId === app.id}
+                                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold tracking-wide transition-all shadow-sm cursor-pointer hover:shadow-md"
+                                title="Sync emails and extract latest leads from Gmail"
+                              >
+                                <RefreshCw className={`w-4 h-4 ${syncingAppId === app.id ? 'animate-spin' : ''}`} />
+                                <span>{syncingAppId === app.id ? 'Syncing Leads...' : 'Sync Leads Now'}</span>
+                              </button>
+                            )}
 
-                        <button
-                          onClick={() => handleLaunch(app.app_url)}
-                          className="p-2 rounded-xl bg-slate-50 dark:bg-slate-900/60 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-600 dark:text-slate-300 hover:text-[#D62839] border border-slate-200/90 dark:border-white/[0.08] transition-all cursor-pointer"
-                          title={`Visit ${app.name} in new browser tab`}
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </button>
+                            <button
+                              onClick={() => handleOpenReconnectModal(app)}
+                              className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-[#D62839] hover:bg-rose-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer hover:shadow-md"
+                              title="Reconnect or switch to a different Google Account"
+                            >
+                              <Mail className="w-4 h-4" />
+                              <span>Reconnect / Change Google Account</span>
+                            </button>
+                            
+                            {app.connection_status === 'connected' && (
+                              <button
+                                onClick={() => onNavigateToGmail ? onNavigateToGmail() : (window.location.href = '/?tab=gmail')}
+                                className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-all cursor-pointer"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                                <span>Open Gmail Workspace</span>
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          /* PORTALS (BNI, EAF, KVV): HIGHLY PROMINENT SYNC LEADS NOW + RECONNECT/EDIT */
+                          <div className="flex flex-col gap-2 w-full">
+                            {/* 1. HIGH-IMPACT PRIMARY BUTTON: SYNC LEADS NOW */}
+                            <button
+                              onClick={() => handleCardSyncNow(app)}
+                              disabled={syncingAppId === app.id}
+                              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold tracking-wide transition-all shadow-sm cursor-pointer hover:shadow-md"
+                              title={`Run live lead sync from ${app.name}`}
+                            >
+                              <RefreshCw className={`w-4 h-4 ${syncingAppId === app.id ? 'animate-spin' : ''}`} />
+                              <span>{syncingAppId === app.id ? 'Syncing Leads...' : 'Sync Leads Now'}</span>
+                            </button>
+
+                            {/* 2. SECONDARY CONTROLS ROW: RECONNECT / CHANGE ACCOUNT + EDIT + LAUNCH */}
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => handleOpenReconnectModal(app)}
+                                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-semibold border border-slate-200/90 dark:border-white/[0.08] transition-all cursor-pointer truncate"
+                                title={`Reconnect or switch account credentials for ${app.name}`}
+                              >
+                                <RefreshCw className="w-3 h-3 text-[#D62839] shrink-0" />
+                                <span className="truncate">Reconnect / Change</span>
+                              </button>
+
+                              <button
+                                onClick={() => handleOpenEditModal(app)}
+                                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-white/[0.08] transition-all cursor-pointer shrink-0"
+                                title="Edit Configuration"
+                              >
+                                <Settings2 className="w-3.5 h-3.5" />
+                              </button>
+
+                              <button
+                                onClick={() => handleLaunch(app.app_url)}
+                                className="p-2 rounded-xl bg-slate-100 hover:bg-rose-50 dark:bg-slate-800 dark:hover:bg-rose-950/40 text-slate-700 dark:text-slate-300 hover:text-[#D62839] border border-slate-200 dark:border-white/[0.08] transition-all cursor-pointer shrink-0"
+                                title={`Visit ${app.name} in new browser tab`}
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ) : (
-                    <div className="mt-5 pt-3 border-t border-slate-200/90 dark:border-white/[0.08] flex items-center gap-2">
-                      <button
-                        onClick={() => handleLaunch(app.app_url)}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 hover:bg-[#D62839] text-[#D62839] dark:text-rose-400 hover:text-white text-xs font-semibold transition-all shadow-xs cursor-pointer border border-rose-200 dark:border-rose-900/50"
-                      >
-                        <span>Launch Portal</span>
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </button>
+                    /* LAUNCHER-ONLY APPLICATIONS (Google Calendar, Drive, My iNotes, Right Form) */
+                    <div className="mt-5 pt-3 border-t border-slate-200/90 dark:border-white/[0.08] space-y-2.5">
+                      <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 px-1">
+                        <span>Integration Mode:</span>
+                        <span className="font-medium text-slate-700 dark:text-slate-300">Direct Web Shortcut</span>
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          onClick={() => handleLaunch(app.app_url)}
+                          className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-[#D62839] dark:hover:bg-[#D62839] text-slate-700 dark:text-slate-200 hover:text-white border border-slate-200 dark:border-white/[0.08] text-xs font-semibold transition-all shadow-xs cursor-pointer"
+                          title={`Open ${app.name} in new browser tab`}
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          <span>Launch Portal</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleOpenEditModal(app)}
+                          className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-white/[0.08] transition-all cursor-pointer"
+                          title="Edit Configuration"
+                        >
+                          <Settings2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -786,460 +988,714 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
           </div>
 
           {filtered.length === 0 && (
-            <div className="py-8">
+            <div className="p-12 text-center rounded-2xl bg-white dark:bg-[#0D111A] border border-slate-200/90 dark:border-white/[0.08] shadow-xs">
               <EmptyState
                 icon={Globe}
                 title="No applications found"
-                description="No connected applications or shortcuts match this filter or search query. Switch categories or add a new application shortcut."
-                primaryAction={{
-                  label: "Add Application",
-                  onClick: () => setIsAddModalOpen(true),
-                  icon: Plus
-                }}
+                description={searchQuery ? `No shortcuts match "${searchQuery}".` : 'No connected applications found for this category.'}
               />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="mt-4 cockpit-btn-secondary text-xs"
+                >
+                  Clear search
+                </button>
+              )}
             </div>
           )}
         </>
       )}
 
-      {/* Security notice regarding external logins */}
-      <div className="p-4 rounded-2xl bg-white dark:bg-[#0D111A] border border-slate-200/90 dark:border-white/[0.08] shadow-xs flex items-start gap-3 text-xs text-slate-500 dark:text-slate-400">
-        <ShieldCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+      {/* Security Notice Card */}
+      <div className="p-4 rounded-2xl bg-white dark:bg-[#0D111A] border border-slate-200/90 dark:border-white/[0.08] flex items-start gap-3.5 shadow-xs">
+        <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60 shrink-0">
+          <ShieldCheck className="w-5 h-5" />
+        </div>
         <div>
-          <p className="font-bold text-slate-900 dark:text-white">Enterprise Cryptographic Security & AES-256-GCM Isolation</p>
-          <p className="mt-0.5 leading-relaxed text-slate-500 dark:text-slate-400">
-            Portal credentials are encrypted using AEAD AES-256-GCM on the server before storage. Raw passwords, session tokens, and cookies are never stored in browser memory, localStorage, or sent to unauthenticated clients.
+          <h4 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <span>Enterprise Cryptographic Security & AES-256-GCM Isolation</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full font-mono bg-slate-100 dark:bg-white/[0.08] text-slate-600 dark:text-slate-400">
+              Zero Plaintext Exposure
+            </span>
+          </h4>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+            Portal credentials are encrypted using AES-256-GCM prior to database storage. Raw passwords, session tokens, and web cookies are never stored in browser memory, local storage, or sent to unauthorized clients. Multi-tenant boundary isolation guarantees complete data segregation.
           </p>
         </div>
       </div>
 
-      {/* SECURE PORTAL CONNECTION MODAL */}
+      {/* ------------------------------------------------------------- */}
+      {/* 1. EDIT APPLICATION CONFIGURATION MODAL */}
+      {/* ------------------------------------------------------------- */}
       <Modal
-        isOpen={isConnectModalOpen}
-        onClose={() => setIsConnectModalOpen(false)}
-        title={selectedPortalApp ? `Connect ${selectedPortalApp.name}` : 'Connect Portal'}
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false);
+          setEditingApp(null);
+        }}
+        title={editingApp ? `Edit ${editingApp.name}` : 'Edit Application'}
       >
-        {selectedPortalApp && (
-          <div className="space-y-4">
-            {/* Status and metadata overview */}
-            <div className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200/90 dark:border-white/[0.08] rounded-xl p-3.5 flex items-center justify-between">
+        {editingApp && (
+          <form onSubmit={handleSaveEdit} className="space-y-4">
+            {/* Status & Identity Ribbon */}
+            <div className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200/90 dark:border-white/[0.08] rounded-xl p-3 flex items-center justify-between">
               <div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Portal Target</p>
-                <p className="text-xs font-mono font-bold text-slate-900 dark:text-white mt-0.5">{selectedPortalApp.app_url}</p>
+                <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Integration Type</p>
+                <p className="text-xs font-bold text-slate-900 dark:text-white mt-0.5">
+                  {editingApp.is_portal ? 'Master CRM / Portal Integration' : 'Direct Browser Shortcut'}
+                </p>
               </div>
               <div className="text-right">
-                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Status</p>
+                <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Current Status</p>
                 <div className="mt-0.5">
-                  <Badge status={selectedPortalApp.connection_status} />
+                  <Badge status={editingApp.live_badge || editingApp.connection_status} />
                 </div>
               </div>
             </div>
 
-            {/* Conditional Portal View: Google OAuth vs Member Credentials */}
-            {selectedPortalApp.source_key === 'gmail' ? (
+            {/* Application Name */}
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1.5">
+                Application Name *
+              </label>
+              <input
+                type="text"
+                required
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="e.g. BNI Connect, EAF Connect"
+                className="cockpit-input"
+              />
+            </div>
+
+            {/* Application URL */}
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1.5">
+                Portal URL *
+              </label>
+              <input
+                type="url"
+                required
+                value={editAppUrl}
+                onChange={(e) => setEditAppUrl(e.target.value)}
+                placeholder="https://..."
+                className="cockpit-input font-mono text-xs"
+              />
+            </div>
+
+            {/* Category & Icon Selection */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1.5">
+                  Category
+                </label>
+                <select
+                  value={editCategory}
+                  onChange={(e) => setEditCategory(e.target.value as any)}
+                  className="cockpit-input"
+                >
+                  <option value="business">Business & CRM</option>
+                  <option value="productivity">Productivity</option>
+                  <option value="communication">Communication</option>
+                  <option value="cloud">Cloud Storage</option>
+                  <option value="custom">Custom Portals</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1.5">
+                  Application Icon
+                </label>
+                <select
+                  value={editIconName}
+                  onChange={(e) => setEditIconName(e.target.value)}
+                  className="cockpit-input"
+                >
+                  <option value="Users">Users / Network</option>
+                  <option value="Briefcase">Briefcase / Business</option>
+                  <option value="Mail">Mail / Gmail</option>
+                  <option value="Calendar">Calendar / Scheduling</option>
+                  <option value="HardDrive">HardDrive / Cloud Storage</option>
+                  <option value="BookOpen">BookOpen / Notes</option>
+                  <option value="FileText">FileText / Forms</option>
+                  <option value="Globe">Globe / Web Portal</option>
+                  <option value="Share2">Share2 / Integrations</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Sync Frequency (only for portal sources) */}
+            {editingApp.is_portal && (
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1.5 flex items-center justify-between">
+                  <span>Automatic Sync Cadence</span>
+                  <span className="text-[11px] text-slate-400 normal-case">Minimum 5 min</span>
+                </label>
+                <select
+                  value={editSyncInterval}
+                  onChange={(e) => setEditSyncInterval(Number(e.target.value))}
+                  className="cockpit-input"
+                >
+                  <option value={5}>Every 5 minutes (Real-time)</option>
+                  <option value={15}>Every 15 minutes (Standard recommendation)</option>
+                  <option value={30}>Every 30 minutes</option>
+                  <option value={60}>Every 1 hour</option>
+                  <option value={360}>Every 6 hours</option>
+                  <option value={1440}>Every 24 hours (Daily)</option>
+                </select>
+              </div>
+            )}
+
+            {/* Administrative Notes */}
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1.5">
+                Administrative Notes
+              </label>
+              <textarea
+                value={editNotes}
+                onChange={(e) => setEditNotes(e.target.value)}
+                placeholder="Optional configuration notes, department access rules, or custom instructions..."
+                rows={2}
+                className="cockpit-input resize-none text-xs"
+              />
+            </div>
+
+            {/* Feedback Alert */}
+            {editFeedback && (
+              <div className={`p-3 rounded-xl border flex items-center gap-2 text-xs ${
+                editFeedback.type === 'success' 
+                  ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900/50 text-[#059669] dark:text-emerald-400' 
+                  : 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900/50 text-[#DC2626] dark:text-rose-400'
+              }`}>
+                {editFeedback.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                <span className="font-semibold">{editFeedback.message}</span>
+              </div>
+            )}
+
+            {/* Modal Actions */}
+            <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-200/90 dark:border-white/[0.08]">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditModalOpen(false);
+                  setEditingApp(null);
+                }}
+                className="cockpit-btn-secondary text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSavingEdit}
+                className="cockpit-btn-primary text-xs flex items-center gap-1.5"
+              >
+                {isSavingEdit ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Saving Changes...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Save Configuration</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* ------------------------------------------------------------- */}
+      {/* 2. RECONNECT / CHANGE ACCOUNT MODAL (WITH COCKPIT 3D LOADER) */}
+      {/* ------------------------------------------------------------- */}
+      <Modal
+        isOpen={isReconnectModalOpen}
+        onClose={() => {
+          setIsReconnectModalOpen(false);
+          setReconnectingApp(null);
+        }}
+        title={reconnectingApp ? `${reconnectingApp.name} — Reconnect & Change Account` : 'Reconnect Application'}
+      >
+        {reconnectingApp && (
+          <div className="space-y-4">
+            {/* Header info with Target Endpoint & Live Status */}
+            <div className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200/90 dark:border-white/[0.08] rounded-xl p-3 flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Target Endpoint</p>
+                <p className="text-xs font-mono font-bold text-slate-900 dark:text-white mt-0.5">{reconnectingApp.app_url}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Connection Status</p>
+                <div className="mt-0.5">
+                  <Badge status={reconnectingApp.live_badge || reconnectingApp.connection_status} />
+                </div>
+              </div>
+            </div>
+
+            {/* Existing Connected Account Identifier Banner */}
+            {reconnectingApp.connected_account_identifier ? (
+              <div className="p-3 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 rounded-xl flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300">
+                    <Users className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
+                      {reconnectingApp.source_key === 'kvv' ? 'Existing Registered Mobile' : 'Existing Connected Account'}
+                    </p>
+                    <p className="font-mono font-bold text-slate-900 dark:text-white text-xs">
+                      {reconnectingApp.connected_account_identifier}
+                    </p>
+                  </div>
+                </div>
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                  <CheckCircle2 className="w-3 h-3" />
+                  Active Vault
+                </span>
+              </div>
+            ) : (
+              <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>No active session configured yet. Enter account credentials below to connect.</span>
+              </div>
+            )}
+
+            {/* Safe Account Switching Guarantee Notice */}
+            <div className="p-2.5 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/50 rounded-xl flex items-start gap-2 text-xs text-blue-800 dark:text-blue-300">
+              <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+              <p className="text-[11px] leading-relaxed">
+                <span className="font-bold">Safe Account Switching: </span>
+                If authentication fails with new credentials, your existing connection is safely retained. Previously synchronized CRM leads, contact histories, and pipeline records are permanently preserved ($0$ leads lost).
+              </p>
+            </div>
+
+            {/* 3D Loading Overlay during authentication */}
+            {reconnect3DLoading ? (
+              <div className="py-8 flex flex-col items-center justify-center text-center">
+                <Cockpit3DLoader 
+                  variant="sync" 
+                  size="md" 
+                  text={`Authenticating with ${reconnectingApp.name}...`}
+                  subtitle="Verifying credentials and updating AES-256-GCM encryption..."
+                />
+              </div>
+            ) : reconnectingApp.source_key === 'gmail' ? (
+              /* GMAIL OAUTH RECONNECT EXPERIENCE */
               <div className="space-y-4">
-                {/* Platform Guidance Callout */}
-                <div className="p-3.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 rounded-xl flex items-start gap-2.5 text-xs text-slate-900 dark:text-slate-200">
+                <div className="p-3.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 rounded-xl flex items-start gap-2.5 text-xs">
                   <Mail className="w-4 h-4 text-[#D62839] dark:text-rose-400 shrink-0 mt-0.5" />
-                  <div className="space-y-1.5 leading-relaxed">
+                  <div className="space-y-1">
                     <p className="font-bold text-[#D62839] dark:text-rose-400">
-                      Official Google Workspace & Gmail Integration (OAuth 2.0 + PKCE)
+                      Official Google Workspace OAuth 2.0 Authorization
                     </p>
-                    <p className="text-slate-600 dark:text-slate-400">
-                      Connects directly using Google's official authorization code flow with PKCE. Access and refresh tokens are encrypted using AEAD AES-256-GCM. <strong>Passwords are never requested or stored.</strong>
+                    <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
+                      Click below to sign in with Google and choose an account. Authentication tokens are securely encrypted using AES-256-GCM. Passwords are never requested or stored.
                     </p>
-                    <div className="pt-1">
-                      <span className="font-semibold text-slate-900 dark:text-white">Approved Minimal Scopes:</span>
-                      <ul className="list-disc list-inside mt-0.5 text-[11px] text-slate-600 dark:text-slate-400 space-y-0.5">
-                        <li><code className="text-[#D62839] dark:text-rose-400 font-mono">gmail.readonly</code> – Read emails, threads & search inbox</li>
-                        <li><code className="text-[#D62839] dark:text-rose-400 font-mono">gmail.send</code> – Send emails & replies directly from Cockpit</li>
-                        <li><code className="text-[#D62839] dark:text-rose-400 font-mono">gmail.compose</code> – Compose and update draft emails</li>
-                        <li><code className="text-[#D62839] dark:text-rose-400 font-mono">gmail.modify</code> – Star, label, archive & trash emails</li>
-                        <li><code className="text-[#D62839] dark:text-rose-400 font-mono">openid, email</code> – Authenticated user profile identity</li>
-                      </ul>
-                    </div>
-                    <div className="p-2 rounded bg-white dark:bg-black/30 border border-rose-200 dark:border-rose-900/50 text-[10.5px] text-rose-700 dark:text-rose-300">
-                      <strong>Google Cloud Testing Mode Note:</strong> In Google Cloud "Testing" mode, OAuth refresh tokens expire after 7 days, and only designated Test Users can authorize.
-                    </div>
                   </div>
                 </div>
 
-                {/* Canonical Redirect URI Callout */}
-                <div className="p-3 bg-slate-50 dark:bg-slate-900/60 border border-slate-200/90 dark:border-white/[0.08] rounded-xl text-xs space-y-1">
-                  <span className="text-slate-500 dark:text-slate-400 font-medium block">Canonical Backend OAuth Callback URI:</span>
-                  <div className="flex items-center gap-2">
-                    <code className="flex-1 bg-white dark:bg-black/30 border border-slate-200/90 dark:border-white/[0.08] px-2.5 py-1.5 rounded-lg font-mono text-[11px] text-slate-900 dark:text-slate-100 select-all truncate">
-                      {displayedCallbackUri}
-                    </code>
-                    <button
-                      type="button"
-                      onClick={copyCallbackUri}
-                      className="px-2.5 py-1.5 rounded-lg border border-slate-200/90 dark:border-white/[0.08] bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1 cursor-pointer shrink-0"
-                    >
-                      {copiedCallback ? <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
-                      <span>{copiedCallback ? 'Copied' : 'Copy'}</span>
-                    </button>
-                  </div>
-                  <p className="text-[10px] text-slate-400">
-                    This exact URI must be registered in your Google Cloud Console under "Authorized redirect URIs".
-                  </p>
-                </div>
-
-                {/* Feedback Alert */}
-                {modalFeedback && (
+                {/* Reconnect Feedback */}
+                {reconnectFeedback && (
                   <div className={`p-3 rounded-xl border flex items-start gap-2.5 text-xs ${
-                    modalFeedback.type === 'success'
+                    reconnectFeedback.type === 'success'
                       ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900/50 text-[#059669] dark:text-emerald-400'
-                      : modalFeedback.type === 'error'
-                      ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900/50 text-[#DC2626] dark:text-rose-400'
-                      : 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900/50 text-[#175CD3] dark:text-blue-400'
+                      : 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900/50 text-[#DC2626] dark:text-rose-400'
                   }`}>
-                    {modalFeedback.type === 'success' ? (
+                    {reconnectFeedback.type === 'success' ? (
                       <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
-                    ) : modalFeedback.type === 'error' ? (
-                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                     ) : (
-                      <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                     )}
-                    <div className="font-medium leading-relaxed">{modalFeedback.message}</div>
+                    <div className="font-semibold leading-relaxed">{reconnectFeedback.message}</div>
                   </div>
                 )}
 
-                {/* OAuth Actions based on connection status */}
-                {selectedPortalApp.connection_status === 'connected' ? (
-                  <div className="space-y-3 pt-1">
-                    <div className="p-3 bg-[#ECFDF5] border border-[#A7F3D0] rounded-xl flex items-center justify-between text-xs text-[#059669]">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span className="font-bold">Connected Account:</span>
-                        <span className="font-mono">{selectedPortalApp.connected_email || 'Active Google Session'}</span>
-                      </div>
-                      <Badge status="connected" />
+                <div className="flex flex-col sm:flex-row items-center gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => handleExecuteReconnect()}
+                    disabled={isReconnecting}
+                    className="w-full flex-1 cockpit-btn-primary py-2.5 text-xs flex items-center justify-center gap-2 cursor-pointer font-bold"
+                  >
+                    <Mail className="w-4 h-4" />
+                    <span>Reconnect / Change Google Account</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowGoogleCredsConfig(!showGoogleCredsConfig)}
+                    className="w-full sm:w-auto cockpit-btn-secondary py-2.5 text-xs flex items-center justify-center gap-1.5"
+                    title="Configure Google Cloud OAuth Client ID and Secret"
+                  >
+                    <Settings2 className="w-3.5 h-3.5" />
+                    <span>Client Keys</span>
+                  </button>
+                </div>
+
+                {/* Collapsible Client ID / Secret Configuration */}
+                {showGoogleCredsConfig && (
+                  <form onSubmit={handleSaveGoogleCredentials} className="p-3.5 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-white/[0.08] rounded-xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <Lock className="w-3.5 h-3.5 text-[#D62839]" />
+                        Google Cloud OAuth 2.0 Client Keys
+                      </span>
+                      <span className="text-[10px] text-slate-400">AES-256-GCM Encrypted</span>
                     </div>
-
-                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[#E9EAEE]">
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={handleTestConnection}
-                          disabled={isTesting}
-                          className="cockpit-btn-secondary text-xs py-2 px-3 flex items-center gap-1.5"
-                          title="Validate OAuth Access Token"
-                        >
-                          {isTesting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5 text-[#059669]" />}
-                          <span>Test Session</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleSyncPortalNow}
-                          disabled={isSyncing}
-                          className="cockpit-btn-secondary text-xs py-2 px-3 flex items-center gap-1.5"
-                          title="Run Live Sync"
-                        >
-                          <RefreshCw className={`w-3.5 h-3.5 text-[#D62839] ${isSyncing ? 'animate-spin' : ''}`} />
-                          <span>Sync Now</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleDisconnectPortal}
-                          disabled={isDisconnecting}
-                          className="text-xs py-2 px-3 text-[#DC2626] hover:bg-[#FEF2F2] rounded-xl font-semibold transition-colors flex items-center gap-1 cursor-pointer"
-                        >
-                          <Unlink className="w-3.5 h-3.5" />
-                          <span>Disconnect</span>
-                        </button>
-                      </div>
-
+                    <div>
+                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1">
+                        Client ID
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={googleClientId}
+                        onChange={(e) => setGoogleClientId(e.target.value)}
+                        placeholder="e.g. 123456789-xxxxxx.apps.googleusercontent.com"
+                        className="cockpit-input text-xs font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1">
+                        Client Secret
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        value={googleClientSecret}
+                        onChange={(e) => setGoogleClientSecret(e.target.value)}
+                        placeholder="GOCSPX-••••••••••••••••••••"
+                        className="cockpit-input text-xs font-mono"
+                      />
+                    </div>
+                    <div className="flex items-center justify-end gap-2 pt-1">
                       <button
                         type="button"
-                        onClick={() => {
-                          setIsConnectModalOpen(false);
-                          if (onNavigateToGmail) {
-                            onNavigateToGmail();
-                          } else {
-                            window.location.href = '/?tab=gmail';
-                          }
-                        }}
-                        className="cockpit-btn-primary text-xs py-2 px-4 flex items-center gap-1.5 ml-auto"
+                        onClick={() => setShowGoogleCredsConfig(false)}
+                        className="cockpit-btn-secondary text-xs py-1.5 px-3"
                       >
-                        <Mail className="w-3.5 h-3.5" />
-                        <span>Open Gmail Workspace</span>
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isSavingGoogleCreds}
+                        className="cockpit-btn-primary text-xs py-1.5 px-3 flex items-center gap-1"
+                      >
+                        {isSavingGoogleCreds ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Lock className="w-3 h-3" />}
+                        <span>Save Client Keys</span>
                       </button>
                     </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4 pt-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <button
-                        type="button"
-                        onClick={handleConnectGoogle}
-                        disabled={isGettingGoogleAuth}
-                        className="flex-1 cockpit-btn-primary text-sm py-2.5 px-4 flex items-center justify-center gap-2"
-                      >
-                        {isGettingGoogleAuth ? (
-                          <>
-                            <RefreshCw className="w-4 h-4 animate-spin" />
-                            <span>Requesting Google Consent...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Globe className="w-4 h-4" />
-                            <span>Authorize with Google OAuth</span>
-                          </>
-                        )}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setShowGoogleCredsConfig(!showGoogleCredsConfig)}
-                        className="cockpit-btn-secondary text-xs py-2.5 px-3 flex items-center gap-1.5"
-                        title="Configure Client ID and Secret"
-                      >
-                        <Settings2 className="w-3.5 h-3.5" />
-                        <span>OAuth Credentials</span>
-                      </button>
-                    </div>
-
-                    {/* Collapsible Client ID / Secret Configuration */}
-                    {showGoogleCredsConfig && (
-                      <form onSubmit={handleSaveGoogleCredentials} className="p-3.5 bg-[#F8F9FB] border border-[#E9EAEE] rounded-xl space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-[#20242C] flex items-center gap-1.5">
-                            <Lock className="w-3.5 h-3.5 text-[#D62839]" />
-                            Google Cloud OAuth 2.0 Credentials
-                          </span>
-                          <span className="text-[10px] text-[#667085]">AES-256-GCM Encrypted</span>
-                        </div>
-                        <div>
-                          <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#667085] mb-1">
-                            Google Client ID
-                          </label>
-                          <input
-                            type="text"
-                            required
-                            value={googleClientId}
-                            onChange={(e) => setGoogleClientId(e.target.value)}
-                            placeholder="e.g. 123456789-xxxxxx.apps.googleusercontent.com"
-                            className="cockpit-input text-xs font-mono"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[11px] font-semibold uppercase tracking-wider text-[#667085] mb-1">
-                            Google Client Secret
-                          </label>
-                          <input
-                            type="password"
-                            required
-                            value={googleClientSecret}
-                            onChange={(e) => setGoogleClientSecret(e.target.value)}
-                            placeholder="GOCSPX-••••••••••••••••••••"
-                            className="cockpit-input text-xs font-mono"
-                          />
-                        </div>
-                        <div className="flex items-center justify-end gap-2 pt-1">
-                          <button
-                            type="button"
-                            onClick={() => setShowGoogleCredsConfig(false)}
-                            className="cockpit-btn-secondary text-xs py-1.5 px-3"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="submit"
-                            disabled={isSavingGoogleCreds}
-                            className="cockpit-btn-primary text-xs py-1.5 px-3 flex items-center gap-1"
-                          >
-                            {isSavingGoogleCreds ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Lock className="w-3 h-3" />}
-                            <span>Save Credentials</span>
-                          </button>
-                        </div>
-                      </form>
-                    )}
-                  </div>
+                  </form>
                 )}
               </div>
             ) : (
-              <>
-                {/* Platform Guidance Callout */}
-                {selectedPortalApp.source_key === 'bni' ? (
-                  <div className="p-3 bg-[#EFF8FF] border border-[#B2DDFF] rounded-xl flex items-start gap-2.5 text-xs text-[#175CD3]">
-                    <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
+              /* PORTAL (BNI, EAF, KVV) RECONNECT & ACCOUNT CHANGE FORM */
+              <form onSubmit={handleExecuteReconnect} className="space-y-4">
+                {/* Platform Specific Guidance */}
+                {reconnectingApp.source_key === 'bni' ? (
+                  <div className="p-3 bg-[#EFF8FF] dark:bg-blue-950/40 border border-[#B2DDFF] dark:border-blue-900/50 rounded-xl flex items-start gap-2.5 text-xs text-[#175CD3] dark:text-blue-300">
+                    <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5 text-blue-600" />
                     <div>
-                      <span className="font-bold">BNI Connect Authentication & AES-256-GCM: </span>
-                      Enter your BNI Connect Username or Email and Password to authenticate directly with BNI Connect Global. If Cloudflare bot protection or CAPTCHA challenges appear, complete them in browser. Raw passwords are never stored in browser memory.
+                      <span className="font-bold">BNI Connect Account Authentication: </span>
+                      Enter your authorized BNI Connect username/email and password. You can enter new credentials to change to a different account.
                     </div>
                   </div>
-                ) : selectedPortalApp.source_key === 'kvv' ? (
-                  <div className="p-3 bg-[#FFF8F1] border border-[#FDE68A] rounded-xl flex items-start gap-2.5 text-xs text-[#D97706]">
-                    <Lock className="w-4 h-4 shrink-0 mt-0.5" />
+                ) : reconnectingApp.source_key === 'kvv' ? (
+                  <div className="p-3 bg-[#FFF8F1] dark:bg-amber-950/40 border border-[#FDE68A] dark:border-amber-900/50 rounded-xl flex items-start gap-2.5 text-xs text-[#D97706] dark:text-amber-300">
+                    <Lock className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
                     <div>
-                      <span className="font-bold">KVV Member Authentication & Direct Sync: </span>
-                      Enter your 10-digit registered mobile number and password to connect directly to the Kannada Vyapaara Vedike platform. Authenticated referrals will be retrieved and synchronized directly with CRM.
+                      <span className="font-bold">KVV Portal Member Authentication: </span>
+                      Enter your 10-digit registered mobile number and password to connect or switch accounts.
                     </div>
                   </div>
                 ) : (
                   <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 rounded-xl flex items-start gap-2.5 text-xs text-[#D62839] dark:text-rose-400">
                     <Lock className="w-4 h-4 shrink-0 mt-0.5" />
                     <div>
-                      <span className="font-bold">Two-Way Web Automation & AES-256-GCM: </span>
-                      EAF Connect member sessions are verified against your live member dashboard. Credentials are encrypted on the server with AES-256-GCM and never exposed to the client.
+                      <span className="font-bold">EAF Connect Account Authentication: </span>
+                      Enter your registered member email and password. Dynamic session cookies are validated and stored with AES-256-GCM encryption.
                     </div>
                   </div>
                 )}
 
-                {/* Feedback Alert */}
-                {modalFeedback && (
-                  <div className={`p-3 rounded-xl border flex items-start gap-2.5 text-xs ${
-                    modalFeedback.type === 'success'
-                      ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900/50 text-[#059669] dark:text-emerald-400'
-                      : modalFeedback.type === 'error'
-                      ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900/50 text-[#DC2626] dark:text-rose-400'
-                      : 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900/50 text-[#175CD3] dark:text-blue-400'
-                  }`}>
-                    {modalFeedback.type === 'success' ? (
-                      <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
-                    ) : modalFeedback.type === 'error' ? (
-                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                    ) : (
-                      <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                    )}
-                    <div className="font-medium leading-relaxed">{modalFeedback.message}</div>
-                  </div>
-                )}
+                {/* Account Identifier Input */}
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1.5">
+                    {reconnectingApp.source_key === 'kvv' 
+                      ? 'New 10-Digit Mobile Number *' 
+                      : reconnectingApp.source_key === 'bni'
+                      ? 'New BNI Username / Email *'
+                      : 'New EAF Email / Username *'
+                    }
+                  </label>
+                  <input
+                    type={reconnectingApp.source_key === 'kvv' ? 'tel' : 'text'}
+                    required
+                    pattern={reconnectingApp.source_key === 'kvv' ? '[0-9]{10}' : undefined}
+                    maxLength={reconnectingApp.source_key === 'kvv' ? 10 : undefined}
+                    value={reconnectUserId}
+                    onChange={(e) => setReconnectUserId(e.target.value)}
+                    placeholder={
+                      reconnectingApp.source_key === 'kvv'
+                        ? 'e.g. 9876543210'
+                        : reconnectingApp.source_key === 'bni'
+                        ? 'Enter BNI username or email'
+                        : `Enter ${reconnectingApp.name} email or username`
+                    }
+                    className="cockpit-input"
+                    autoComplete="username"
+                  />
+                  {reconnectingApp.source_key === 'kvv' && (
+                    <p className="text-[10px] text-slate-400 mt-1">Must be exactly 10 numerical digits.</p>
+                  )}
+                </div>
 
-                {/* Connection Form */}
-                <form onSubmit={handleConnectPortal} className="space-y-3.5">
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-[#667085] mb-1.5">
-                      {selectedPortalApp.source_key === 'kvv' ? 'Registered Mobile Number (10 Digits)' : 'Member User ID / Email'}
-                    </label>
+                {/* Password Input */}
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1.5">
+                    {reconnectingApp.source_key === 'kvv' 
+                      ? 'KVV Member Password *' 
+                      : reconnectingApp.source_key === 'bni'
+                      ? 'BNI Portal Password *'
+                      : 'EAF Portal Password *'
+                    }
+                  </label>
+                  <div className="relative">
                     <input
-                      type="text"
+                      type={showReconnectPassword ? 'text' : 'password'}
                       required
-                      value={portalUserId}
-                      onChange={(e) => setPortalUserId(e.target.value)}
-                      placeholder={
-                        selectedPortalApp.source_key === 'kvv'
-                          ? 'e.g. 9876543210'
-                          : selectedPortalApp.source_key === 'bni'
-                          ? 'BNI Username or Email'
-                          : `Authorized ${selectedPortalApp.name} username or email`
-                      }
-                      className="cockpit-input"
-                      autoComplete="username"
+                      value={reconnectPassword}
+                      onChange={(e) => setReconnectPassword(e.target.value)}
+                      placeholder="••••••••••••"
+                      className="cockpit-input pr-10"
+                      autoComplete="current-password"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowReconnectPassword(!showReconnectPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                      title={showReconnectPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showReconnectPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Credentials are encrypted with AES-256-GCM. Passwords are never returned in responses or browser memory.
+                  </p>
+                </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-[#667085] mb-1.5">
-                      Portal Password
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        required
-                        value={portalPassword}
-                        onChange={(e) => setPortalPassword(e.target.value)}
-                        placeholder="••••••••••••"
-                        className="cockpit-input pr-10"
-                        autoComplete="current-password"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[#94A3B8] hover:text-[#20242C] transition-colors cursor-pointer"
-                        title={showPassword ? 'Hide password' : 'Show password'}
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                    <p className="text-[11px] text-[#94A3B8] mt-1">
-                      Credentials are used solely to establish an authorized member session.
-                    </p>
+                {/* Reconnect Feedback Alert */}
+                {reconnectFeedback && (
+                  <div className={`p-3 rounded-xl border flex items-start gap-2.5 text-xs ${
+                    reconnectFeedback.type === 'success'
+                      ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900/50 text-[#059669] dark:text-emerald-400'
+                      : 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900/50 text-[#DC2626] dark:text-rose-400'
+                  }`}>
+                    {reconnectFeedback.type === 'success' ? (
+                      <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    )}
+                    <div className="font-semibold leading-relaxed">{reconnectFeedback.message}</div>
                   </div>
+                )}
 
-                  {/* Action Buttons */}
-                  <div className="pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-[#E9EAEE]">
+                {/* Stored credentials auto-renewal button (if already active) */}
+                {reconnectingApp.has_stored_credentials && (
+                  <div className="p-3 bg-slate-50 dark:bg-slate-900/60 border border-slate-200/90 dark:border-white/[0.08] rounded-xl flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={handleTestConnection}
-                        disabled={isTesting}
-                        className="cockpit-btn-secondary text-xs py-2 px-3 flex items-center gap-1.5"
-                        title="Validate stored encrypted credentials"
-                      >
-                        {isTesting ? (
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <ShieldCheck className="w-3.5 h-3.5 text-[#059669]" />
-                        )}
-                        <span>Test Connection</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={handleSyncPortalNow}
-                        disabled={isSyncing}
-                        className="cockpit-btn-secondary text-xs py-2 px-3 flex items-center gap-1.5"
-                        title="Trigger immediate sync"
-                      >
-                        {isSyncing ? (
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <RefreshCw className="w-3.5 h-3.5 text-[#D62839]" />
-                        )}
-                        <span>Sync Now</span>
-                      </button>
-
-                      {selectedPortalApp.has_stored_credentials && (
-                        <button
-                          type="button"
-                          onClick={handleDisconnectPortal}
-                          disabled={isDisconnecting}
-                          className="text-xs py-2 px-3 text-[#DC2626] hover:bg-[#FEF2F2] rounded-xl font-semibold transition-colors flex items-center gap-1 cursor-pointer"
-                          title="Disconnect and purge saved credentials"
-                        >
-                          <Unlink className="w-3.5 h-3.5" />
-                          <span>Disconnect</span>
-                        </button>
-                      )}
+                      <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                      <span className="font-medium text-slate-700 dark:text-slate-300">Keep current credentials</span>
                     </div>
-
-                    <div className="flex items-center gap-2 ml-auto">
-                      <button
-                        type="button"
-                        onClick={() => setIsConnectModalOpen(false)}
-                        className="cockpit-btn-secondary text-xs py-2 px-3"
-                      >
-                        Close
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={isConnecting}
-                        className="cockpit-btn-primary text-xs py-2 px-4 flex items-center gap-1.5"
-                      >
-                        {isConnecting ? (
-                          <>
-                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                            <span>Encrypting & Saving...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Lock className="w-3.5 h-3.5" />
-                            <span>Save & Connect</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleExecuteReconnect()}
+                      disabled={isReconnecting}
+                      className="cockpit-btn-secondary text-[11px] py-1 px-2.5 flex items-center gap-1 cursor-pointer"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${isReconnecting ? 'animate-spin' : ''}`} />
+                      <span>Re-validate Active Session</span>
+                    </button>
                   </div>
-                </form>
-              </>
+                )}
+
+                {/* Modal Action Buttons */}
+                <div className="flex justify-end gap-2.5 pt-4 border-t border-slate-200/90 dark:border-white/[0.08]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsReconnectModalOpen(false);
+                      setReconnectingApp(null);
+                    }}
+                    className="cockpit-btn-secondary text-xs"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isReconnecting}
+                    className="cockpit-btn-primary text-xs flex items-center gap-1.5 font-bold"
+                  >
+                    {isReconnecting ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Verifying & Connecting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="w-3.5 h-3.5" />
+                        <span>Update Credentials & Reconnect</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
             )}
           </div>
         )}
       </Modal>
 
-      {/* ADD APPLICATION SHORTCUT MODAL */}
+      {/* ------------------------------------------------------------- */}
+      {/* 3. DELETE APPLICATION CONFIRMATION MODAL */}
+      {/* ------------------------------------------------------------- */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setDeletingApp(null);
+        }}
+        title="Delete Application Shortcut"
+      >
+        {deletingApp && (
+          <div className="space-y-4">
+            <div className="p-4 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 rounded-xl flex items-start gap-3 text-xs text-rose-800 dark:text-rose-300">
+              <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-bold text-rose-900 dark:text-rose-200">
+                  Are you sure you want to delete '{deletingApp.name}'?
+                </p>
+                <p className="leading-relaxed">
+                  This will remove the application shortcut from your Connected Applications Hub.
+                </p>
+              </div>
+            </div>
+
+            {/* Permanent CRM Data Preservation Assurance */}
+            <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl flex items-start gap-2.5 text-xs text-emerald-800 dark:text-emerald-300">
+              <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <p className="leading-relaxed">
+                <span className="font-bold">CRM Leads Preserved: </span>
+                All previously imported or synchronized CRM leads, interaction notes, customer records, and invoices are permanently retained in your database.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-200/90 dark:border-white/[0.08]">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDeleteModalOpen(false);
+                  setDeletingApp(null);
+                }}
+                className="cockpit-btn-secondary text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isDeletingApp}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                {isDeletingApp ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Shortcut</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* ------------------------------------------------------------- */}
+      {/* 4. DISCONNECT CONFIRMATION MODAL */}
+      {/* ------------------------------------------------------------- */}
+      <Modal
+        isOpen={isDisconnectModalOpen}
+        onClose={() => {
+          setIsDisconnectModalOpen(false);
+          setDisconnectingApp(null);
+        }}
+        title={disconnectingApp ? `Disconnect ${disconnectingApp.name}` : 'Disconnect Application'}
+      >
+        {disconnectingApp && (
+          <div className="space-y-4">
+            <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl flex items-start gap-3 text-xs text-amber-800 dark:text-amber-300">
+              <Unlink className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-bold text-amber-900 dark:text-amber-200">
+                  Disconnect active session for {disconnectingApp.name}?
+                </p>
+                <p className="leading-relaxed">
+                  Disconnecting will securely purge stored encrypted credentials and authentication tokens from the server vault. Background automated synchronization will be paused.
+                </p>
+              </div>
+            </div>
+
+            {/* Permanent CRM Data Preservation Guarantee */}
+            <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl flex items-start gap-2.5 text-xs text-emerald-800 dark:text-emerald-300">
+              <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <p className="leading-relaxed">
+                <span className="font-bold">Zero Lead Loss Guarantee: </span>
+                Your previously synchronized CRM leads, customer contact records, notes, and activity histories will be permanently preserved and remain fully accessible in the CRM.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-200/90 dark:border-white/[0.08]">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDisconnectModalOpen(false);
+                  setDisconnectingApp(null);
+                }}
+                className="cockpit-btn-secondary text-xs"
+              >
+                Keep Connected
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDisconnect}
+                disabled={isDisconnectingApp}
+                className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                {isDisconnectingApp ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Disconnecting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Unlink className="w-3.5 h-3.5" />
+                    <span>Confirm Disconnect</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* ------------------------------------------------------------- */}
+      {/* 5. ADD APPLICATION SHORTCUT MODAL */}
+      {/* ------------------------------------------------------------- */}
       <Modal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
@@ -1247,34 +1703,36 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
       >
         <form onSubmit={handleCreateApp} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-[#667085] mb-1.5">
-              Application Name
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1.5">
+              Application Name *
             </label>
             <input
               type="text"
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Right Form or Custom ERP"
+              placeholder="e.g. Linear, Notion, Stripe"
               className="cockpit-input"
             />
           </div>
+
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-[#667085] mb-1.5">
-              Application URL
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1.5">
+              Portal URL *
             </label>
             <input
               type="url"
               required
               value={appUrl}
               onChange={(e) => setAppUrl(e.target.value)}
-              placeholder="https://example.com"
-              className="cockpit-input font-mono"
+              placeholder="https://..."
+              className="cockpit-input font-mono text-xs"
             />
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-[#667085] mb-1.5">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1.5">
                 Category
               </label>
               <select
@@ -1286,58 +1744,58 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
                 <option value="productivity">Productivity</option>
                 <option value="communication">Communication</option>
                 <option value="cloud">Cloud Storage</option>
-                <option value="custom">Custom Web Portal</option>
+                <option value="custom">Custom Portals</option>
               </select>
             </div>
+
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-[#667085] mb-1.5">
-                Icon Representation
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-400 mb-1.5">
+                Icon
               </label>
               <select
                 value={iconName}
                 onChange={(e) => setIconName(e.target.value)}
                 className="cockpit-input"
               >
-                <option value="Globe">Globe / Web</option>
+                <option value="Globe">Globe</option>
+                <option value="Briefcase">Briefcase</option>
+                <option value="Users">Users</option>
+                <option value="Mail">Mail</option>
                 <option value="Calendar">Calendar</option>
-                <option value="Mail">Email / Mail</option>
-                <option value="HardDrive">Cloud Drive</option>
-                <option value="Users">Networking / Users</option>
-                <option value="Briefcase">Enterprise Briefcase</option>
-                <option value="FileText">Forms & Docs</option>
-                <option value="BookOpen">Notes & Knowledge</option>
+                <option value="HardDrive">HardDrive</option>
+                <option value="BookOpen">BookOpen</option>
+                <option value="FileText">FileText</option>
               </select>
             </div>
           </div>
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-[#667085] mb-1.5">
-              Connection Status
+
+          <div className="flex items-center gap-2 pt-2">
+            <input
+              type="checkbox"
+              id="isPinnedAdd"
+              checked={isPinned}
+              onChange={(e) => setIsPinned(e.target.checked)}
+              className="rounded border-slate-300 text-[#D62839] focus:ring-[#D62839]"
+            />
+            <label htmlFor="isPinnedAdd" className="text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
+              Pin to top of applications grid
             </label>
-            <select
-              value={connectionStatus}
-              onChange={(e) => setConnectionStatus(e.target.value as any)}
-              className="cockpit-input"
-            >
-              <option value="launcher_only">Launcher Only (Direct Link)</option>
-              <option value="connected">Connected (OAuth / API)</option>
-              <option value="config_required">Configuration Required</option>
-              <option value="unsupported">Unsupported</option>
-            </select>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-[#E9EAEE]">
+          <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-200/90 dark:border-white/[0.08]">
             <button
               type="button"
               onClick={() => setIsAddModalOpen(false)}
-              className="cockpit-btn-secondary"
+              className="cockpit-btn-secondary text-xs"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="cockpit-btn-primary"
+              className="cockpit-btn-primary text-xs flex items-center gap-1.5"
             >
-              Save Application
+              <Plus className="w-4 h-4" />
+              <span>Add Shortcut</span>
             </button>
           </div>
         </form>
@@ -1345,5 +1803,3 @@ export const ConnectedApps: React.FC<ConnectedAppsProps> = ({ onNavigateToGmail 
     </div>
   );
 };
-
-export default ConnectedApps;

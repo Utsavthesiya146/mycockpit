@@ -324,6 +324,9 @@ try {
     if (preg_match('#^/apps/([0-9]+)/connect$#', $path, $matches) && $method === 'POST') {
         AppHubController::connectPortal($currentUser, (int)$matches[1]);
     }
+    if (preg_match('#^/apps/([0-9]+)/reconnect$#', $path, $matches) && $method === 'POST') {
+        AppHubController::reconnectPortal($currentUser, (int)$matches[1]);
+    }
     if (preg_match('#^/apps/([0-9]+)/test-connection$#', $path, $matches) && $method === 'POST') {
         AppHubController::testConnection($currentUser, (int)$matches[1]);
     }

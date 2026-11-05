@@ -333,6 +333,9 @@ class AppHubController {
                 if (!in_array('last_error', $caCols)) {
                     $db->exec("ALTER TABLE `connected_apps` ADD COLUMN `last_error` TEXT NULL AFTER `records_synced`");
                 }
+                if (!in_array('is_deleted', $caCols)) {
+                    $db->exec("ALTER TABLE `connected_apps` ADD COLUMN `is_deleted` TINYINT(1) DEFAULT 0 AFTER `is_pinned`");
+                }
             } catch (\Throwable $e) {}
 
         } catch (\Throwable $e) {
@@ -340,6 +343,28 @@ class AppHubController {
         }
 
         self::$schemaMigrated = true;
+    }
+
+    /**
+     * Safely mask account identifier (email, phone, or username) for client display
+     */
+    public static function maskIdentifier(?string $raw): string {
+        $raw = trim((string)$raw);
+        if (empty($raw)) return '';
+        if (filter_var($raw, FILTER_VALIDATE_EMAIL)) {
+            $parts = explode('@', $raw);
+            $name = $parts[0];
+            $domain = $parts[1] ?? '';
+            $maskedName = strlen($name) > 2 ? substr($name, 0, 2) . str_repeat('*', max(3, strlen($name) - 2)) : $name . '***';
+            return $maskedName . '@' . $domain;
+        }
+        if (preg_match('/^\d{10}$/', $raw)) {
+            return substr($raw, 0, 2) . '******' . substr($raw, 8, 2);
+        }
+        if (strlen($raw) > 3) {
+            return substr($raw, 0, 2) . str_repeat('*', max(2, strlen($raw) - 3)) . substr($raw, -1);
+        }
+        return $raw . '***';
     }
 
     /**
@@ -510,7 +535,7 @@ class AppHubController {
         // 3. Fetch apps and live integration sync states
         $stmt = $db->prepare("
             SELECT * FROM connected_apps
-            WHERE tenant_id = ?
+            WHERE tenant_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)
             ORDER BY is_pinned DESC, name ASC
         ");
         $stmt->execute([$tenantId]);
@@ -542,7 +567,7 @@ class AppHubController {
                 $intervalMinutes = (int)($stateRow['sync_interval_minutes'] ?? \Cockpit\Services\SyncEngine::getDefaultInterval($sourceKey));
 
                 // Query lead_platform_sessions (NO secrets returned!)
-                $sStmt = $db->prepare("SELECT session_status, last_validated_at, 
+                $sStmt = $db->prepare("SELECT session_status, last_validated_at, encrypted_session_data,
                     (encrypted_session_data IS NOT NULL AND LENGTH(encrypted_session_data) > 0) AS has_creds
                     FROM lead_platform_sessions 
                     WHERE tenant_id = ? AND source_key = ? LIMIT 1");
@@ -550,7 +575,7 @@ class AppHubController {
                 $sess = $sStmt->fetch(PDO::FETCH_ASSOC);
 
                 // Query lead_sources_config
-                $cStmt = $db->prepare("SELECT status, last_sync_at, last_error_message, sync_count,
+                $cStmt = $db->prepare("SELECT status, last_sync_at, last_error_message, sync_count, encrypted_credentials,
                     (encrypted_credentials IS NOT NULL AND LENGTH(encrypted_credentials) > 0) AS has_cfg_creds
                     FROM lead_sources_config 
                     WHERE tenant_id = ? AND source_key = ? LIMIT 1");
@@ -689,6 +714,25 @@ class AppHubController {
                     }
                 }
 
+                // Extract and safely mask connected account identifier for client display
+                $connectedAccount = null;
+                if (!empty($sess['encrypted_session_data']) || !empty($cfg['encrypted_credentials'])) {
+                    try {
+                        $rawEnc = !empty($sess['encrypted_session_data']) ? $sess['encrypted_session_data'] : $cfg['encrypted_credentials'];
+                        $dec = json_decode((string)Encryption::decrypt($rawEnc), true);
+                        if (is_array($dec)) {
+                            $rawUser = $dec['username'] ?? ($dec['email'] ?? ($dec['mobile_number'] ?? ''));
+                            if (!empty($rawUser)) {
+                                $connectedAccount = self::maskIdentifier($rawUser);
+                            }
+                        }
+                    } catch (\Throwable $e) {}
+                }
+                if ($sourceKey === 'gmail' && !empty($gmailAccount['email_address'])) {
+                    $connectedAccount = self::maskIdentifier($gmailAccount['email_address']);
+                }
+                $app['connected_account_identifier'] = $connectedAccount;
+
                 // Determine Live Badge
                 if ($isSyncing) {
                     $liveBadge = 'Syncing';
@@ -804,7 +848,7 @@ class AppHubController {
         }
     }
 
-    public static function connectPortal(array $currentUser, int $id): void {
+    public static function connectPortal(array $currentUser, int $id, ?array $overrideInput = null): void {
         TenantMiddleware::requireRole($currentUser, ['super_admin', 'tenant_owner', 'tenant_admin']);
         $tenantId = TenantMiddleware::resolveTenantId($currentUser);
         $db = Database::getConnection();
@@ -839,7 +883,7 @@ class AppHubController {
             Response::success($authRes, 'Google OAuth authorization initiated');
         }
 
-        $input = json_decode(file_get_contents('php://input'), true) ?? [];
+        $input = $overrideInput ?? (json_decode(file_get_contents('php://input'), true) ?? []);
         $username = trim((string)($input['username'] ?? ($input['email'] ?? ($input['userId'] ?? ''))));
         $password = (string)($input['password'] ?? '');
 
@@ -870,21 +914,28 @@ class AppHubController {
             if (($authResult['status'] ?? '') !== 'active') {
                 $errMsg = $authResult['message'] ?? 'Invalid email or password on EAF Connect.';
 
-                $db->prepare("UPDATE lead_sources_config SET status = 'auth_required', last_error_message = ?, last_error_at = NOW(), updated_at = NOW() WHERE tenant_id = ? AND source_key = 'eaf'")
-                    ->execute([$errMsg, $tenantId]);
+                $existingSess = $db->query("SELECT encrypted_session_data, session_status FROM lead_platform_sessions WHERE tenant_id = {$tenantId} AND source_key = 'eaf' LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+                $hasPriorWorkingSession = !empty($existingSess['encrypted_session_data']);
 
-                $db->prepare("INSERT INTO lead_platform_sessions (tenant_id, source_key, session_status, encrypted_session_data, last_validated_at)
-                    VALUES (?, 'eaf', 'expired', NULL, NOW())
-                    ON DUPLICATE KEY UPDATE session_status = 'expired', encrypted_session_data = NULL, last_validated_at = NOW()")
-                    ->execute([$tenantId]);
+                // Only nullify credentials if there was no prior working session
+                if (!$hasPriorWorkingSession) {
+                    $db->prepare("UPDATE lead_sources_config SET status = 'auth_required', last_error_message = ?, last_error_at = NOW(), updated_at = NOW() WHERE tenant_id = ? AND source_key = 'eaf'")
+                        ->execute([$errMsg, $tenantId]);
 
-                $db->prepare("UPDATE connected_apps SET connection_status = 'auth_required', updated_at = NOW() WHERE id = ?")
-                    ->execute([$id]);
+                    $db->prepare("INSERT INTO lead_platform_sessions (tenant_id, source_key, session_status, encrypted_session_data, last_validated_at)
+                        VALUES (?, 'eaf', 'expired', NULL, NOW())
+                        ON DUPLICATE KEY UPDATE session_status = 'expired', encrypted_session_data = NULL, last_validated_at = NOW()")
+                        ->execute([$tenantId]);
 
-                Response::error('Authentication failed: ' . $errMsg, 401, [
-                    'session_status' => 'expired',
-                    'connection_status' => 'auth_required',
+                    $db->prepare("UPDATE connected_apps SET connection_status = 'auth_required', updated_at = NOW() WHERE id = ?")
+                        ->execute([$id]);
+                }
+
+                Response::error('Authentication failed: ' . $errMsg . ($hasPriorWorkingSession ? ' (Existing connection was preserved)' : ''), 401, [
+                    'session_status' => $hasPriorWorkingSession ? ($existingSess['session_status'] ?? 'active') : 'expired',
+                    'connection_status' => $hasPriorWorkingSession ? 'connected' : 'auth_required',
                     'source_key' => 'eaf',
+                    'previous_session_preserved' => $hasPriorWorkingSession,
                     'reason' => $authResult['reason'] ?? 'auth_failed',
                     'diagnostics' => $authResult['diagnostics'] ?? null
                 ]);
@@ -925,6 +976,7 @@ class AppHubController {
                 'session_status' => 'active',
                 'connection_status' => 'connected',
                 'has_stored_credentials' => true,
+                'connected_account_identifier' => self::maskIdentifier($username),
                 'message' => 'Successfully authenticated with EAF Connect (https://eafconnect.com). Active session verified and securely encrypted (AES-256-GCM).'
             ], 'EAF Connect authenticated successfully');
         } elseif ($sourceKey === 'bni') {
@@ -950,21 +1002,28 @@ class AppHubController {
             if (($authResult['status'] ?? '') !== 'active') {
                 $errMsg = $authResult['message'] ?? 'Invalid BNI Connect username or password.';
 
-                $db->prepare("UPDATE lead_sources_config SET status = 'auth_required', last_error_message = ?, last_error_at = NOW(), updated_at = NOW() WHERE tenant_id = ? AND source_key = 'bni'")
-                    ->execute([$errMsg, $tenantId]);
+                $existingSess = $db->query("SELECT encrypted_session_data, session_status FROM lead_platform_sessions WHERE tenant_id = {$tenantId} AND source_key = 'bni' LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+                $hasPriorWorkingSession = !empty($existingSess['encrypted_session_data']);
 
-                $db->prepare("INSERT INTO lead_platform_sessions (tenant_id, source_key, session_status, encrypted_session_data, last_validated_at)
-                    VALUES (?, 'bni', 'expired', NULL, NOW())
-                    ON DUPLICATE KEY UPDATE session_status = 'expired', encrypted_session_data = NULL, last_validated_at = NOW()")
-                    ->execute([$tenantId]);
+                // Only nullify credentials if there was no prior working session
+                if (!$hasPriorWorkingSession) {
+                    $db->prepare("UPDATE lead_sources_config SET status = 'auth_required', last_error_message = ?, last_error_at = NOW(), updated_at = NOW() WHERE tenant_id = ? AND source_key = 'bni'")
+                        ->execute([$errMsg, $tenantId]);
 
-                $db->prepare("UPDATE connected_apps SET connection_status = 'auth_required', updated_at = NOW() WHERE id = ?")
-                    ->execute([$id]);
+                    $db->prepare("INSERT INTO lead_platform_sessions (tenant_id, source_key, session_status, encrypted_session_data, last_validated_at)
+                        VALUES (?, 'bni', 'expired', NULL, NOW())
+                        ON DUPLICATE KEY UPDATE session_status = 'expired', encrypted_session_data = NULL, last_validated_at = NOW()")
+                        ->execute([$tenantId]);
 
-                Response::error('Authentication failed: ' . $errMsg, 401, [
-                    'session_status' => 'expired',
-                    'connection_status' => 'auth_required',
+                    $db->prepare("UPDATE connected_apps SET connection_status = 'auth_required', updated_at = NOW() WHERE id = ?")
+                        ->execute([$id]);
+                }
+
+                Response::error('Authentication failed: ' . $errMsg . ($hasPriorWorkingSession ? ' (Existing connection was preserved)' : ''), 401, [
+                    'session_status' => $hasPriorWorkingSession ? ($existingSess['session_status'] ?? 'active') : 'expired',
+                    'connection_status' => $hasPriorWorkingSession ? 'connected' : 'auth_required',
                     'source_key' => 'bni',
+                    'previous_session_preserved' => $hasPriorWorkingSession,
                     'reason' => $authResult['reason'] ?? 'auth_failed',
                     'diagnostics' => $authResult['diagnostics'] ?? null
                 ]);
@@ -1008,6 +1067,7 @@ class AppHubController {
                 'session_status' => 'active',
                 'connection_status' => 'connected',
                 'has_stored_credentials' => true,
+                'connected_account_identifier' => self::maskIdentifier($username),
                 'message' => 'Successfully authenticated with BNI Connect (https://www.bniconnectglobal.com). Active session verified and securely encrypted (AES-256-GCM).'
             ], 'BNI Connect authenticated successfully');
         } elseif ($sourceKey === 'kvv') {
@@ -1033,21 +1093,28 @@ class AppHubController {
             if (($authResult['status'] ?? '') !== 'active') {
                 $errMsg = $authResult['message'] ?? 'Invalid KVV mobile number or password.';
 
-                $db->prepare("UPDATE lead_sources_config SET status = 'auth_required', last_error_message = ?, last_error_at = NOW(), updated_at = NOW() WHERE tenant_id = ? AND source_key = 'kvv'")
-                    ->execute([$errMsg, $tenantId]);
+                $existingSess = $db->query("SELECT encrypted_session_data, session_status FROM lead_platform_sessions WHERE tenant_id = {$tenantId} AND source_key = 'kvv' LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+                $hasPriorWorkingSession = !empty($existingSess['encrypted_session_data']);
 
-                $db->prepare("INSERT INTO lead_platform_sessions (tenant_id, source_key, session_status, encrypted_session_data, last_validated_at)
-                    VALUES (?, 'kvv', 'expired', NULL, NOW())
-                    ON DUPLICATE KEY UPDATE session_status = 'expired', encrypted_session_data = NULL, last_validated_at = NOW()")
-                    ->execute([$tenantId]);
+                // Only nullify credentials if there was no prior working session
+                if (!$hasPriorWorkingSession) {
+                    $db->prepare("UPDATE lead_sources_config SET status = 'auth_required', last_error_message = ?, last_error_at = NOW(), updated_at = NOW() WHERE tenant_id = ? AND source_key = 'kvv'")
+                        ->execute([$errMsg, $tenantId]);
 
-                $db->prepare("UPDATE connected_apps SET connection_status = 'auth_required', updated_at = NOW() WHERE id = ?")
-                    ->execute([$id]);
+                    $db->prepare("INSERT INTO lead_platform_sessions (tenant_id, source_key, session_status, encrypted_session_data, last_validated_at)
+                        VALUES (?, 'kvv', 'expired', NULL, NOW())
+                        ON DUPLICATE KEY UPDATE session_status = 'expired', encrypted_session_data = NULL, last_validated_at = NOW()")
+                        ->execute([$tenantId]);
 
-                Response::error('Authentication failed: ' . $errMsg, 401, [
-                    'session_status' => 'expired',
-                    'connection_status' => 'auth_required',
+                    $db->prepare("UPDATE connected_apps SET connection_status = 'auth_required', updated_at = NOW() WHERE id = ?")
+                        ->execute([$id]);
+                }
+
+                Response::error('Authentication failed: ' . $errMsg . ($hasPriorWorkingSession ? ' (Existing connection was preserved)' : ''), 401, [
+                    'session_status' => $hasPriorWorkingSession ? ($existingSess['session_status'] ?? 'active') : 'expired',
+                    'connection_status' => $hasPriorWorkingSession ? 'connected' : 'auth_required',
                     'source_key' => 'kvv',
+                    'previous_session_preserved' => $hasPriorWorkingSession,
                     'reason' => $authResult['reason'] ?? 'auth_failed',
                     'diagnostics' => $authResult['diagnostics'] ?? null
                 ]);
@@ -1089,6 +1156,7 @@ class AppHubController {
                 'session_status' => 'active',
                 'connection_status' => 'connected',
                 'has_stored_credentials' => true,
+                'connected_account_identifier' => self::maskIdentifier($username),
                 'message' => 'Successfully authenticated with KVV Portal (https://app.kannadigaravyaapaaravedike.com). Active member session verified and securely encrypted (AES-256-GCM).'
             ], 'KVV Portal authenticated successfully');
         }
@@ -1406,7 +1474,17 @@ class AppHubController {
 
         $sourceKey = self::resolveSourceKey($app['name'] ?? '', $app['app_url'] ?? '');
         if (!$sourceKey) {
-            Response::error('This application does not support portal disconnection.', 400);
+            $db->prepare("UPDATE connected_apps SET connection_status = 'disconnected', updated_at = NOW() WHERE id = ? AND tenant_id = ?")
+                ->execute([$id, $tenantId]);
+            Response::success([
+                'id' => $id,
+                'source_key' => null,
+                'session_status' => 'disconnected',
+                'connection_status' => 'disconnected',
+                'has_stored_credentials' => false,
+                'message' => "Application '{$app['name']}' has been disconnected."
+            ], 'Application disconnected successfully');
+            return;
         }
 
         // Purge session credentials
@@ -1682,11 +1760,11 @@ class AppHubController {
         Response::success(['id' => (int)$db->lastInsertId()], 'Application shortcut added', 201);
     }
 
-    public static function updateApp(array $currentUser, int $id): void {
+    public static function updateApp(array $currentUser, int $id, ?array $overrideInput = null): void {
         TenantMiddleware::requireRole($currentUser, ['super_admin', 'tenant_owner', 'tenant_admin']);
         $tenantId = TenantMiddleware::resolveTenantId($currentUser);
 
-        $input = json_decode(file_get_contents('php://input'), true) ?? [];
+        $input = $overrideInput ?? (json_decode(file_get_contents('php://input'), true) ?? []);
         $name = trim($input['name'] ?? '');
         $appUrl = trim($input['app_url'] ?? '');
 
@@ -1694,25 +1772,70 @@ class AppHubController {
             Response::error('Application name and URL are required.', 422);
         }
 
+        if (isset($input['sync_interval_minutes']) && (int)$input['sync_interval_minutes'] < 5) {
+            Response::error('Sync interval must be at least 5 minutes.', 422);
+        }
+
         $db = Database::getConnection();
         self::ensureSchemaCompatibility($db);
+
+        $checkStmt = $db->prepare("SELECT * FROM connected_apps WHERE id = ? AND tenant_id = ? LIMIT 1");
+        $checkStmt->execute([$id, $tenantId]);
+        $existing = $checkStmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$existing) {
+            Response::error('Application not found or unauthorized.', 404);
+        }
+
+        $sourceKey = self::resolveSourceKey($name, $appUrl);
+        if (!$sourceKey) {
+            $sourceKey = self::resolveSourceKey($existing['name'] ?? '', $existing['app_url'] ?? '');
+        }
+
+        $category = $input['category'] ?? $existing['category'] ?? 'business';
+        $iconName = $input['icon_name'] ?? $existing['icon_name'] ?? 'Globe';
+        $connStatus = $input['connection_status'] ?? $existing['connection_status'] ?? 'launcher_only';
+        $isPinned = isset($input['is_pinned']) ? (!empty($input['is_pinned']) ? 1 : 0) : ($existing['is_pinned'] ?? 0);
+        $settingsJson = isset($input['settings_json']) 
+            ? (is_array($input['settings_json']) ? json_encode($input['settings_json']) : $input['settings_json'])
+            : ($existing['settings_json'] ?? null);
+
         $stmt = $db->prepare("
             UPDATE connected_apps 
-            SET name = ?, category = ?, icon_name = ?, app_url = ?, connection_status = ?, is_pinned = ?, updated_at = NOW()
+            SET name = ?, category = ?, icon_name = ?, app_url = ?, connection_status = ?, is_pinned = ?, settings_json = ?, updated_at = NOW()
             WHERE id = ? AND tenant_id = ?
         ");
         $stmt->execute([
             $name,
-            $input['category'] ?? 'business',
-            $input['icon_name'] ?? 'Globe',
+            $category,
+            $iconName,
             $appUrl,
-            $input['connection_status'] ?? 'launcher_only',
-            !empty($input['is_pinned']) ? 1 : 0,
+            $connStatus,
+            $isPinned,
+            $settingsJson,
             $id,
             $tenantId
         ]);
 
-        Response::success(null, 'Application updated');
+        // If sync_interval_minutes was configured for a portal source, update integration_sync_state & lead_sources_config
+        if ($sourceKey && !empty($input['sync_interval_minutes'])) {
+            $interval = max(5, min(1440, (int)$input['sync_interval_minutes']));
+            $db->prepare("UPDATE integration_sync_state SET sync_interval_minutes = ?, updated_at = NOW() WHERE tenant_id = ? AND source_key = ?")
+                ->execute([$interval, $tenantId, $sourceKey]);
+            $db->prepare("UPDATE lead_sources_config SET sync_interval_minutes = ?, updated_at = NOW() WHERE tenant_id = ? AND source_key = ?")
+                ->execute([$interval, $tenantId, $sourceKey]);
+        }
+
+        Response::success([
+            'id' => $id,
+            'name' => $name,
+            'category' => $category,
+            'icon_name' => $iconName,
+            'app_url' => $appUrl,
+            'connection_status' => $connStatus,
+            'is_pinned' => $isPinned,
+            'source_key' => $sourceKey
+        ], 'Application configuration updated successfully');
     }
 
     public static function deleteApp(array $currentUser, int $id): void {
@@ -1721,10 +1844,232 @@ class AppHubController {
 
         $db = Database::getConnection();
         self::ensureSchemaCompatibility($db);
-        $stmt = $db->prepare("DELETE FROM connected_apps WHERE id = ? AND tenant_id = ?");
+
+        $checkStmt = $db->prepare("SELECT * FROM connected_apps WHERE id = ? AND tenant_id = ? LIMIT 1");
+        $checkStmt->execute([$id, $tenantId]);
+        $existing = $checkStmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$existing) {
+            Response::error('Application not found or unauthorized.', 404);
+        }
+
+        $stmt = $db->prepare("UPDATE connected_apps SET is_deleted = 1, updated_at = NOW() WHERE id = ? AND tenant_id = ?");
         $stmt->execute([$id, $tenantId]);
 
-        Response::success(null, 'Application deleted');
+        Response::success([
+            'id' => $id,
+            'name' => $existing['name']
+        ], 'Application deleted successfully');
+    }
+
+    public static function reconnectPortal(array $currentUser, int $id, ?array $overrideInput = null): void {
+        TenantMiddleware::requireRole($currentUser, ['super_admin', 'tenant_owner', 'tenant_admin']);
+        $tenantId = TenantMiddleware::resolveTenantId($currentUser);
+        $db = Database::getConnection();
+        self::ensureSchemaCompatibility($db);
+
+        $stmt = $db->prepare("SELECT * FROM connected_apps WHERE id = ? AND tenant_id = ? LIMIT 1");
+        $stmt->execute([$id, $tenantId]);
+        $app = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$app) {
+            Response::error('Application not found or unauthorized.', 404);
+        }
+
+        $sourceKey = self::resolveSourceKey($app['name'] ?? '', $app['app_url'] ?? '');
+        if (!$sourceKey) {
+            Response::error('This application is a generic web launcher and does not require credentials reconnection.', 400);
+        }
+
+        // If credentials are provided in the request body, delegate to connectPortal
+        $input = $overrideInput ?? (json_decode(file_get_contents('php://input'), true) ?? []);
+        $username = trim((string)($input['username'] ?? ($input['email'] ?? ($input['userId'] ?? ($input['mobile_number'] ?? '')))));
+        $password = (string)($input['password'] ?? '');
+
+        if (!empty($username) && !empty($password)) {
+            self::connectPortal($currentUser, $id, $input);
+            return;
+        }
+
+        // If Gmail, initiate OAuth URL generation
+        if ($sourceKey === 'gmail') {
+            require_once __DIR__ . '/GmailController.php';
+            require_once __DIR__ . '/../services/gmail/GmailOAuthService.php';
+            $oauth = new \Cockpit\Services\Gmail\GmailOAuthService($db);
+            $userId = (int)($currentUser['id'] ?? 1);
+            $authRes = $oauth->generateAuthUrl($tenantId, $userId);
+            if (!$authRes['success']) {
+                Response::error($authRes['message'] ?? 'Google OAuth Client ID is not configured.', 400, [
+                    'source_key' => 'gmail',
+                    'redirect_uri' => \Cockpit\Services\Gmail\GmailOAuthService::getCanonicalRedirectUri(),
+                    'requires_oauth_config' => true
+                ]);
+            }
+            Response::success($authRes, 'Google OAuth authorization initiated');
+            return;
+        }
+
+        // Check if stored encrypted credentials exist in lead_sources_config or lead_platform_sessions
+        $sStmt = $db->prepare("SELECT encrypted_session_data FROM lead_platform_sessions WHERE tenant_id = ? AND source_key = ? LIMIT 1");
+        $sStmt->execute([$tenantId, $sourceKey]);
+        $sessData = $sStmt->fetchColumn();
+
+        $cStmt = $db->prepare("SELECT encrypted_credentials FROM lead_sources_config WHERE tenant_id = ? AND source_key = ? LIMIT 1");
+        $cStmt->execute([$tenantId, $sourceKey]);
+        $cfgData = $cStmt->fetchColumn();
+
+        $rawEnc = $sessData ?: $cfgData;
+
+        if (empty($rawEnc)) {
+            Response::error("No stored credentials found for {$app['name']}. Please provide username and password to connect.", 400, [
+                'requires_credentials' => true,
+                'source_key' => $sourceKey,
+                'portal_name' => $app['name']
+            ]);
+        }
+
+        // Try to re-validate and renew the session using stored credentials
+        try {
+            $dec = json_decode((string)Encryption::decrypt($rawEnc), true);
+            if (!is_array($dec)) {
+                throw new \Exception('Invalid encrypted credential payload.');
+            }
+        } catch (\Throwable $e) {
+            Response::error('Stored credentials could not be decrypted. Please enter your credentials again.', 400, [
+                'requires_credentials' => true,
+                'source_key' => $sourceKey,
+                'portal_name' => $app['name']
+            ]);
+        }
+
+        // Reconnect with decrypted username and password if available
+        $u = $dec['username'] ?? ($dec['email'] ?? ($dec['mobile_number'] ?? ''));
+        $p = $dec['password'] ?? '';
+
+        if (!empty($u) && !empty($p)) {
+            if ($sourceKey === 'eaf') {
+                $driver = self::getEAFDriver();
+                $authResult = $driver->authenticateSession($u, $p);
+                if (($authResult['status'] ?? '') === 'active') {
+                    $sessionPayload = [
+                        'email' => $u,
+                        'password' => $p,
+                        'cookie_jar' => $authResult['cookie_jar'] ?? '',
+                        'cookies' => $authResult['cookies'] ?? [],
+                        'ci_session' => $authResult['ci_session'] ?? null,
+                        'is_live' => true,
+                        'authenticated_at' => date('Y-m-d H:i:s')
+                    ];
+                    $encrypted = Encryption::encrypt(json_encode($sessionPayload));
+                    $db->prepare("UPDATE lead_platform_sessions SET session_status = 'active', encrypted_session_data = ?, last_validated_at = NOW() WHERE tenant_id = ? AND source_key = 'eaf'")
+                        ->execute([$encrypted, $tenantId]);
+                    $db->prepare("UPDATE lead_sources_config SET encrypted_credentials = ?, status = 'connected', last_error_message = NULL, last_error_at = NULL, updated_at = NOW() WHERE tenant_id = ? AND source_key = 'eaf'")
+                        ->execute([$encrypted, $tenantId]);
+                    $db->prepare("UPDATE connected_apps SET connection_status = 'connected', updated_at = NOW() WHERE id = ?")
+                        ->execute([$id]);
+
+                    Response::success([
+                        'id' => $id,
+                        'source_key' => 'eaf',
+                        'connection_status' => 'connected',
+                        'session_status' => 'active',
+                        'message' => 'EAF Connect session renewed and reconnected successfully!'
+                    ], 'EAF Connect reconnected successfully');
+                    return;
+                } else {
+                    $errMsg = $authResult['message'] ?? 'EAF Connect authentication challenge failed.';
+                    Response::error("Reconnection failed: {$errMsg}. Please enter updated credentials.", 401, [
+                        'requires_credentials' => true,
+                        'source_key' => 'eaf',
+                        'reason' => $authResult['reason'] ?? 'auth_failed'
+                    ]);
+                }
+            } elseif ($sourceKey === 'bni') {
+                $driver = self::getBNIDriver();
+                $authResult = $driver->authenticateSession($u, $p);
+                if (($authResult['status'] ?? '') === 'active') {
+                    $sessionPayload = [
+                        'username' => $u,
+                        'email' => $u,
+                        'password' => $p,
+                        'access_token' => $authResult['access_token'] ?? null,
+                        'refresh_token' => $authResult['refresh_token'] ?? null,
+                        'expires_in' => $authResult['expires_in'] ?? null,
+                        'cookies' => $authResult['cookies'] ?? [],
+                        'cookie_jar' => $authResult['cookie_jar'] ?? '',
+                        'is_live' => true,
+                        'authenticated_at' => date('Y-m-d H:i:s')
+                    ];
+                    $encrypted = Encryption::encrypt(json_encode($sessionPayload));
+                    $db->prepare("UPDATE lead_platform_sessions SET session_status = 'active', encrypted_session_data = ?, last_validated_at = NOW() WHERE tenant_id = ? AND source_key = 'bni'")
+                        ->execute([$encrypted, $tenantId]);
+                    $db->prepare("UPDATE lead_sources_config SET encrypted_credentials = ?, status = 'connected', last_error_message = NULL, last_error_at = NULL, updated_at = NOW() WHERE tenant_id = ? AND source_key = 'bni'")
+                        ->execute([$encrypted, $tenantId]);
+                    $db->prepare("UPDATE connected_apps SET connection_status = 'connected', updated_at = NOW() WHERE id = ?")
+                        ->execute([$id]);
+
+                    Response::success([
+                        'id' => $id,
+                        'source_key' => 'bni',
+                        'connection_status' => 'connected',
+                        'session_status' => 'active',
+                        'message' => 'BNI Connect session renewed and reconnected successfully!'
+                    ], 'BNI Connect reconnected successfully');
+                    return;
+                } else {
+                    $errMsg = $authResult['message'] ?? 'BNI Connect authentication challenge failed.';
+                    Response::error("Reconnection failed: {$errMsg}. Please enter updated credentials.", 401, [
+                        'requires_credentials' => true,
+                        'source_key' => 'bni',
+                        'reason' => $authResult['reason'] ?? 'auth_failed'
+                    ]);
+                }
+            } elseif ($sourceKey === 'kvv') {
+                $driver = self::getKVVDriver();
+                $authResult = $driver->authenticateSession($u, $p);
+                if (($authResult['status'] ?? '') === 'active') {
+                    $sessionPayload = [
+                        'mobile_number' => $u,
+                        'username' => $u,
+                        'password' => $p,
+                        'token' => $authResult['token'] ?? null,
+                        'user' => $authResult['user'] ?? [],
+                        'user_id' => $authResult['user_id'] ?? null,
+                        'is_live' => true,
+                        'authenticated_at' => date('Y-m-d H:i:s')
+                    ];
+                    $encrypted = Encryption::encrypt(json_encode($sessionPayload));
+                    $db->prepare("UPDATE lead_platform_sessions SET session_status = 'active', encrypted_session_data = ?, last_validated_at = NOW() WHERE tenant_id = ? AND source_key = 'kvv'")
+                        ->execute([$encrypted, $tenantId]);
+                    $db->prepare("UPDATE lead_sources_config SET encrypted_credentials = ?, status = 'connected', last_error_message = NULL, last_error_at = NULL, updated_at = NOW() WHERE tenant_id = ? AND source_key = 'kvv'")
+                        ->execute([$encrypted, $tenantId]);
+                    $db->prepare("UPDATE connected_apps SET connection_status = 'connected', updated_at = NOW() WHERE id = ?")
+                        ->execute([$id]);
+
+                    Response::success([
+                        'id' => $id,
+                        'source_key' => 'kvv',
+                        'connection_status' => 'connected',
+                        'session_status' => 'active',
+                        'message' => 'KVV Portal member session renewed and reconnected successfully!'
+                    ], 'KVV Portal reconnected successfully');
+                    return;
+                } else {
+                    $errMsg = $authResult['message'] ?? 'KVV Portal authentication challenge failed.';
+                    Response::error("Reconnection failed: {$errMsg}. Please enter updated credentials.", 401, [
+                        'requires_credentials' => true,
+                        'source_key' => 'kvv',
+                        'reason' => $authResult['reason'] ?? 'auth_failed'
+                    ]);
+                }
+            }
+        }
+
+        Response::error("Stored credentials incomplete. Please enter User ID and Password.", 400, [
+            'requires_credentials' => true,
+            'source_key' => $sourceKey,
+            'portal_name' => $app['name']
+        ]);
     }
 
     public static function togglePin(array $currentUser, int $id): void {

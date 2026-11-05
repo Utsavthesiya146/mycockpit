@@ -190,7 +190,7 @@ class GmailOAuthService {
             'response_type' => 'code',
             'scope' => implode(' ', self::APPROVED_SCOPES),
             'access_type' => 'offline',
-            'prompt' => 'consent', // Enforce consent to guarantee refresh_token
+            'prompt' => 'select_account consent', // Allow account switching & enforce consent for refresh_token
             'include_granted_scopes' => 'true',
             'state' => $stateToken,
             'code_challenge' => $pkce['challenge'],
